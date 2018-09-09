@@ -1,7 +1,9 @@
 package ws
 
 import (
+	"bufio"
 	"io"
+
 	"nhooyr.io/ws/internal/wscore"
 )
 
@@ -16,7 +18,7 @@ const (
 	Pong
 )
 
-func Write(w io.Writer, typ FrameType, p []byte) (n int, err error) {
+func Writer(w bufio.Writer, typ FrameType) io.WriteCloser {
 	panic("TODO")
 }
 
