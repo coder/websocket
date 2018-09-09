@@ -1,0 +1,1 @@
+module nhooyr.io/ws
