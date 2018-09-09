@@ -1,4 +1,4 @@
-package wscore
+package ws
 
 import (
 	"io"
@@ -28,7 +28,7 @@ type Header struct {
 	Opcode Opcode
 
 	// Length is an integer because the RFC mandates the MSB bit cannot be set.
-	// We cannot send or receive a frame with negative length.
+	// So we cannot send or receive a frame with negative length.
 	Length int64
 
 	Mask []byte
@@ -42,7 +42,7 @@ func (f *Header) MaskPayload(payload []byte) {
 	panic("TODO")
 }
 
-func ReadHeader(w io.Writer) (*Header, error) {
+func ReadHeader(w io.Writer) (Header, error) {
 	panic("TODO")
 }
 
@@ -53,9 +53,5 @@ const (
 	GoingAway
 	ProtocolError
 	UnsupportedData
-	// TODO
+	// ...
 )
-
-func SecWebsocketAccept(secWebsocketKey string) string {
-	panic("TODO")
-}
