@@ -31,7 +31,8 @@ type Header struct {
 	// So we cannot send or receive a frame with negative length.
 	Length int64
 
-	Mask []byte
+	Masked bool
+	Mask   [4]byte
 }
 
 func (f *Header) Bytes() []byte {
