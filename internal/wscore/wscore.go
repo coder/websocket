@@ -42,7 +42,7 @@ func (f *Header) MaskPayload(payload []byte) {
 	panic("TODO")
 }
 
-func Read(w io.Writer) (*Header, error) {
+func ReadHeader(w io.Writer) (*Header, error) {
 	panic("TODO")
 }
 
@@ -55,3 +55,7 @@ const (
 	UnsupportedData
 	// TODO
 )
+
+func SecWebsocketAccept(secWebsocketKey string) string {
+	panic("TODO")
+}
