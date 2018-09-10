@@ -7,11 +7,11 @@ import (
 	"net/http"
 )
 
-func Writer(w bufio.Writer, typ Opcode) io.WriteCloser {
+func Writer(w bufio.Writer, op Opcode) io.WriteCloser {
 	panic("TODO")
 }
 
-func WriteFrame(w io.Writer, typ Opcode, p []byte) error {
+func WriteFrame(w io.Writer, op Opcode, p []byte) error {
 	panic("TODO")
 }
 
