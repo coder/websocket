@@ -2,6 +2,7 @@ package wscore
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math/rand"
 	"testing"
 	"time"
@@ -135,11 +136,6 @@ func genBytes(max int) []byte {
 func genKey() [4]byte {
 	var b [4]byte
 	key := rand.Uint32()
-
-	b[0] = byte(key >> 24)
-	b[1] = byte(key >> 16)
-	b[2] = byte(key >> 8)
-	b[3] = byte(key)
-
+	binary.BigEndian.PutUint32(b[:], key)
 	return b
 }
