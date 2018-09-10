@@ -2,7 +2,7 @@
 
 // +build !appengine
 
-package wscore
+package ws
 
 import "unsafe"
 

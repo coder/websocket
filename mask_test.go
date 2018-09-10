@@ -1,4 +1,4 @@
-package wscore
+package ws
 
 import (
 	"bytes"

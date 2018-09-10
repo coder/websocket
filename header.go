@@ -1,6 +1,4 @@
-// Code in this file was originally taken from github.com/gobwas/ws
-
-package wscore
+package ws
 
 import (
 	"encoding/binary"
@@ -11,6 +9,17 @@ import (
 // Opcode is a WebSocket opcode.
 // This is how the WebSocket RFC capitalizes it.
 type Opcode int
+
+const (
+	OpContinuation Opcode = iota
+	OpText
+	OpBinary
+	// 3 - 7 are reserved for further non-control frames.
+	OpClose = 8
+	OpPing
+	OpPong
+	// 11-16 are reserved for further control frames.
+)
 
 type Header struct {
 	FIN bool
@@ -31,7 +40,10 @@ type Header struct {
 
 const maxHeaderSize = 2 + 8 + 4
 
+// TODO turn into WriteTo to make use of buffering better.
+// TODO Benchmark ptr
 func (f *Header) Bytes() []byte {
+
 	var b [maxHeaderSize]byte
 
 	if f.FIN {
@@ -76,10 +88,6 @@ func (f *Header) Bytes() []byte {
 	}
 
 	return b[:length]
-}
-
-func (f *Header) MaskPayload(payload []byte) {
-	panic("TODO")
 }
 
 func ReadHeader(w io.Writer) (Header, error) {

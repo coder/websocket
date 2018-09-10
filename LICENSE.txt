@@ -50,6 +50,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 =============================================================================
 
+Some files in this repository are licensed under github.com/gobwas/ws's license.
+
 The MIT License (MIT)
 
 Copyright (c) 2017-2018 Sergey Kamardin <gobwas@gmail.com>
