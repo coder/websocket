@@ -9,21 +9,20 @@ import (
 	"net/http"
 )
 
-type Writer struct {
-	Writer io.Writer
-
-	Client bool
+type Conn struct {
+	ReadWriter io.ReadWriter
+	Client     bool
 }
 
-func (c *Writer) WriteFrame(op Opcode, p []byte) error {
+func (c Conn) WriteFrame(op Opcode, p []byte) error {
 	panic("TODO")
 }
 
-func (c *Writer) StreamFrame(op Opcode) io.WriteCloser {
+func (c Conn) StreamFrame(op Opcode) io.WriteCloser {
 	panic("TODO")
 }
 
-func Read(r io.Reader) (typ Opcode, payload io.Reader, err error) {
+func (c Conn) ReadFrame() (typ Opcode, payload io.Reader, err error) {
 	panic("TODO")
 }
 
@@ -39,7 +38,7 @@ func Handshake(w io.Writer, r *bufio.Reader, req *http.Request) (*http.Response,
 	req.Header.Set("Sec-WebSocket-Version", "13")
 	req.Header.Set("Sec-WebSocket-Key", secWebsocketKey)
 
-	// If w is a *bufio.Writer, req.Write will flush for us.
+	// If w is a *bufio.Wgriter, req.Write will flush for us.
 	err := req.Write(w)
 	if err != nil {
 		return nil, err
