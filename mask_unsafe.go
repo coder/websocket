@@ -8,7 +8,7 @@ import "unsafe"
 
 const wordSize = unsafe.Sizeof(uintptr(0))
 
-func mask(key [4]byte, pos int, p []byte) int {
+func realMask(key [4]byte, pos int, p []byte) int {
 	if len(p) < 2*int(wordSize) {
 		// Mask one byte at a time for small buffers.
 		return maskByByte(key, pos, p)

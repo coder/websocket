@@ -1,10 +1,8 @@
-package ws_test
+package ws
 
 import (
 	"bytes"
 	"testing"
-
-	"nhooyr.io/ws"
 )
 
 func TestHeader(t *testing.T) {
@@ -12,14 +10,14 @@ func TestHeader(t *testing.T) {
 
 	testCases := []struct {
 		name string
-		h    ws.Header
+		h    header
 		want []byte
 	}{
 		{
 			name: "RFC1",
-			h: ws.Header{
+			h: header{
 				FIN:    true,
-				Opcode: ws.OpText,
+				Opcode: OpText,
 				Length: int64(len("Hello")),
 			},
 			want: []byte{
@@ -29,9 +27,9 @@ func TestHeader(t *testing.T) {
 		},
 		{
 			name: "RFC2",
-			h: ws.Header{
+			h: header{
 				FIN:    true,
-				Opcode: ws.OpText,
+				Opcode: OpText,
 				Length: int64(len("Hello")),
 				Masked: true,
 				Mask: [4]byte{

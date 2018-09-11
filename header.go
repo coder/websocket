@@ -11,7 +11,7 @@ import (
 type Opcode int
 
 const (
-	OpContinuation Opcode = iota
+	opContinuation Opcode = iota
 	OpText
 	OpBinary
 	// 3 - 7 are reserved for further non-control frames.
@@ -21,7 +21,7 @@ const (
 	// 11-16 are reserved for further control frames.
 )
 
-type Header struct {
+type header struct {
 	FIN bool
 
 	RSV1 bool
@@ -42,8 +42,7 @@ const maxHeaderSize = 2 + 8 + 4
 
 // TODO turn into WriteTo to make use of buffering better.
 // TODO Benchmark ptr
-func (f *Header) Bytes() []byte {
-
+func (f *header) Bytes() []byte {
 	var b [maxHeaderSize]byte
 
 	if f.FIN {
@@ -90,7 +89,7 @@ func (f *Header) Bytes() []byte {
 	return b[:length]
 }
 
-func ReadHeader(w io.Writer) (Header, error) {
+func readHeader(w io.Writer) (header, error) {
 	panic("TODO")
 }
 

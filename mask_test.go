@@ -32,7 +32,7 @@ func TestMask(t *testing.T) {
 		0x58,
 	}
 
-	pos := Mask(key, 0, p)
+	pos := mask(key, 0, p)
 
 	if exp := "Hello"; exp != string(p) {
 		t.Errorf("expected %q; got %q", exp, string(p))
@@ -69,11 +69,11 @@ func TestMaskFuzzy(t *testing.T) {
 
 			mask := func() int {
 				if order {
-					return Mask(key, pos, p2)
+					return mask(key, pos, p2)
 				}
 
 				// maskByByte is relatively simple so its much easier to trust.
-				// Using it here will catch whether Mask's behaviour matches maskByByte.
+				// Using it here will catch whether mask's behaviour matches maskByByte.
 				return maskByByte(key, pos, p2)
 			}
 
