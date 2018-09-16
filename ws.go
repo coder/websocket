@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/sha1"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,20 +15,56 @@ import (
 )
 
 type Conn struct {
-	Client     bool
-	ReadWriter io.ReadWriter
+	client bool
+
+	writer *bufio.Writer
+
+	reader io.Reader
+
+	closer io.Closer
 }
 
-func (c Conn) WriteFrame(op Opcode, p []byte) error {
+func NewClientConn(w *bufio.Writer, r io.Reader, c io.Closer) *Conn {
+	return &Conn{
+		client: true,
+		writer: w,
+		reader: r,
+		closer: c,
+	}
+}
+
+func NewServerConn(w *bufio.Writer, r io.Reader, c io.Closer) *Conn {
+	return &Conn{
+		writer: w,
+		reader: r,
+		closer: c,
+	}
+}
+
+func (c *Conn) WriteFrame(op DataOpcode) io.WriteCloser {
 	panic("TODO")
 }
 
-func (c Conn) StreamFrame(op Opcode) io.WriteCloser {
+func (c *Conn) ReadFrame() (typ DataOpcode, payload io.Reader, err error) {
 	panic("TODO")
 }
 
-func (c Conn) ReadFrame() (typ Opcode, payload io.Reader, err error) {
-	panic("TODO")
+func (c Conn) Close(code StatusCode, reason string) (err error) {
+	defer func() {
+		err2 := c.closer.Close()
+		if err == nil && err2 != nil {
+			err = err2
+		}
+	}()
+
+	// TODO Make sure to prevent close frame fragmentation
+	w := c.WriteFrame(opClose)
+	err = writeClosePayload(w, code, reason)
+	if err != nil {
+		return err
+	}
+	err = w.Close()
+	return err
 }
 
 func Upgrade(w http.ResponseWriter, r *http.Request) (Conn, net.Conn, error) {
@@ -53,8 +90,11 @@ func Upgrade(w http.ResponseWriter, r *http.Request) (Conn, net.Conn, error) {
 	}
 
 	w.Header().Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
-}
 
+	c := Conn{
+		writeFrameBuf:
+	}
+}
 
 var acceptGUID = []byte("258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
 
@@ -108,8 +148,8 @@ func Handshake(rw *bufio.ReadWriter, req *http.Request) (Conn, *http.Response, e
 	}
 
 	conn := Conn{
-		ReadWriter: rw,
-		Client:     true,
+		readWriter: rw,
+		client:     true,
 	}
 
 	return conn, resp, nil

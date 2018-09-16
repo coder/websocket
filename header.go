@@ -6,84 +6,78 @@ import (
 	"io"
 )
 
-// Opcode is a WebSocket opcode.
-// This is how the WebSocket RFC capitalizes it.
-type Opcode int
+type opCode int
 
 const (
-	opContinuation Opcode = iota
-	OpText
-	OpBinary
+	opContinuation opCode = iota
+	opText
+	opBinary
 	// 3 - 7 are reserved for further non-control frames.
-	OpClose = 8
-	OpPing
-	OpPong
+	opClose = 8
+	opPing
+	opPong
 	// 11-16 are reserved for further control frames.
 )
 
+// DataOpcode is a WebSocket data opcode.
+// This is how the WebSocket RFC capitalizes Opcode.
+// TODO we don't just always binary because text utf-8 and javascript convert to utf-16 optimizations.
+type DataOpcode int
+
+const (
+	OpText   = DataOpcode(opText)
+	OpBinary = DataOpcode(opBinary)
+)
+
 type header struct {
-	FIN bool
-
-	RSV1 bool
-	RSV2 bool
-	RSV3 bool
-
-	Opcode Opcode
-
+	fin    bool
+	opcode opCode
 	// Length is an integer because the RFC mandates the MSB bit cannot be set.
 	// So we cannot send or receive a frame with negative length.
-	Length int64
+	length int64
 
-	Masked bool
-	Mask   [4]byte
+	masked bool
+	mask   [4]byte
 }
 
 const maxHeaderSize = 2 + 8 + 4
 
-// TODO turn into WriteTo to make use of buffering better.
 // TODO Benchmark ptr
-func (f *header) Bytes() []byte {
+func (f *header) writeTo(w io.Writer) (int64, error) {
 	var b [maxHeaderSize]byte
 
-	if f.FIN {
+	if f.fin {
 		b[0] |= 0x80
 	}
-	if f.RSV1 {
-		b[0] |= 0x40
-	}
-	if f.RSV2 {
-		b[0] |= 0x20
-	}
-	if f.RSV3 {
-		b[0] |= 0x10
+	// Next 3 bits in the first byte are for extensions so we never set them.
+
+	if f.opcode > 0x0F {
+		return nil, fmt.Errorf("opcode not allowed to be greater than 0x0F: %")
+		panicf("opcode is not allowed to be greater than 0x0F: %#v", f.opcode)
 	}
 
-	if f.Opcode > 0x0F {
-		panicf("opcode is not allowed to be greater than 0x0F: %#v", f.Opcode)
-	}
-
-	b[0] |= byte(f.Opcode)
+	b[0] |= byte(f.opcode)
 
 	length := 2
 
 	switch {
-	case f.Length < 0:
-		panicf("length is not allowed to be less than 0: %#v", f.Length)
-	case f.Length < 126:
-		b[1] |= byte(f.Length)
-	case f.Length < 65536:
+	case f.length < 0:
+		panicf("length is not allowed to be less than 0: %#v", f.length)
+	case f.length < 126:
+		b[1] |= byte(f.length)
+	case f.length < 65536:
 		b[1] = 126
 		length += 2
-		binary.BigEndian.PutUint16(b[length:], uint16(f.Length))
+		binary.BigEndian.PutUint16(b[length:], uint16(f.length))
 	default:
 		b[1] = 127
 		length += 8
-		binary.BigEndian.PutUint16(b[length:], uint16(f.Length))
+		binary.BigEndian.PutUint16(b[length:], uint16(f.length))
 	}
 
-	if f.Masked {
+	if f.masked {
 		b[1] |= 0x80
-		length += copy(b[length:], f.Mask[:])
+		length += copy(b[length:], f.mask[:])
 	}
 
 	return b[:length]

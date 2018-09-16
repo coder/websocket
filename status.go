@@ -3,10 +3,12 @@ package ws
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math/bits"
 )
 
+//go:generate stringer -type=StatusCode
 type StatusCode int
 
 const (
@@ -17,7 +19,16 @@ const (
 	// ...
 )
 
-func ParseClosePayload(p []byte) (code StatusCode, reason string, err error) {
+type CloseError struct {
+	Code   StatusCode
+	Reason string
+}
+
+func (e CloseError) Error() string {
+	return fmt.Sprintf("WebSocket closed with status = %s and reason = %q", e.Code, e.Reason)
+}
+
+func parseClosePayload(p []byte) (code StatusCode, reason string, err error) {
 	if len(p) < 2 {
 		return 0, "", errors.New("close payload is less than 2 bytes")
 	}
@@ -28,26 +39,23 @@ func ParseClosePayload(p []byte) (code StatusCode, reason string, err error) {
 	return code, reason, nil
 }
 
-func WriteClosePayload(w io.Writer, code StatusCode, reason string) (n int, err error) {
+func writeClosePayload(w io.Writer, code StatusCode, reason string) error {
 	if bits.Len(uint(code)) > 2 {
-		return 0, errors.New("status code is larger than 2 bytes")
+		return errors.New("status code is larger than 2 bytes")
 	}
 
 	var b [2]byte
 	binary.BigEndian.PutUint16(b[:], uint16(code))
 
-	n1, err := w.Write(b[:])
+	_, err := w.Write(b[:])
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	if len(reason) < 1 {
-		return n1, err
+		return nil
 	}
 
-	n2, err := io.WriteString(w, reason)
-	if err != nil {
-		return 0, err
-	}
-	return n1 + n2, nil
+	_, err = io.WriteString(w, reason)
+	return err
 }

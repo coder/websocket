@@ -16,9 +16,9 @@ func TestHeader(t *testing.T) {
 		{
 			name: "RFC1",
 			h: header{
-				FIN:    true,
-				Opcode: OpText,
-				Length: int64(len("Hello")),
+				fin:    true,
+				opcode: OpText,
+				length: int64(len("Hello")),
 			},
 			want: []byte{
 				0x81,
@@ -28,11 +28,11 @@ func TestHeader(t *testing.T) {
 		{
 			name: "RFC2",
 			h: header{
-				FIN:    true,
-				Opcode: OpText,
-				Length: int64(len("Hello")),
-				Masked: true,
-				Mask: [4]byte{
+				fin:    true,
+				opcode: OpText,
+				length: int64(len("Hello")),
+				masked: true,
+				mask: [4]byte{
 					0x37,
 					0xfa,
 					0x21,
@@ -52,7 +52,7 @@ func TestHeader(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			b := tc.h.Bytes()
+			b := tc.h.writeTo()
 			if !bytes.Equal(tc.want, b) {
 				t.Errorf("want %#v; got %#v", tc.want, b)
 			}
