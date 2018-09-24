@@ -3,6 +3,7 @@ package ws
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -138,4 +139,32 @@ func genKey() [4]byte {
 	key := rand.Uint32()
 	binary.BigEndian.PutUint32(b[:], key)
 	return b
+}
+
+// Taken from gorilla/websocket
+func BenchmarkMaskBytes(b *testing.B) {
+	for _, size := range []int{2, 4, 8, 16, 32, 512, 1024} {
+		b.Run(fmt.Sprintf("size-%d", size), func(b *testing.B) {
+			for _, align := range []int{int(wordSize / 2)} {
+				b.Run(fmt.Sprintf("align-%d", align), func(b *testing.B) {
+					for _, fn := range []struct {
+						name string
+						fn   func(key [4]byte, pos int, b []byte) int
+					}{
+						{"byte", maskByByte},
+						{"word", mask},
+					} {
+						b.Run(fn.name, func(b *testing.B) {
+							key := genKey()
+							data := make([]byte, size+align)[align:]
+							for i := 0; i < b.N; i++ {
+								fn.fn(key, 0, data)
+							}
+							b.SetBytes(int64(len(data)))
+						})
+					}
+				})
+			}
+		})
+	}
 }

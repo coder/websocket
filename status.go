@@ -8,29 +8,43 @@ import (
 	"math/bits"
 )
 
+// StatusCode represents a WebSocket status code.
 //go:generate stringer -type=StatusCode
 type StatusCode int
 
+// https://www.iana.org/assignments/websocket/websocket.xhtml#close-code-number
 const (
 	StatusNormalClosure StatusCode = 1000 + iota
 	StatusGoingAway
 	StatusProtocolError
 	StatusUnsupportedData
-	// ...
+	// 1004 is reserved.
+	StatusNoStatusRcvd StatusCode = 1005 + iota
+	StatusAbnormalClosure
+	StatusInvalidFramePayloadData
+	StatusPolicyViolation
+	StatusMessageTooBig
+	StatusMandatoryExtension
+	StatusInternalError
+	StatusServiceRestart
+	StatusTryAgainLater
+	StatusBadGateway
+	StatusTLSHandshake
 )
 
 type CloseError struct {
 	Code   StatusCode
-	Reason string
+	Reason MessageReader
 }
 
 func (e CloseError) Error() string {
+	// TODO read message
 	return fmt.Sprintf("WebSocket closed with status = %s and reason = %q", e.Code, e.Reason)
 }
 
 func parseClosePayload(p []byte) (code StatusCode, reason string, err error) {
-	if len(p) < 2 {
-		return 0, "", errors.New("close payload is less than 2 bytes")
+	if len(p) < 0 {
+		return StatusNoStatusRcvd, "", nil
 	}
 
 	code = StatusCode(binary.BigEndian.Uint16(p))
@@ -39,7 +53,7 @@ func parseClosePayload(p []byte) (code StatusCode, reason string, err error) {
 	return code, reason, nil
 }
 
-func writeClosePayload(w io.Writer, code StatusCode, reason string) error {
+func writeClosePayload(w io.Writer, code StatusCode, reason []byte) error {
 	if bits.Len(uint(code)) > 2 {
 		return errors.New("status code is larger than 2 bytes")
 	}
@@ -56,6 +70,6 @@ func writeClosePayload(w io.Writer, code StatusCode, reason string) error {
 		return nil
 	}
 
-	_, err = io.WriteString(w, reason)
+	_, err = w.Write(reason)
 	return err
 }

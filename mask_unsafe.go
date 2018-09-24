@@ -4,10 +4,13 @@
 
 package ws
 
-import "unsafe"
+import (
+	"unsafe"
+)
 
-const wordSize = unsafe.Sizeof(uintptr(0))
+const wordSize = int(unsafe.Sizeof(uintptr(0)))
 
+// TODO review this and make it even faster if possible, check both gobwas and gorilla
 func realMask(key [4]byte, pos int, p []byte) int {
 	if len(p) < 2*int(wordSize) {
 		// Mask one byte at a time for small buffers.
@@ -15,7 +18,7 @@ func realMask(key [4]byte, pos int, p []byte) int {
 	}
 
 	arrayAddr := uintptr(unsafe.Pointer(&p[0]))
-	offset := arrayAddr % wordSize
+	offset := int(arrayAddr) % wordSize
 	if offset > 0 {
 		// Mask one byte at a time to word boundary.
 		left := wordSize - offset

@@ -4,8 +4,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 )
 
+//go:generate stringer -type=opCode
 type opCode int
 
 const (
@@ -13,7 +15,7 @@ const (
 	opText
 	opBinary
 	// 3 - 7 are reserved for further non-control frames.
-	opClose = 8
+	opClose opCode = 8 + iota
 	opPing
 	opPong
 	// 11-16 are reserved for further control frames.
@@ -21,7 +23,8 @@ const (
 
 // DataOpcode is a WebSocket data opcode.
 // This is how the WebSocket RFC capitalizes Opcode.
-// TODO we don't just always binary because text utf-8 and javascript convert to utf-16 optimizations.
+// We allow users to set this, even though all data is technically binary because text frames appear
+// in javascript as UTF-16 strings.
 type DataOpcode int
 
 const (
@@ -29,21 +32,29 @@ const (
 	OpBinary = DataOpcode(opBinary)
 )
 
+func (op DataOpcode) String() string {
+	return opCode(op).String()
+}
+
 type header struct {
 	fin    bool
 	opcode opCode
-	// Length is an integer because the RFC mandates the MSB bit cannot be set.
+	// payloadLength is an integer because the RFC mandates the MSB bit cannot be set.
 	// So we cannot send or receive a frame with negative length.
-	length int64
+	payloadLength int64
 
 	masked bool
 	mask   [4]byte
 }
 
-const maxHeaderSize = 2 + 8 + 4
+// First byte consists of FIN, RSV1, RSV2, RSV3 and the Opcode.
+// Second byte is the mask flag and the payload length.
+// Next 8 bytes are the extended payload length.
+// Next 4 bytes are the mask key.
+const maxHeaderSize = 1 + 1 + 8 + 4
 
-// TODO Benchmark ptr
-func (f *header) writeTo(w io.Writer) (int64, error) {
+// See https://tools.ietf.org/html/rfc6455#section-5.2
+func (f header) writeTo(w io.Writer) (int, error) {
 	var b [maxHeaderSize]byte
 
 	if f.fin {
@@ -51,43 +62,92 @@ func (f *header) writeTo(w io.Writer) (int64, error) {
 	}
 	// Next 3 bits in the first byte are for extensions so we never set them.
 
-	if f.opcode > 0x0F {
-		return nil, fmt.Errorf("opcode not allowed to be greater than 0x0F: %")
-		panicf("opcode is not allowed to be greater than 0x0F: %#v", f.opcode)
+	// Opcode can only be max 4 bits.
+	if f.opcode > 1<<4-1 {
+		return 0, fmt.Errorf("opcode not allowed to be greater than 0x0f: %#x", f.opcode)
 	}
 
 	b[0] |= byte(f.opcode)
 
-	length := 2
+	// Minimum length of the frame as we have at least one more byte
+	// for the mask bit and the payload length.
+	length := 1 + 1
 
 	switch {
-	case f.length < 0:
-		panicf("length is not allowed to be less than 0: %#v", f.length)
-	case f.length < 126:
-		b[1] |= byte(f.length)
-	case f.length < 65536:
+	case f.payloadLength < 0:
+		return 0, fmt.Errorf("length is not permitted to be negative: %#x", f.payloadLength)
+	case f.payloadLength < 126:
+		b[1] |= byte(f.payloadLength)
+	case f.payloadLength <= math.MaxUint16:
 		b[1] = 126
+		binary.BigEndian.PutUint16(b[length:], uint16(f.payloadLength))
 		length += 2
-		binary.BigEndian.PutUint16(b[length:], uint16(f.length))
 	default:
 		b[1] = 127
+		binary.BigEndian.PutUint64(b[length:], uint64(f.payloadLength))
 		length += 8
-		binary.BigEndian.PutUint16(b[length:], uint16(f.length))
 	}
 
 	if f.masked {
-		b[1] |= 0x80
+		b[1] |= 1 << 7
 		length += copy(b[length:], f.mask[:])
 	}
 
-	return b[:length]
+	return w.Write(b[:length])
 }
 
-func readHeader(w io.Writer) (header, error) {
-	panic("TODO")
-}
+// See https://tools.ietf.org/html/rfc6455#section-5.2
+func readHeader(r io.Reader) (header, error) {
+	var b [maxHeaderSize - 2]byte
 
-func panicf(f string, v ...interface{}) {
-	msg := fmt.Sprintf(f, v...)
-	panic(msg)
+	_, err := io.ReadFull(r, b[:2])
+	if err != nil {
+		return header{}, err
+	}
+
+	var h header
+
+	h.fin = b[0]&(1<<3) != 0
+	h.opcode = opCode(b[0] & 0x0f)
+	h.masked = b[1]&(1<<7) != 0
+
+	extra := 0
+
+	if h.masked {
+		extra += 4
+	}
+
+	payloadLength := b[1] &^ (1 << 7)
+	switch {
+	case payloadLength == 127:
+		extra += 8
+	case payloadLength == 126:
+		extra += 2
+	}
+
+	_, err = io.ReadFull(r, b[:extra])
+	if err != nil {
+		return header{}, nil
+	}
+
+	switch payloadLength {
+	case 127:
+		h.payloadLength = int64(binary.BigEndian.Uint64(b[:]))
+		if h.payloadLength < 0 {
+			// TODO is this necessary?
+			return header{}, fmt.Errorf("received disallowed negative payload length: %#x", h.payloadLength)
+		}
+	case 126:
+		h.payloadLength = int64(binary.BigEndian.Uint16(b[:]))
+	default:
+		h.payloadLength = int64(payloadLength)
+	}
+
+	if h.masked {
+		// Skip the extended payload length.
+		extra -= 4
+		copy(h.mask[:], b[extra:])
+	}
+
+	return h, nil
 }
