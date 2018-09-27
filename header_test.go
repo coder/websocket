@@ -18,7 +18,7 @@ func TestHeader(t *testing.T) {
 			name: "RFC1",
 			h: header{
 				fin:           true,
-				opcode:        opText,
+				opCode:        opText,
 				payloadLength: int64(len("Hello")),
 			},
 		},
@@ -26,10 +26,10 @@ func TestHeader(t *testing.T) {
 			name: "RFC2",
 			h: header{
 				fin:           true,
-				opcode:        opText,
+				opCode:        opText,
 				payloadLength: int64(len("Hello")),
 				masked:        true,
-				mask: [4]byte{
+				maskKey: [4]byte{
 					0x37,
 					0xfa,
 					0x21,

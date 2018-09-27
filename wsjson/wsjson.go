@@ -2,39 +2,31 @@ package wsjson
 
 import (
 	"encoding/json"
-	"time"
+	"fmt"
 
 	"nhooyr.io/ws"
 )
 
-func Read(conn *ws.Conn, v interface{}) error {
-	_, wsr, err := conn.ReadDataMessage()
+func ReadMessage(conn *ws.Conn, v interface{}) error {
+	op, wsr, err := conn.ReadMessage()
 	if err != nil {
 		return err
 	}
 
-	deadline := time.Now().Add(time.Second * 15)
-	err = wsr.SetDeadline(deadline)
-	if err != nil {
-		return err
+	if op != ws.OpText {
+		return fmt.Errorf("unexpected op type for json: %v", op)
 	}
 
-	d := json.NewDecoder()
+	d := json.NewDecoder(wsr)
 	err = d.Decode(v)
 	return err
 }
 
-func Write(conn *ws.Conn, v interface{}) error {
-	wsw := conn.WriteDataMessage(ws.OpText)
-
-	deadline := time.Now().Add(time.Second * 15)
-	err := wsw.SetDeadline(deadline)
-	if err != nil {
-		return err
-	}
+func WriteMessage(conn *ws.Conn, v interface{}) error {
+	wsw := conn.WriteMessage(ws.OpText)
 
 	e := json.NewEncoder(wsw)
-	err = e.Encode(v)
+	err := e.Encode(v)
 	if err != nil {
 		return err
 	}

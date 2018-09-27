@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"math/bits"
 )
 
@@ -34,42 +33,34 @@ const (
 
 type CloseError struct {
 	Code   StatusCode
-	Reason MessageReader
+	Reason []byte
 }
 
 func (e CloseError) Error() string {
-	// TODO read message
-	return fmt.Sprintf("WebSocket closed with status = %s and reason = %q", e.Code, e.Reason)
+	return fmt.Sprintf("WebSocket closed with status = %v and reason = %q", e.Code, string(e.Reason))
 }
 
-func parseClosePayload(p []byte) (code StatusCode, reason string, err error) {
-	if len(p) < 0 {
-		return StatusNoStatusRcvd, "", nil
+func parseClosePayload(p []byte) (code StatusCode, reason []byte, err error) {
+	if len(p) < 2 {
+		return 0, nil, fmt.Errorf("close payload too small, cannot even contain the 2 byte status code")
 	}
 
 	code = StatusCode(binary.BigEndian.Uint16(p))
-	reason = string(p[2:])
+	reason = p[2:]
 
 	return code, reason, nil
 }
 
-func writeClosePayload(w io.Writer, code StatusCode, reason []byte) error {
-	if bits.Len(uint(code)) > 2 {
-		return errors.New("status code is larger than 2 bytes")
+func closePayload(code StatusCode, reason []byte) ([]byte, error) {
+	if bits.Len(uint(code)) > 16 {
+		return nil, errors.New("status code is larger than 2 bytes")
+	}
+	if code == StatusNoStatusRcvd || code == StatusAbnormalClosure {
+		return nil, fmt.Errorf("status code %v cannot be set by applications", code)
 	}
 
-	var b [2]byte
-	binary.BigEndian.PutUint16(b[:], uint16(code))
-
-	_, err := w.Write(b[:])
-	if err != nil {
-		return err
-	}
-
-	if len(reason) < 1 {
-		return nil
-	}
-
-	_, err = w.Write(reason)
-	return err
+	buf := make([]byte, 2+len(reason))
+	binary.BigEndian.PutUint16(buf[:], uint16(code))
+	copy(buf[2:], reason)
+	return buf, nil
 }

@@ -6,12 +6,12 @@ import "strconv"
 
 const (
 	_StatusCode_name_0 = "StatusNormalClosureStatusGoingAwayStatusProtocolErrorStatusUnsupportedData"
-	_StatusCode_name_1 = "StatusNoStatusRcvdStatusAbnormalClosureStatusInvalidFramePayloadDataStatusPolicyViolationStatusMessageTooBigStatusMandatoryExtStatusInternalErrorStatusServiceRestartStatusTryAgainLaterStatusBadGatewayStatusTLSHandshake"
+	_StatusCode_name_1 = "StatusNoStatusRcvdStatusAbnormalClosureStatusInvalidFramePayloadDataStatusPolicyViolationStatusMessageTooBigStatusMandatoryExtensionStatusInternalErrorStatusServiceRestartStatusTryAgainLaterStatusBadGatewayStatusTLSHandshake"
 )
 
 var (
 	_StatusCode_index_0 = [...]uint8{0, 19, 34, 53, 74}
-	_StatusCode_index_1 = [...]uint8{0, 18, 39, 68, 89, 108, 126, 145, 165, 184, 200, 218}
+	_StatusCode_index_1 = [...]uint8{0, 18, 39, 68, 89, 108, 132, 151, 171, 190, 206, 224}
 )
 
 func (i StatusCode) String() string {

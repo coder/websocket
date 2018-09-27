@@ -7,25 +7,26 @@ import (
 	"math"
 )
 
-//go:generate stringer -type=opCode
-type opCode int
+// DataOpcode is a WebSocket data opcode.
+// This is how the WebSocket RFC capitalizes Opcode.
+// We allow users to set this, even though all data is technically binary because text frames appear
+// in javascript as UTF-16 strings.
+//go:generate stringer -type=opcode
+type opcode int
 
 const (
-	opContinuation opCode = iota
+	opContinuation opcode = iota
 	opText
 	opBinary
-	// 3 - 7 are reserved for further non-control frames.
-	opClose opCode = 8 + iota
+	// 3 - 7 are reserved for further non-control frames.g
+	opClose opcode = 8 + iota
 	opPing
 	opPong
 	// 11-16 are reserved for further control frames.
 )
 
-// DataOpcode is a WebSocket data opcode.
-// This is how the WebSocket RFC capitalizes Opcode.
-// We allow users to set this, even though all data is technically binary because text frames appear
-// in javascript as UTF-16 strings.
-type DataOpcode int
+// This is how Opcode is in the RFC.
+type DataOpcode opcode
 
 const (
 	OpText   = DataOpcode(opText)
@@ -33,18 +34,18 @@ const (
 )
 
 func (op DataOpcode) String() string {
-	return opCode(op).String()
+	return opcode(op).String()
 }
 
 type header struct {
 	fin    bool
-	opcode opCode
+	opCode opcode
 	// payloadLength is an integer because the RFC mandates the MSB bit cannot be set.
 	// So we cannot send or receive a frame with negative length.
 	payloadLength int64
 
-	masked bool
-	mask   [4]byte
+	masked  bool
+	maskKey [4]byte
 }
 
 // First byte consists of FIN, RSV1, RSV2, RSV3 and the Opcode.
@@ -54,8 +55,8 @@ type header struct {
 const maxHeaderSize = 1 + 1 + 8 + 4
 
 // See https://tools.ietf.org/html/rfc6455#section-5.2
-func (f header) writeTo(w io.Writer) (int, error) {
-	var b [maxHeaderSize]byte
+func (f header) bytes() ([]byte, error) {
+	b := make([]byte, maxHeaderSize)
 
 	if f.fin {
 		b[0] |= 0x80
@@ -63,11 +64,11 @@ func (f header) writeTo(w io.Writer) (int, error) {
 	// Next 3 bits in the first byte are for extensions so we never set them.
 
 	// Opcode can only be max 4 bits.
-	if f.opcode > 1<<4-1 {
-		return 0, fmt.Errorf("opcode not allowed to be greater than 0x0f: %#x", f.opcode)
+	if f.opCode > 1<<4-1 {
+		return nil, fmt.Errorf("opcode not allowed to be greater than 0x0f: %#x", f.opCode)
 	}
 
-	b[0] |= byte(f.opcode)
+	b[0] |= byte(f.opCode)
 
 	// Minimum length of the frame as we have at least one more byte
 	// for the mask bit and the payload length.
@@ -75,7 +76,7 @@ func (f header) writeTo(w io.Writer) (int, error) {
 
 	switch {
 	case f.payloadLength < 0:
-		return 0, fmt.Errorf("length is not permitted to be negative: %#x", f.payloadLength)
+		return nil, fmt.Errorf("length is not permitted to be negative: %#x", f.payloadLength)
 	case f.payloadLength < 126:
 		b[1] |= byte(f.payloadLength)
 	case f.payloadLength <= math.MaxUint16:
@@ -90,10 +91,10 @@ func (f header) writeTo(w io.Writer) (int, error) {
 
 	if f.masked {
 		b[1] |= 1 << 7
-		length += copy(b[length:], f.mask[:])
+		length += copy(b[length:], f.maskKey[:])
 	}
 
-	return w.Write(b[:length])
+	return b[:length], nil
 }
 
 // See https://tools.ietf.org/html/rfc6455#section-5.2
@@ -102,13 +103,13 @@ func readHeader(r io.Reader) (header, error) {
 
 	_, err := io.ReadFull(r, b[:2])
 	if err != nil {
-		return header{}, err
+		return header{}, fmt.Errorf("failed to read first 2 bytes of header: %v", err)
 	}
 
 	var h header
 
 	h.fin = b[0]&(1<<3) != 0
-	h.opcode = opCode(b[0] & 0x0f)
+	h.opCode = opcode(b[0] & 0x0f)
 	h.masked = b[1]&(1<<7) != 0
 
 	extra := 0
@@ -127,7 +128,7 @@ func readHeader(r io.Reader) (header, error) {
 
 	_, err = io.ReadFull(r, b[:extra])
 	if err != nil {
-		return header{}, nil
+		return header{}, fmt.Errorf("failed to read remaining header bytes: %v", err)
 	}
 
 	switch payloadLength {
@@ -146,7 +147,7 @@ func readHeader(r io.Reader) (header, error) {
 	if h.masked {
 		// Skip the extended payload length.
 		extra -= 4
-		copy(h.mask[:], b[extra:])
+		copy(h.maskKey[:], b[extra:])
 	}
 
 	return h, nil
