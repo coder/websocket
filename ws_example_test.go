@@ -7,12 +7,13 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"net/url"
 	"reflect"
 	"time"
 
+	"golang.org/x/time/rate"
 	"nhooyr.io/ws"
 	"nhooyr.io/ws/wsjson"
+	"nhooyr.io/ws/wsutil"
 )
 
 func ExampleClient() {
@@ -66,17 +67,9 @@ func ExampleClient() {
 
 func ExampleServer() {
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin != "" {
-			url, err := url.Parse(origin)
-			if err != nil {
-				http.Error(w, "invalid origin header", http.StatusBadRequest)
-				return
-			}
-			if url.Host != r.Host {
-				http.Error(w, "unexpected origin host", http.StatusForbidden)
-				return
-			}
+		err := wsutil.VerifyOrigin(w, r, r.Host)
+		if err != nil {
+			return
 		}
 
 		conn, err := ws.ServerHandshake(w, r)
@@ -86,19 +79,33 @@ func ExampleServer() {
 		}
 		defer conn.Close()
 
+		ctx := context.Background()
+
+		l := rate.NewLimiter(rate.Every(time.Millisecond*100), 500)
 		for {
-			typ, wsr, err := conn.ReadMessage()
+			ctx, cancel := context.WithTimeout(ctx, time.Hour*2)
+			defer cancel()
+
+			err = l.Wait(ctx)
+			if err != nil {
+				log.Printf("failed to wait for limiter to allow reading the next message: %v", err)
+				return
+			}
+
+			typ, wsr, err := conn.ReadMessage(ctx)
 			if err != nil {
 				log.Printf("failed to read message: %v", err)
 				return
 			}
 
-			wsr.SetLimit(16384)
-			deadline := time.Now().Add(time.Second * 15)
-			wsr.SetContext(deadline)
+			ctx, cancel = context.WithTimeout(ctx, time.Second*10)
+			defer cancel()
 
-			wsw := conn.WriteMessage(typ)
-			wsw.SetContext(deadline)
+			wsr.Limit(16384)
+			wsr.Context(ctx)
+
+			wsw := conn.MessageWriter(typ)
+			wsw.Context(ctx)
 
 			_, err = io.Copy(wsw, wsr)
 			if err != nil {

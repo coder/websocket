@@ -28,7 +28,7 @@ func WriteMessage(conn *ws.Conn, pb proto.Message) error {
 		return err
 	}
 
-	wsw := conn.WriteMessage(ws.OpText)
+	wsw := conn.MessageWriter(ws.OpText)
 	_, err = wsw.Write(buf)
 	if err != nil {
 		return err

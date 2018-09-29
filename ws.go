@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"golang.org/x/net/http/httpguts"
+	"golang.org/x/time/rate"
 )
 
 // No exported constructor because very few callers will want to pass in a custom net conn.
@@ -25,7 +26,8 @@ type Conn struct {
 
 	// I cannot see anyone customizing these and they are not changeable in the http2 or
 	// http libraries either so I think a solid default is all that matters.
-	br *bufio.Reader
+	readRateLimiter rate.Limiter
+	br              *bufio.Reader
 
 	writeMu  chan struct{}
 	writes   chan write
@@ -73,11 +75,15 @@ func newConn(br *bufio.Reader, bw *bufio.Writer, netConn net.Conn, client bool) 
 func (c *Conn) manage() error {
 	const pingInterval = time.Minute
 	pingsTimer := time.NewTicker(pingInterval)
+	defer pingsTimer.Stop()
 
 	for {
 		select {
 		case <-pingsTimer.C:
 			lastRead := c.lastRead.Load().(time.Time)
+			if time.Since(lastRead) < pingInterval {
+				continue
+			}
 			if time.Since(lastRead) >= pingInterval*2 {
 				return fmt.Errorf("connection died; no read activity in %v; last read at %v", pingInterval*2, lastRead)
 			}
@@ -141,7 +147,7 @@ type MessageWriter struct {
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 
-	opCode opcode
+	opCode Opcode
 	locked bool
 }
 
@@ -149,7 +155,7 @@ type MessageWriter struct {
 // Only error case for TCP is if the conn is closed.
 // If the deadline is zero, that disables the deadline from the default
 // of 10 seconds.
-func (mw *MessageWriter) SetContext(ctx context.Context) {
+func (mw *MessageWriter) Context(ctx context.Context) {
 	mw.ctx = ctx
 	mw.cancelCtx = func() {}
 }
@@ -250,11 +256,11 @@ func (c *Conn) write(ctx context.Context, h header, payload []byte) error {
 	}
 }
 
-func (c *Conn) WriteMessage(op DataOpcode) *MessageWriter {
+func (c *Conn) MessageWriter(op Opcode) *MessageWriter {
 	if op != OpBinary && op != OpText {
 		panicf("cannot write non binary and non text data frame: %v", op)
 	}
-	return c.writeDataMessage(opcode(op))
+	return c.writeDataMessage(Opcode(op))
 }
 
 func (c *Conn) WriteCloseMessage(ctx context.Context, code StatusCode, reason []byte) error {
@@ -276,7 +282,7 @@ func panicf(f string, v ...interface{}) {
 	panic(msg)
 }
 
-func (c *Conn) writeDataMessage(op opcode) *MessageWriter {
+func (c *Conn) writeDataMessage(op Opcode) *MessageWriter {
 	mw := &MessageWriter{
 		c:      c,
 		opCode: op,
@@ -295,13 +301,13 @@ type MessageReader struct {
 
 // No error because in stdlib they use net.Conn.SetDeadline without checking error often.
 // Only error case for TCP is if the conn is closed.
-func (mr *MessageReader) SetContext(ctx context.Context) {
+func (mr *MessageReader) Context(ctx context.Context) {
 	mr.ctx = ctx
 	mr.cancelCtx = func() {}
 }
 
 // Do not use io.LimitReader because it does not error if the limit was hit.
-func (mr *MessageReader) SetLimit(n int) {
+func (mr *MessageReader) Limit(n int) {
 	mr.limit = n
 }
 
@@ -316,8 +322,8 @@ func (c *Conn) updateLastRead() {
 	c.lastRead.Store(time.Now())
 }
 
-// TODO should I rate limit messages read?
-func (c *Conn) ReadMessage() (typ DataOpcode, payload *MessageReader, err error) {
+func (c *Conn) ReadMessage(ctx context.Context) (typ Opcode, payload *MessageReader, err error) {
+	// TODO use ctx
 	for {
 		h, err := readHeader(c.br)
 		if err != nil {
@@ -367,6 +373,7 @@ func ishttpUpgradeHeader(h http.Header) error {
 func ServerHandshake(w http.ResponseWriter, r *http.Request) (*Conn, error) {
 	err := ishttpUpgradeHeader(r.Header)
 	if err != nil {
+		http.Error(w, "missing upgrade header for WebSocket upgrade", http.StatusBadRequest)
 		return nil, err
 	}
 	if r.Method != http.MethodGet {
@@ -385,6 +392,11 @@ func ServerHandshake(w http.ResponseWriter, r *http.Request) (*Conn, error) {
 	}
 
 	w.Header().Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
+
+	// Need to set this to prevent net/http from using chunked transfer encoding by default.
+	w.Header().Set("Content-Length", "0")
+
+	w.WriteHeader(http.StatusSwitchingProtocols)
 
 	hj, ok := w.(http.Hijacker)
 	if !ok {

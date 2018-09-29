@@ -23,7 +23,7 @@ func ReadMessage(conn *ws.Conn, v interface{}) error {
 }
 
 func WriteMessage(conn *ws.Conn, v interface{}) error {
-	wsw := conn.WriteMessage(ws.OpText)
+	wsw := conn.MessageWriter(ws.OpText)
 
 	e := json.NewEncoder(wsw)
 	err := e.Encode(v)

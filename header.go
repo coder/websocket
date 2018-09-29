@@ -7,39 +7,26 @@ import (
 	"math"
 )
 
-// DataOpcode is a WebSocket data opcode.
 // This is how the WebSocket RFC capitalizes Opcode.
 // We allow users to set this, even though all data is technically binary because text frames appear
 // in javascript as UTF-16 strings.
-//go:generate stringer -type=opcode
-type opcode int
+//go:generate stringer -type=Opcode
+type Opcode int
 
 const (
-	opContinuation opcode = iota
-	opText
-	opBinary
+	opContinuation Opcode = iota
+	OpText
+	OpBinary
 	// 3 - 7 are reserved for further non-control frames.g
-	opClose opcode = 8 + iota
+	opClose Opcode = 8 + iota
 	opPing
 	opPong
 	// 11-16 are reserved for further control frames.
 )
 
-// This is how Opcode is in the RFC.
-type DataOpcode opcode
-
-const (
-	OpText   = DataOpcode(opText)
-	OpBinary = DataOpcode(opBinary)
-)
-
-func (op DataOpcode) String() string {
-	return opcode(op).String()
-}
-
 type header struct {
 	fin    bool
-	opCode opcode
+	opCode Opcode
 	// payloadLength is an integer because the RFC mandates the MSB bit cannot be set.
 	// So we cannot send or receive a frame with negative length.
 	payloadLength int64
@@ -65,7 +52,7 @@ func (f header) bytes() ([]byte, error) {
 
 	// Opcode can only be max 4 bits.
 	if f.opCode > 1<<4-1 {
-		return nil, fmt.Errorf("opcode not allowed to be greater than 0x0f: %#x", f.opCode)
+		return nil, fmt.Errorf("Opcode not allowed to be greater than 0x0f: %#x", f.opCode)
 	}
 
 	b[0] |= byte(f.opCode)
@@ -109,7 +96,7 @@ func readHeader(r io.Reader) (header, error) {
 	var h header
 
 	h.fin = b[0]&(1<<3) != 0
-	h.opCode = opcode(b[0] & 0x0f)
+	h.opCode = Opcode(b[0] & 0x0f)
 	h.masked = b[1]&(1<<7) != 0
 
 	extra := 0
