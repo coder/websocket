@@ -38,7 +38,7 @@ func ExampleClient() {
 	if err != nil {
 		log.Fatalf("failed to do websocket client handshake: %v; resp: %v", err, resp)
 	}
-	defer c.Close()
+	defer c.Close(ws.StatusInternalError, nil)
 
 	for i := 0; i < 5; i++ {
 		msg := map[string]interface{}{
@@ -61,8 +61,10 @@ func ExampleClient() {
 		}
 	}
 
-	deadline := time.Now().Add(time.Second * 15)
-	_ = c.WriteCloseMessage(ws.StatusNormalClosure, nil, deadline)
+	err = c.Close(ws.StatusNormalClosure, nil)
+	if err != nil {
+		log.Fatalf("failed to write status normal closure.")
+	}
 }
 
 func ExampleServer() {
@@ -77,7 +79,7 @@ func ExampleServer() {
 			log.Printf("failed to upgrade HTTP to WebSocket: %v", err)
 			return
 		}
-		defer conn.Close()
+		defer conn.Close(ws.StatusInternalError, nil)
 
 		ctx := context.Background()
 
@@ -102,10 +104,10 @@ func ExampleServer() {
 			defer cancel()
 
 			wsr.Limit(16384)
-			wsr.Context(ctx)
+			wsr.SetContext(ctx)
 
 			wsw := conn.MessageWriter(typ)
-			wsw.Context(ctx)
+			wsw.SetContext(ctx)
 
 			_, err = io.Copy(wsw, wsr)
 			if err != nil {

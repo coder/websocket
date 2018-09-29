@@ -137,10 +137,6 @@ func (c *Conn) setErr(err error) {
 	c.errMu.Unlock()
 }
 
-func (c *Conn) NetConn() net.Conn {
-	return c.conn
-}
-
 type MessageWriter struct {
 	c *Conn
 
@@ -155,7 +151,7 @@ type MessageWriter struct {
 // Only error case for TCP is if the conn is closed.
 // If the deadline is zero, that disables the deadline from the default
 // of 10 seconds.
-func (mw *MessageWriter) Context(ctx context.Context) {
+func (mw *MessageWriter) SetContext(ctx context.Context) {
 	mw.ctx = ctx
 	mw.cancelCtx = func() {}
 }
@@ -263,11 +259,14 @@ func (c *Conn) MessageWriter(op Opcode) *MessageWriter {
 	return c.writeDataMessage(Opcode(op))
 }
 
-func (c *Conn) WriteCloseMessage(ctx context.Context, code StatusCode, reason []byte) error {
+func (c *Conn) Close(code StatusCode, reason []byte) error {
 	p, err := closePayload(code, reason)
 	if err != nil {
 		return fmt.Errorf("failed to construct close payload: %v", err)
 	}
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
 	h := header{
 		fin:           true,
 		opCode:        opClose,
@@ -301,7 +300,7 @@ type MessageReader struct {
 
 // No error because in stdlib they use net.Conn.SetDeadline without checking error often.
 // Only error case for TCP is if the conn is closed.
-func (mr *MessageReader) Context(ctx context.Context) {
+func (mr *MessageReader) SetContext(ctx context.Context) {
 	mr.ctx = ctx
 	mr.cancelCtx = func() {}
 }
@@ -348,10 +347,6 @@ func (c *Conn) ReadMessage(ctx context.Context) (typ Opcode, payload *MessageRea
 		}
 		return h.opCode, mr, nil
 	}
-}
-
-func (c *Conn) Close() error {
-	return c.conn.Close()
 }
 
 func httpHeaderContains(h http.Header, headerName, token string) error {
