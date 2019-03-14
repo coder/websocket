@@ -5,4 +5,4 @@ LABEL "com.github.actions.description"="Ensure files are formatted"
 LABEL "com.github.actions.icon"="code"
 LABEL "com.github.actions.color"="purple"
 
-CMD gofmt -ls .
+CMD gofmt -l -s .
