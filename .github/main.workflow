@@ -4,5 +4,5 @@ workflow "main" {
 }
 
 action "test" {
-  uses = ".github/test"
+  uses = "./.github/test"
 }
