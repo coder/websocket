@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 
-set -euxo pipefail
-
-export GO111MODULE=on
-export GOFLAGS=-mod=readonly
+source .github/lib.sh
 
 go test -v -vet=off ./...

@@ -1,7 +1,7 @@
 FROM golang:1.12
 
-LABEL "com.github.actions.name"="ensure go mod"
-LABEL "com.github.actions.description"="Ensure go.mod and go.sum are up to date"
+LABEL "com.github.actions.name"="deps"
+LABEL "com.github.actions.description"="Ensure synced go.mod and go.sum"
 LABEL "com.github.actions.icon"="code"
 LABEL "com.github.actions.color"="purple"
 
