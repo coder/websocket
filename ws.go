@@ -19,6 +19,8 @@ func ReadFrame(r io.Reader) (typ Opcode, payload io.Reader, err error) {
 	panic("TODO")
 }
 
+
+
 func Upgrade(w http.ResponseWriter, r *http.Request) (net.Conn, *bufio.ReadWriter, error) {
 	panic("TODO")
 }
