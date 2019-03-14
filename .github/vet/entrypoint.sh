@@ -5,4 +5,4 @@ set -euxo pipefail
 export GO111MODULE=on
 export GOFLAGS=-mod=readonly
 
-go vet -composites=false all
+go vet -composites=false ./...

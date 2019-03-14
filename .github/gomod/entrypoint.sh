@@ -13,7 +13,7 @@ function help() {
 	exit 1
 }
 
-go list -mod=readonly all > /dev/null || help
+go list -mod=readonly ./... > /dev/null || help
 go mod tidy || help
 
 # Until https://github.com/golang/go/issues/27005 the previous command can actually modify go.sum so we need to ensure its not changed.
