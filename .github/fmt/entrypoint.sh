@@ -9,11 +9,20 @@ if [[ $(gofmt -l -s .) != "" ]]; then
 	exit 1
 fi
 
-go get -u golang.org/x/tools/cmd/goimports
+go install golang.org/x/tools/cmd/goimports
 
 if [[ $(goimports -l -local=nhooyr.io/ws .) != "" ]]; then
 	echo "imports are not formatted correctly"
 	echo "please run:"
 	echo "goimports -w -local=nhooyr.io/ws ."
+	exit 1
+fi
+
+go install mvdan.cc/sh/cmd/shfmt
+
+if [[ $(shfmt -l -s .) != "" ]]; then
+	echo "shell scripts are not formatted correctly"
+	echo "please run:"
+	echo "shfmt -w -s ."
 	exit 1
 fi
