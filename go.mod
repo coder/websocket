@@ -3,7 +3,7 @@ module nhooyr.io/ws
 go 1.12
 
 require (
-	github.com/golang/protobuf v1.3.1
-	golang.org/x/net v0.0.0-20190313220215-9f648a60d977
-	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
+	github.com/kr/pretty v0.1.0 // indirect
+	golang.org/x/tools v0.0.0-20190315191501-e6df0c1bb376
+	mvdan.cc/sh v2.6.4+incompatible
 )
