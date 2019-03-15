@@ -5,5 +5,5 @@ import (
 )
 
 func TestMeow(t *testing.T) {
-	t.Log("hi github")
+	t.Log(Basic())
 }
