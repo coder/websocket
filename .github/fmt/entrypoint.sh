@@ -20,9 +20,9 @@ fi
 
 go install mvdan.cc/sh/cmd/shfmt
 
-if [[ $(shfmt -l -s .) != "" ]]; then
+if [[ $(shfmt -l -s -sr .) != "" ]]; then
 	echo "shell scripts are not formatted correctly"
 	echo "please run:"
-	echo "shfmt -w -s ."
+	echo "shfmt -w -s -sr ."
 	exit 1
 fi
