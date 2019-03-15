@@ -1,18 +1,10 @@
 workflow "main" {
   on = "push"
-  resolves = ["deps", "fmt", "vet", "test"]
-}
-
-action "deps" {
-  uses = "./.github/deps"
+  resolves = ["fmt", "test"]
 }
 
 action "fmt" {
   uses = "./.github/fmt"
-}
-
-action "vet" {
-  uses = "./.github/vet"
 }
 
 action "test" {
