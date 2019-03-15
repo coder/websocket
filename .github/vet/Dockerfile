@@ -7,4 +7,6 @@ LABEL "com.github.actions.color"="purple"
 
 COPY entrypoint.sh /entrypoint.sh
 
+RUN apt update && apt install -y shellcheck
+
 CMD ["/entrypoint.sh"]

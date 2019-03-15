@@ -1,9 +1,0 @@
-language: go
-go:
-  - "1.x"
-env:
-  - GO111MODULE=on
-cache:
-  directories:
-    - ~/.cache/go-build
-    - ~/gopath/pkg/mod
