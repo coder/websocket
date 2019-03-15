@@ -17,4 +17,5 @@ action "vet" {
 
 action "test" {
   uses = "./.github/test"
+  secrets = ["CODECOV_TOKEN"]
 }
