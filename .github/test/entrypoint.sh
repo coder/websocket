@@ -2,36 +2,38 @@
 
 source .github/lib.sh
 
-function gomod_help() {
-	echo
-	echo "you may need to update go.mod/go.sum via:"
-	echo "go list all > /dev/null"
-	echo "go mod tidy"
-	echo
-	echo "or git add files to staging"
-	exit 1
-}
-
-go list ./... > /dev/null || gomod_help
+# Unfortunately, this is the only way to ensure go.mod and go.sum are correct.
+# See https://github.com/golang/go/issues/27005
+go list ./... > /dev/null
 go mod tidy
 
-# Until https://github.com/golang/go/issues/27005 the previous command can actually modify go.sum so we need to ensure its not changed.
-if [[ $(git diff --name-only) != "" ]]; then
-	git diff
-	gomod_help
+go install golang.org/x/tools/cmd/stringer
+go generate ./...
+
+if [[ $CI ]] && unstaged_files; then
+	set +x
+	echo
+	echo "generated code needs an update"
+	echo "please run:"
+	echo "./test.sh"
+	echo
+	git status
+	exit 1
 fi
 
-mapfile -t scripts <<< "$(find . -type f -name "*.sh")"
-shellcheck "${scripts[@]}"
+(
+	shopt -s globstar nullglob dotglob
+	shellcheck ./**/*.sh
+)
 
 go vet -composites=false ./...
 
-go test -race -v -coverprofile=coverage.out -vet=off ./...
+COVERAGE_PROFILE=$(mktemp)
+go test -race -v "-coverprofile=${COVERAGE_PROFILE}" -vet=off ./...
+go tool cover "-func=${COVERAGE_PROFILE}"
 
-if [[ -z ${GITHUB_ACTION-} ]]; then
-	go tool cover -html=coverage.out
-else
+if [[ $CI ]]; then
 	bash <(curl -s https://codecov.io/bash)
+else
+	go tool cover "-html=${COVERAGE_PROFILE}" -o=coverage.html
 fi
-
-rm coverage.out

@@ -2,25 +2,17 @@
 
 source .github/lib.sh
 
-if [[ $(gofmt -l -s .) != "" ]]; then
+gofmt -w -s .
+go run go.coder.com/go-tools/cmd/goimports -w "-local=$(go list -m)" .
+go run mvdan.cc/sh/cmd/shfmt -w -s -sr .
+
+if [[ $CI ]] && unstaged_files; then
+	set +x
+	echo
 	echo "files are not formatted correctly"
 	echo "please run:"
-	echo "gofmt -w -s ."
-	exit 1
-fi
-
-out=$(go run golang.org/x/tools/cmd/goimports -l -local=nhooyr.io/ws .)
-if [[ $out != "" ]]; then
-	echo "imports are not formatted correctly"
-	echo "please run:"
-	echo "goimports -w -local=nhooyr.io/ws ."
-	exit 1
-fi
-
-out=$(go run mvdan.cc/sh/cmd/shfmt -l -s -sr .)
-if [[ $out != "" ]]; then
-	echo "shell scripts are not formatted correctly"
-	echo "please run:"
-	echo "shfmt -w -s -sr ."
+	echo "./test.sh"
+	echo
+	git status
 	exit 1
 fi
