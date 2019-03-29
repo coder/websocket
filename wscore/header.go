@@ -19,10 +19,12 @@ type Header struct {
 	MaskKey [4]byte
 }
 
+// Bytes returns the bytes of the header.
 func (h Header) Bytes() []byte {
 	panic("TODO")
 }
 
-func ReaderHeader(r io.Reader) []byte {
+// ReadHeader reads a header from the reader.
+func ReadHeader(r io.Reader) []byte {
 	panic("TODO")
 }

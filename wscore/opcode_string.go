@@ -4,6 +4,18 @@ package wscore
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[OpContinuation-0]
+	_ = x[OpText-1]
+	_ = x[OpBinary-2]
+	_ = x[OpClose-11]
+	_ = x[OpPing-12]
+	_ = x[OpPong-13]
+}
+
 const (
 	_Opcode_name_0 = "OpContinuationOpTextOpBinary"
 	_Opcode_name_1 = "OpCloseOpPingOpPong"

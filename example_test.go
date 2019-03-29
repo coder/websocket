@@ -8,11 +8,12 @@ import (
 	"time"
 
 	"golang.org/x/time/rate"
+
 	"nhooyr.io/ws"
 	"nhooyr.io/ws/wsjson"
 )
 
-func ExampleEcho() {
+func ExampleAccept_echo() {
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := ws.Accept(w, r,
 			ws.AcceptSubprotocols("echo"),
@@ -85,7 +86,7 @@ func ExampleAccept() {
 		type myJsonStruct struct {
 			MyField string `json:"my_field"`
 		}
-		err = wsjson.Write(c, myJsonStruct{
+		err = wsjson.Write(r.Context(), c, myJsonStruct{
 			MyField: "foo",
 		})
 		if err != nil {
@@ -118,7 +119,7 @@ func ExampleDial() {
 	type myJsonStruct struct {
 		MyField string `json:"my_field"`
 	}
-	err = wsjson.Write(c, myJsonStruct{
+	err = wsjson.Write(ctx, c, myJsonStruct{
 		MyField: "foo",
 	})
 	if err != nil {

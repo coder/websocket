@@ -1,6 +1,10 @@
 workflow "main" {
   on = "push"
-  resolves = ["fmt", "test"]
+  resolves = ["fmt", "lint", "test"]
+}
+
+action "lint" {
+  uses = "./.github/lint"
 }
 
 action "fmt" {

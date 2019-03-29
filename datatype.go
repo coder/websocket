@@ -8,6 +8,7 @@ import (
 //go:generate stringer -type=DataType
 type DataType int
 
+// DataType constants.
 const (
 	Text   DataType = DataType(wscore.OpText)
 	Binary DataType = DataType(wscore.OpBinary)

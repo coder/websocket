@@ -8,7 +8,7 @@ gen() {
 	go list ./... > /dev/null
 	go mod tidy
 
-	go install github.com/golang/protobuf/protoc-gen-go
+	go install golang.org/x/tools/cmd/stringer
 	go generate ./...
 }
 

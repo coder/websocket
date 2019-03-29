@@ -1,15 +1,19 @@
 package wspb
 
 import (
+	"context"
+
 	"github.com/golang/protobuf/proto"
 
 	"nhooyr.io/ws"
 )
 
-func Read(c *ws.Conn, v proto.Message) error {
+// Read reads a protobuf message from c into v.
+func Read(ctx context.Context, c *ws.Conn, v proto.Message) error {
 	panic("TODO")
 }
 
-func Write(c *ws.Conn, v proto.Message) error {
+// Write writes the protobuf message into c.
+func Write(ctx context.Context, c *ws.Conn, v proto.Message) error {
 	panic("TODO")
 }

@@ -4,6 +4,7 @@ package wscore
 //go:generate stringer -type=Opcode
 type Opcode int
 
+// Opcode constants.
 const (
 	OpContinuation Opcode = iota
 	OpText

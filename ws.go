@@ -2,6 +2,7 @@ package ws
 
 import (
 	"context"
+	"net"
 )
 
 const (
@@ -15,6 +16,11 @@ type Conn struct {
 // Subprotocol returns the negotiated subprotocol.
 // An empty string means the default protocol.
 func (c *Conn) Subprotocol() string {
+	panic("TODO")
+}
+
+// NetConn returns the net.Conn underlying the Conn.
+func (c *Conn) NetConn() net.Conn {
 	panic("TODO")
 }
 

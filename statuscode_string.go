@@ -4,6 +4,27 @@ package ws
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[StatusNormalClosure-1000]
+	_ = x[StatusGoingAway-1001]
+	_ = x[StatusProtocolError-1002]
+	_ = x[StatusUnsupportedData-1003]
+	_ = x[StatusNoStatusRcvd-1009]
+	_ = x[StatusAbnormalClosure-1010]
+	_ = x[StatusInvalidFramePayloadData-1011]
+	_ = x[StatusPolicyViolation-1012]
+	_ = x[StatusMessageTooBig-1013]
+	_ = x[StatusMandatoryExtension-1014]
+	_ = x[StatusInternalError-1015]
+	_ = x[StatusServiceRestart-1016]
+	_ = x[StatusTryAgainLater-1017]
+	_ = x[StatusBadGateway-1018]
+	_ = x[StatusTLSHandshake-1019]
+}
+
 const (
 	_StatusCode_name_0 = "StatusNormalClosureStatusGoingAwayStatusProtocolErrorStatusUnsupportedData"
 	_StatusCode_name_1 = "StatusNoStatusRcvdStatusAbnormalClosureStatusInvalidFramePayloadDataStatusPolicyViolationStatusMessageTooBigStatusMandatoryExtensionStatusInternalErrorStatusServiceRestartStatusTryAgainLaterStatusBadGatewayStatusTLSHandshake"
