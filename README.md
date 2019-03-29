@@ -38,7 +38,7 @@ such that there is only one way to do things and callbacks have been avoided.
 
 Performance sensitive applications should use ws/wscore directly.
 
-## [gobwas/ws](https://github.com/gobwas/ws)
+### [gobwas/ws](https://github.com/gobwas/ws)
 
 This library has an extremely flexible API but that comes at a cost of usability
 and clarity. Its just not clear and simple how to do things in a safe manner. 
