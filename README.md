@@ -33,7 +33,7 @@ This package is the community standard but it is very old and over time
 has accumulated cruft. There are many ways to do the same thing and the API
 overall is just not very clear. 
 
-The callback hooks are also confusing. The API for this library has been designed
+The callback hooks . The API for this library has been designed
 such that there is only one way to do things and callbacks have been avoided.
 
 Performance sensitive applications should use ws/wscore directly.
@@ -42,3 +42,9 @@ Performance sensitive applications should use ws/wscore directly.
 
 This library has an extremely flexible API but that comes at a cost of usability
 and clarity. Its just not clear and simple how to do things in a safe manner. 
+
+## TODO
+
+- [ ] Fully implement.
+- [ ] Decide whether we want to do WebSocket pings by default maybe every 30s?
+- [ ] 

@@ -1,17 +1,18 @@
-package wscore
+package ws
 
 import (
 	"io"
 )
 
-// Header represents a WebSocket frame header.
+// header represents a WebSocket frame header.
 // See https://tools.ietf.org/html/rfc6455#section-5.2
-type Header struct {
+// The fields are exported for easy printing for debugging.
+type header struct {
 	Fin    bool
 	Rsv1   bool
 	Rsv2   bool
 	Rsv3   bool
-	Opcode Opcode
+	Opcode opcode
 
 	PayloadLength int64
 
@@ -20,7 +21,7 @@ type Header struct {
 }
 
 // Bytes returns the bytes of the header.
-func (h Header) Bytes() []byte {
+func (h header) Bytes() []byte {
 	panic("TODO")
 }
 

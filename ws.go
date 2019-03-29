@@ -10,8 +10,7 @@ const (
 )
 
 // Conn represents a WebSocket connection.
-type Conn struct {
-}
+type Conn struct{}
 
 // Subprotocol returns the negotiated subprotocol.
 // An empty string means the default protocol.
@@ -47,8 +46,7 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 
 // MessageWriter enables writing to a WebSocket connection.
 // Ensure you close the MessageWriter once you have written to entire message.
-type MessageWriter struct {
-}
+type MessageWriter struct{}
 
 // Write writes the given bytes to the WebSocket connection.
 // The frame will automatically be fragmented as appropriate
@@ -65,8 +63,7 @@ func (w *MessageWriter) Close() error {
 }
 
 // MessageReader enables reading a data frame from the WebSocket connection.
-type MessageReader struct {
-}
+type MessageReader struct{}
 
 // SetContext bounds the read operation to the ctx.
 // By default, the context is the one passed to conn.ReadMessage.
