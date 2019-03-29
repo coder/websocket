@@ -1,26 +1,33 @@
 #!/usr/bin/env bash
 
-source .github/lib.sh
+source .github/lib.sh || exit 1
 
-if [[ $(gofmt -l -s .) != "" ]]; then
-	echo "files are not formatted correctly"
-	echo "please run:"
-	echo "gofmt -w -s ."
-	exit 1
-fi
+gen() {
+	# Unfortunately, this is the only way to ensure go.mod and go.sum are correct.
+	# See https://github.com/golang/go/issues/27005
+	go list ./... > /dev/null
+	go mod tidy
 
-out=$(go run golang.org/x/tools/cmd/goimports -l -local=nhooyr.io/ws .)
-if [[ $out != "" ]]; then
-	echo "imports are not formatted correctly"
-	echo "please run:"
-	echo "goimports -w -local=nhooyr.io/ws ."
-	exit 1
-fi
+	go install golang.org/x/tools/cmd/stringer
+	go generate ./...
+}
 
-out=$(go run mvdan.cc/sh/cmd/shfmt -l -s -sr .)
-if [[ $out != "" ]]; then
-	echo "shell scripts are not formatted correctly"
+fmt() {
+	gofmt -w -s .
+	go run go.coder.com/go-tools/cmd/goimports -w "-local=$(go list -m)" .
+	go run mvdan.cc/sh/cmd/shfmt -w -s -sr .
+}
+
+gen
+fmt
+
+if [[ $CI && $(unstaged_files) != "" ]]; then
+	set +x
+	echo
+	echo "files either need generation or are formatted incorrectly"
 	echo "please run:"
-	echo "shfmt -w -s -sr ."
+	echo "./test.sh"
+	echo
+	git status
 	exit 1
 fi
