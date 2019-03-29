@@ -27,6 +27,7 @@ func (c *Conn) NetConn() net.Conn {
 // MessageWriter returns a writer bounded by the context that will write
 // a WebSocket data frame of type dataType to the connection.
 // Ensure you close the MessageWriter once you have written to entire message.
+// Concurrent calls to MessageWriter are ok.
 func (c *Conn) MessageWriter(ctx context.Context, dataType DataType) *MessageWriter {
 	panic("TODO")
 }
