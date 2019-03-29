@@ -1,20 +1,27 @@
 #!/usr/bin/env bash
 
-# This is for local testing. See .github for CI.
+# This script is for local testing. See .github for CI.
 
-source ./.github/lib.sh
+source .github/lib.sh || exit 1
+cd "$(dirname "${0}")"
 
 function docker_run() {
-	local dir=$1
+	local DIR="$1"
+	local IMAGE
+	IMAGE="$(docker build -q "$DIR")"
 	docker run \
 		-v "${PWD}:/repo" \
 		-v "$(go env GOPATH):/go" \
 		-v "$(go env GOCACHE):/root/.cache/go-build" \
 		-w /repo \
-		"$(docker build -q "$dir")"
+		"${IMAGE}"
 }
-docker_run .github/fmt
-docker_run .github/test
 
-set +x
-echo "please open coverage.html to see detailed test coverage stats"
+if [[ $# -gt 0 ]]; then
+	docker_run ".github/$*"
+	exit 0
+fi
+
+docker_run .github/fmt
+docker_run .github/lint
+docker_run .github/test
