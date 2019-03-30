@@ -14,6 +14,17 @@ This library is in heavy development.
 go get nhooyr.io/ws@master
 ```
 
+## Features
+
+- Full support of the WebSocket protocol
+- Simple to use because of the minimal API
+- Uses the context package for cancellation
+- Uses net/http's Client to do WebSocket dials
+- JSON and Protobuf helpers in wsjson and wspb subpackages
+- Compression extension is supported
+- Highly optimized
+- API will be ready for WebSockets over HTTP/2
+
 ## Example
 
 ### Server
@@ -84,17 +95,6 @@ func main() {
 ```
 
 See [example_test.go](example_test.go) for more examples.
-
-## Features
-
-- Full support of the WebSocket protocol
-- Simple to use because of the minimal API
-- Uses the context package for cancellation
-- Uses net/http's Client to do WebSocket dials
-- JSON and Protobuf helpers in wsjson and wspb subpackages
-- Compression extension is supported
-- Highly optimized
-- API will be ready for WebSockets over HTTP/2
 
 ## Design considerations
 
