@@ -24,6 +24,7 @@ go get nhooyr.io/ws@master
 - Compression extension is supported
 - Highly optimized
 - API will be ready for WebSockets over HTTP/2
+- WASM support
 
 ## Example
 
