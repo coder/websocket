@@ -1,4 +1,4 @@
-package ws
+package websocket
 
 // DataType represents the Opcode of a WebSocket data frame.
 //go:generate stringer -type=DataType

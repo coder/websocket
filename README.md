@@ -1,17 +1,17 @@
-# ws
+# websocket
 
-[![GoDoc](https://godoc.org/nhooyr.io/ws?status.svg)](https://godoc.org/nhooyr.io/ws)
-[![Codecov](https://img.shields.io/codecov/c/github/nhooyr/ws.svg)](https://codecov.io/gh/nhooyr/ws)
-[![GitHub release](https://img.shields.io/github/release/nhooyr/ws.svg)](https://github.com/nhooyr/ws/releases)
+[![GoDoc](https://godoc.org/nhooyr.io/websocket?status.svg)](https://godoc.org/nhooyr.io/websocket)
+[![Codecov](https://img.shields.io/codecov/c/github/nhooyr/websocket.svg)](https://codecov.io/gh/nhooyr/websocket)
+[![GitHub release](https://img.shields.io/github/release/nhooyr/websocket.svg)](https://github.com/nhooyr/websocket/releases)
 
-ws is a minimal and idiomatic WebSocket library for Go.
+websocket is a minimal and idiomatic WebSocket library for Go.
 
 This library is in heavy development.
 
 ## Install
 
 ```bash
-go get nhooyr.io/ws@master
+go get nhooyr.io/websocket@master
 ```
 
 ## Features
@@ -20,10 +20,9 @@ go get nhooyr.io/ws@master
 - Simple to use because of the minimal API
 - Uses the context package for cancellation
 - Uses net/http's Client to do WebSocket dials
-- JSON and Protobuf helpers in wsjson and wspb subpackages
-- Compression extension is supported
+- Compression of text frames larger than 1024 bytes by default
 - Highly optimized
-- API will be ready for WebSockets over HTTP/2
+- API will transparently work with WebSockets over HTTP/2
 - WASM support
 
 ## Example
@@ -33,28 +32,31 @@ go get nhooyr.io/ws@master
 ```go
 func main() {
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := ws.Accept(w, r)
+		c, err := websocket.Accept(w, r,
+			websocket.AcceptSubprotocols("test"),
+		)
 		if err != nil {
 			log.Printf("server handshake failed: %v", err)
 			return
 		}
-		defer c.Close(ws.StatusInternalError, "")
+		defer c.Close(websocket.StatusInternalError, "")
 
 		ctx, cancel := context.WithTimeout(r.Context(), time.Second*10)
 		defer cancel()
 
-		err = wsjson.Write(ctx, c, map[string]interface{}{
+		v := map[string]interface{}{
 			"my_field": "foo",
-		})
+		}
+		err = websocket.WriteJSON(ctx, c, v)
 		if err != nil {
-			log.Printf("failed to write json struct: %v", err)
+			log.Printf("failed to write json: %v", err)
 			return
 		}
 
-		c.Close(ws.StatusNormalClosure, "")
+		log.Printf("wrote %v", v)
+
+		c.Close(websocket.StatusNormalClosure, "")
 	})
-	// For production deployments, use a net/http.Server configured
-	// with the appropriate timeouts.
 	err := http.ListenAndServe("localhost:8080", fn)
 	if err != nil {
 		log.Fatalf("failed to listen and serve: %v", err)
@@ -62,28 +64,33 @@ func main() {
  }
 ```
 
+For a production quality example that shows off the low level API, see the [echo example](https://godoc.org/nhooyr.io/websocket#ex-Accept--Echo).
+
 ### Client
 
 ```go
 func main() {
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
 
-	c, _, err := ws.Dial(ctx, "ws://localhost:8080")
+	c, _, err := websocket.Dial(ctx, "ws://localhost:8080",
+		websocket.DialSubprotocols("test"),
+	)
 	if err != nil {
 		log.Fatalf("failed to ws dial: %v", err)
 	}
-	defer c.Close(ws.StatusInternalError, "")
+	defer c.Close(websocket.StatusInternalError, "")
 
-	err = wsjson.Write(ctx, c, map[string]interface{}{
-		"my_field": "foo",
-	})
+	var v interface{}
+	err = websocket.ReadJSON(ctx, c, v)
 	if err != nil {
-		log.Fatalf("failed to write json struct: %v", err)
+		log.Fatalf("failed to read json: %v", err)
 	}
 
-	c.Close(ws.StatusNormalClosure, "")
+	log.Printf("received %v", v)
+
+	c.Close(websocket.StatusNormalClosure, "")
 }
 ```
 
@@ -111,10 +118,10 @@ https://github.com/gorilla/websocket
 This package is the community standard but it is very old and over timennn
 has accumulated cruft. There are many ways to do the same thing and the API
 overall is just not very clear. Just compare the godoc of
-[nhooyr/ws](godoc.org/github.com/nhooyr/ws) side by side with
+[nhooyr/websocket](godoc.org/github.com/nhooyr/websocket) side by side with
 [gorilla/websocket](godoc.org/github.com/gorilla/websocket).
 
-The API for nhooyr/ws has been designed such that there is only one way to do things
+The API for nhooyr/websocket has been designed such that there is only one way to do things
 and with HTTP/2 in mind which makes using it correctly and safely much easier.
 
 ### x/net/websocket
@@ -134,8 +141,8 @@ and clarity. Its just not clear how to do things in a safe manner.
 
 This library is fantastic in terms of performance though. The author put in significant
 effort to ensure its speed and I have tried to apply as many of its teachings as
-I could into nhooyr/ws.
+I could into nhooyr/websocket.
 
 If you want a library that gives you absolute control over everything, this is the library,
-but for most users, the API provided by nhooyr/ws will definitely fit better as it will
+but for most users, the API provided by nhooyr/websocket will definitely fit better as it will
 be just as performant but much easier to use.

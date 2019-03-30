@@ -1,4 +1,4 @@
-package ws
+package websocket
 
 // Mask applies the WebSocket masking algorithm to p
 // with the given key where the first 3 bits of pos
