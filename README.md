@@ -64,7 +64,7 @@ func main() {
  }
 ```
 
-For a production quality example that shows off the low level API, see the [echo example](https://godoc.org/nhooyr.io/websocket#ex-Accept--Echo).
+For a production quality example that shows off the low level API, see the echo example on the [godoc](https://godoc.org/nhooyr.io/websocket#Accept).
 
 ### Client
 
