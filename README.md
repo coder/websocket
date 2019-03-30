@@ -111,7 +111,9 @@ See [example_test.go](example_test.go) for more examples.
 
 ## Comparison
 
-### [gorilla/websocket](https://github.com/gorilla/websocket)
+### gorilla/websocket
+
+https://github.com/gorilla/websocket
 
 This package is the community standard but it is very old and over timennn
 has accumulated cruft. There are many ways to do the same thing and the API
@@ -122,13 +124,17 @@ overall is just not very clear. Just compare the godoc of
 The API for nhooyr/ws has been designed such that there is only one way to do things
 and with HTTP/2 in mind which makes using it correctly and safely much easier.
 
-### [x/net/websocket](https://godoc.org/golang.org/x/net/websocket)
+### x/net/websocket
+
+https://godoc.org/golang.org/x/net/websocket
 
 Unmaintained and the API does not reflect WebSocket semantics. Should never be used.
 
 See https://github.com/golang/go/issues/18152
 
-### [gobwas/ws](https://github.com/gobwas/ws)
+### gobwas/ws
+
+https://github.com/gobwas/ws
 
 This library has an extremely flexible API but that comes at the cost of usability
 and clarity. Its just not clear how to do things in a safe manner. 
