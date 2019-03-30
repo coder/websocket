@@ -1,4 +1,4 @@
-package ws_test
+package websocket_test
 
 import (
 	"context"
@@ -9,20 +9,19 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"nhooyr.io/ws"
-	"nhooyr.io/ws/wsjson"
+	"nhooyr.io/websocket"
 )
 
 func ExampleAccept_echo() {
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := ws.Accept(w, r,
-			ws.AcceptSubprotocols("echo"),
+		c, err := websocket.Accept(w, r,
+			websocket.AcceptSubprotocols("echo"),
 		)
 		if err != nil {
 			log.Printf("server handshake failed: %v", err)
 			return
 		}
-		defer c.Close(ws.StatusInternalError, "")
+		defer c.Close(websocket.StatusInternalError, "")
 
 		ctx := context.Background()
 
@@ -65,9 +64,14 @@ func ExampleAccept_echo() {
 			}
 		}
 	})
-	// For production deployments, use a net/http.Server configured
-	// with the appropriate timeouts.
-	err := http.ListenAndServe("localhost:8080", fn)
+
+	s := &http.Server{
+		Addr:         "localhost:8080",
+		Handler:      fn,
+		ReadTimeout:  time.Second * 15,
+		WriteTimeout: time.Second * 15,
+	}
+	err := s.ListenAndServe()
 	if err != nil {
 		log.Fatalf("failed to listen and serve: %v", err)
 	}
@@ -75,28 +79,31 @@ func ExampleAccept_echo() {
 
 func ExampleAccept() {
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := ws.Accept(w, r)
+		c, err := websocket.Accept(w, r,
+			websocket.AcceptSubprotocols("test"),
+		)
 		if err != nil {
 			log.Printf("server handshake failed: %v", err)
 			return
 		}
-		defer c.Close(ws.StatusInternalError, "")
+		defer c.Close(websocket.StatusInternalError, "")
 
 		ctx, cancel := context.WithTimeout(r.Context(), time.Second*10)
 		defer cancel()
 
-		err = wsjson.Write(ctx, c, map[string]interface{}{
+		v := map[string]interface{}{
 			"my_field": "foo",
-		})
+		}
+		err = websocket.WriteJSON(ctx, c, v)
 		if err != nil {
-			log.Printf("failed to write json struct: %v", err)
+			log.Printf("failed to write json: %v", err)
 			return
 		}
 
-		c.Close(ws.StatusNormalClosure, "")
+		log.Printf("wrote %v", v)
+
+		c.Close(websocket.StatusNormalClosure, "")
 	})
-	// For production deployments, use a net/http.Server configured
-	// with the appropriate timeouts.
 	err := http.ListenAndServe("localhost:8080", fn)
 	if err != nil {
 		log.Fatalf("failed to listen and serve: %v", err)
@@ -108,18 +115,21 @@ func ExampleDial() {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	c, _, err := ws.Dial(ctx, "ws://localhost:8080")
+	c, _, err := websocket.Dial(ctx, "ws://localhost:8080",
+		websocket.DialSubprotocols("test"),
+	)
 	if err != nil {
 		log.Fatalf("failed to ws dial: %v", err)
 	}
-	defer c.Close(ws.StatusInternalError, "")
+	defer c.Close(websocket.StatusInternalError, "")
 
-	err = wsjson.Write(ctx, c, map[string]interface{}{
-		"my_field": "foo",
-	})
+	var v interface{}
+	err = websocket.ReadJSON(ctx, c, v)
 	if err != nil {
-		log.Fatalf("failed to write json struct: %v", err)
+		log.Fatalf("failed to read json: %v", err)
 	}
 
-	c.Close(ws.StatusNormalClosure, "")
+	log.Printf("received %v", v)
+
+	c.Close(websocket.StatusNormalClosure, "")
 }

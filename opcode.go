@@ -1,4 +1,4 @@
-package ws
+package websocket
 
 // opcode represents a WebSocket Opcode.
 //go:generate stringer -type=opcode
