@@ -1,6 +1,6 @@
 package ws
 
-// Mask applies the websocket masking algorithm to p
+// Mask applies the WebSocket masking algorithm to p
 // with the given key where the first 3 bits of pos
 // are the starting position in the key.
 // See https://tools.ietf.org/html/rfc6455#section-5.3

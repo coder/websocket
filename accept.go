@@ -24,6 +24,7 @@ func AcceptSubprotocols(subprotocols ...string) AcceptOption {
 // Use this option with caution to avoid exposing your WebSocket
 // server to a CSRF attack.
 // See https://stackoverflow.com/a/37837709/4283659
+// You can use a * to specify wildcards in domain names.
 func AcceptOrigins(origins ...string) AcceptOption {
 	panic("TODO")
 }

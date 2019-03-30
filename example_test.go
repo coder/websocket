@@ -41,7 +41,8 @@ func ExampleAccept_echo() {
 			r.SetContext(ctx)
 			r.Limit(32768)
 
-			w := c.MessageWriter(ctx, typ)
+			w := c.MessageWriter(typ)
+			w.SetContext(ctx)
 			_, err = io.Copy(w, r)
 			if err != nil {
 				return err
@@ -83,10 +84,13 @@ func ExampleAccept() {
 		}
 		defer c.Close(ws.StatusInternalError, "")
 
+		ctx, cancel := context.WithTimeout(r.Context(), time.Second*10)
+		defer cancel()
+
 		type myJsonStruct struct {
 			MyField string `json:"my_field"`
 		}
-		err = wsjson.Write(r.Context(), c, myJsonStruct{
+		err = wsjson.Write(ctx, c, myJsonStruct{
 			MyField: "foo",
 		})
 		if err != nil {
@@ -112,7 +116,6 @@ func ExampleDial() {
 	c, _, err := ws.Dial(ctx, "ws://localhost:8080")
 	if err != nil {
 		log.Fatalf("failed to ws dial: %v", err)
-		return
 	}
 	defer c.Close(ws.StatusInternalError, "")
 
@@ -124,7 +127,6 @@ func ExampleDial() {
 	})
 	if err != nil {
 		log.Fatalf("failed to write json struct: %v", err)
-		return
 	}
 
 	c.Close(ws.StatusNormalClosure, "")
