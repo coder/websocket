@@ -6,7 +6,8 @@ package websocket
 // See https://tools.ietf.org/html/rfc6455#section-5.3
 //
 // The returned value is the position of the next byte
-// to be used for masking in the key.
+// to be used for masking in the key. This is so that
+// unmasking can be performed without the entire frame.
 func mask(key [4]byte, pos int, p []byte) int {
 	for i := range p {
 		p[i] ^= key[pos&3]
