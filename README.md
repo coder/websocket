@@ -32,9 +32,7 @@ go get nhooyr.io/ws@master
 ```go
 func main() {
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := ws.Accept(w, r,
-			ws.AcceptSubprotocols("echo"),
-		)
+		c, err := ws.Accept(w, r)
 		if err != nil {
 			log.Printf("server handshake failed: %v", err)
 			return
@@ -44,11 +42,8 @@ func main() {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Second*10)
 		defer cancel()
 
-		type myJsonStruct struct {
-			MyField string `json:"my_field"`
-		}
-		err = wsjson.Write(ctx, c, myJsonStruct{
-			MyField: "foo",
+		err = wsjson.Write(ctx, c, map[string]interface{}{
+			"my_field": "foo",
 		})
 		if err != nil {
 			log.Printf("failed to write json struct: %v", err)
@@ -63,7 +58,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen and serve: %v", err)
 	}
-}
+ }
 ```
 
 ### Client
@@ -80,11 +75,8 @@ func main() {
 	}
 	defer c.Close(ws.StatusInternalError, "")
 
-	type myJsonStruct struct {
-		MyField string `json:"my_field"`
-	}
-	err = wsjson.Write(ctx, c, myJsonStruct{
-		MyField: "foo",
+	err = wsjson.Write(ctx, c, map[string]interface{}{
+		"my_field": "foo",
 	})
 	if err != nil {
 		log.Fatalf("failed to write json struct: %v", err)
