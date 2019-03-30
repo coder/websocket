@@ -33,9 +33,10 @@ func DialSubprotocols(subprotocols ...string) DialOption {
 
 // We use this key for all client requests as the Sec-WebSocket-Key header is useless.
 // See https://stackoverflow.com/a/37074398/4283659.
+// We also use the same mask key for every message as it too does not make a difference.
 var secWebSocketKey = base64.StdEncoding.EncodeToString(make([]byte, 16))
 
-// Dial performs a websocket handshake on the given url with the given options.
+// Dial performs a WebSocket handshake on the given url with the given options.
 func Dial(ctx context.Context, u string, opts ...DialOption) (*Conn, *http.Response, error) {
 	panic("TODO")
 }
