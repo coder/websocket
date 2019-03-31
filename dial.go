@@ -78,15 +78,15 @@ func Dial(ctx context.Context, u string, opts ...DialOption) (_ *Conn, _ *http.R
 	}
 
 	switch parsedURL.Scheme {
-	case "ws", "http":
+	case "ws":
 		parsedURL.Scheme = "http"
-	case "wss", "https":
+	case "wss":
 		parsedURL.Scheme = "https"
 	default:
 		return nil, nil, xerrors.Errorf("unknown scheme in url: %q", parsedURL.Scheme)
 	}
 
-	req, _ := http.NewRequest("GET", u, nil)
+	req, _ := http.NewRequest("GET", parsedURL.String(), nil)
 	req = req.WithContext(ctx)
 	req.Header = header
 	req.Header.Set("Connection", "Upgrade")

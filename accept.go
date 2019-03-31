@@ -23,8 +23,8 @@ func (o acceptSubprotocols) acceptOption() {}
 
 // AcceptSubprotocols list the subprotocols that Accept will negotiate with a client.
 // The first protocol that a client supports will be negotiated.
-// Pass "" as a subprotocol if you would like to allow the default protocol along with
-// specific subprotocols.
+// The empty protocol will always be negotiated as per RFC 6455. If you would like to
+// reject it, close the connection is c.Subprotocol() == "".
 func AcceptSubprotocols(subprotocols ...string) AcceptOption {
 	return acceptSubprotocols(subprotocols)
 }
@@ -42,7 +42,7 @@ func (o acceptOrigins) acceptOption() {}
 // See https://stackoverflow.com/a/37837709/4283659
 // You can use a * for wildcards.
 func AcceptOrigins(origins ...string) AcceptOption {
-	return AcceptOrigins(origins...)
+	return acceptOrigins(origins)
 }
 
 // Accept accepts a WebSocket handshake from a client and upgrades the
@@ -135,7 +135,7 @@ func Accept(w http.ResponseWriter, r *http.Request, opts ...AcceptOption) (*Conn
 }
 
 func selectSubprotocol(w http.ResponseWriter, r *http.Request, subprotocols []string) {
-	clientSubprotocols := strings.Split(r.Header.Get("Sec-WebSocket-Protocol"), "\n")
+	clientSubprotocols := strings.Split(r.Header.Get("Sec-WebSocket-Protocol"), ",")
 	for _, sp := range subprotocols {
 		for _, cp := range clientSubprotocols {
 			if sp == strings.TrimSpace(cp) {
@@ -168,9 +168,9 @@ func authenticateOrigin(r *http.Request, origins []string) error {
 		return xerrors.Errorf("failed to parse Origin header %q: %w", origin, err)
 	}
 	for _, o := range origins {
-		if u.Host == o {
+		if strings.EqualFold(u.Host, o) {
 			return nil
 		}
 	}
-	return xerrors.New("request origin is not authorized")
+	return xerrors.Errorf("request origin %q is not authorized", r.Header.Get("Origin"))
 }

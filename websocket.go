@@ -139,7 +139,11 @@ messageLoop:
 				masked:        c.client,
 			}
 			c.writeFrame(h, control.payload)
-			c.writeDone <- struct{}{}
+			select {
+			case <-c.closed:
+				return
+			case c.writeDone <- struct{}{}:
+			}
 			continue
 		}
 
@@ -280,6 +284,7 @@ func (c *Conn) readLoop() {
 				return
 			}
 		default:
+			// TODO send back protocol violation message or figure out what RFC wants.
 			c.close(xerrors.Errorf("unexpected opcode in header: %#v", h))
 			return
 		}
@@ -481,8 +486,14 @@ func (w *MessageWriter) Close() error {
 		}
 	}
 	close(w.c.writeBytes)
-	<-w.c.writeDone
-	return nil
+	select {
+	case <-w.c.closed:
+		return w.c.getCloseErr()
+	case <-w.ctx.Done():
+		return w.ctx.Err()
+	case <-w.c.writeDone:
+		return nil
+	}
 }
 
 // MessageReader enables reading a data frame from the WebSocket connection.
