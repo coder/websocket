@@ -3,6 +3,7 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"io"
 
 	"golang.org/x/xerrors"
 )
@@ -31,8 +32,7 @@ func (jc *JSONConn) read(ctx context.Context, v interface{}) error {
 		return xerrors.Errorf("unexpected frame type for json (expected DataText): %v", typ)
 	}
 
-	r.Limit(131072)
-	r.SetContext(ctx)
+	r = io.LimitReader(r, 131072)
 
 	d := json.NewDecoder(r)
 	err = d.Decode(v)
@@ -52,8 +52,7 @@ func (jc JSONConn) Write(ctx context.Context, v interface{}) error {
 }
 
 func (jc JSONConn) write(ctx context.Context, v interface{}) error {
-	w := jc.Conn.MessageWriter(DataText)
-	w.SetContext(ctx)
+	w := jc.Conn.MessageWriter(ctx, DataText)
 
 	e := json.NewEncoder(w)
 	err := e.Encode(v)

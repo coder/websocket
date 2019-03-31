@@ -34,14 +34,9 @@ func ExampleAccept_echo() {
 				return err
 			}
 
-			ctx, cancel = context.WithTimeout(ctx, time.Second*10)
-			defer cancel()
+			r = io.LimitReader(r, 32768)
 
-			r.SetContext(ctx)
-			r.Limit(32768)
-
-			w := c.MessageWriter(typ)
-			w.SetContext(ctx)
+			w := c.MessageWriter(ctx, typ)
 			_, err = io.Copy(w, r)
 			if err != nil {
 				return err

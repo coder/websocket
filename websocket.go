@@ -403,19 +403,19 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 
 // MessageWriter returns a writer bounded by the context that will write
 // a WebSocket data frame of type dataType to the connection.
-// Ensure you close the MessageWriter once you have written to entire message.
-// Concurrent calls to MessageWriter are ok.
-func (c *Conn) MessageWriter(dataType DataType) *MessageWriter {
-	return &MessageWriter{
+// Ensure you close the messageWriter once you have written to entire message.
+// Concurrent calls to messageWriter are ok.
+func (c *Conn) MessageWriter(ctx context.Context, dataType DataType) io.WriteCloser {
+	return &messageWriter{
 		c:        c,
-		ctx:      context.Background(),
+		ctx:      ctx,
 		datatype: dataType,
 	}
 }
 
-// MessageWriter enables writing to a WebSocket connection.
-// Ensure you close the MessageWriter once you have written to entire message.
-type MessageWriter struct {
+// messageWriter enables writing to a WebSocket connection.
+// Ensure you close the messageWriter once you have written to entire message.
+type messageWriter struct {
 	datatype     DataType
 	ctx          context.Context
 	c            *Conn
@@ -429,7 +429,7 @@ type MessageWriter struct {
 // The frame will automatically be fragmented as appropriate
 // with the buffers obtained from http.Hijacker.
 // Please ensure you call Close once you have written the full message.
-func (w *MessageWriter) Write(p []byte) (int, error) {
+func (w *messageWriter) Write(p []byte) (int, error) {
 	if !w.acquiredLock {
 		select {
 		case <-w.c.closed:
@@ -458,14 +458,9 @@ func (w *MessageWriter) Write(p []byte) (int, error) {
 	}
 }
 
-// SetContext bounds the writer to the context.
-func (w *MessageWriter) SetContext(ctx context.Context) {
-	w.ctx = ctx
-}
-
 // Close flushes the frame to the connection.
-// This must be called for every MessageWriter.
-func (w *MessageWriter) Close() error {
+// This must be called for every messageWriter.
+func (w *messageWriter) Close() error {
 	if !w.acquiredLock {
 		select {
 		case <-w.c.closed:
@@ -492,13 +487,13 @@ func (w *MessageWriter) Close() error {
 // Please use SetContext on the reader to bound the read operation.
 // Your application must keep reading messages for the Conn to automatically respond to ping
 // and close frames.
-func (c *Conn) ReadMessage(ctx context.Context) (DataType, *MessageReader, error) {
+func (c *Conn) ReadMessage(ctx context.Context) (DataType, io.Reader, error) {
 	select {
 	case <-c.closed:
 		return 0, nil, xerrors.Errorf("failed to read message: %w", c.getCloseErr())
 	case opcode := <-c.read:
-		return DataType(opcode), &MessageReader{
-			ctx: context.Background(),
+		return DataType(opcode), &messageReader{
+			ctx: ctx,
 			c:   c,
 		}, nil
 	case <-ctx.Done():
@@ -506,36 +501,21 @@ func (c *Conn) ReadMessage(ctx context.Context) (DataType, *MessageReader, error
 	}
 }
 
-// MessageReader enables reading a data frame from the WebSocket connection.
-type MessageReader struct {
-	n     int
-	limit int
-	c     *Conn
-	ctx   context.Context
+// messageReader enables reading a data frame from the WebSocket connection.
+type messageReader struct {
+	ctx context.Context
+	c   *Conn
 }
 
 // SetContext bounds the read operation to the ctx.
 // By default, the context is the one passed to conn.ReadMessage.
 // You still almost always want a separate context for reading the message though.
-func (r *MessageReader) SetContext(ctx context.Context) {
+func (r *messageReader) SetContext(ctx context.Context) {
 	r.ctx = ctx
 }
 
-// Limit limits the number of bytes read by the reader.
-//
-// Why not use io.LimitReader? io.LimitReader returns a io.EOF
-// after the limit bytes which means its not possible to tell
-// whether the message has been read or a limit has been hit.
-// This results in unclear error and log messages.
-// This function will cause the connection to be closed if the limit is hit
-// with a close reason explaining the error and also an error
-// indicating the limit was hit.
-func (r *MessageReader) Limit(bytes int) {
-	r.limit = bytes
-}
-
 // Read reads as many bytes as possible into p.
-func (r *MessageReader) Read(p []byte) (n int, err error) {
+func (r *messageReader) Read(p []byte) (n int, err error) {
 	select {
 	case <-r.c.closed:
 		return 0, r.c.getCloseErr()
@@ -546,11 +526,6 @@ func (r *MessageReader) Read(p []byte) (n int, err error) {
 		case <-r.c.closed:
 			return 0, r.c.getCloseErr()
 		case n := <-r.c.readDone:
-			r.n += n
-			// TODO make this better later and inside readLoop to prevent the read from actually occuring if over limit.
-			if r.limit > 0 && r.n > r.limit {
-				return 0, xerrors.New("message too big")
-			}
 			return n, nil
 		case <-r.ctx.Done():
 			return 0, r.ctx.Err()

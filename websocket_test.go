@@ -365,10 +365,7 @@ func echoLoop(ctx context.Context, c *websocket.Conn, t *testing.T) {
 			return err
 		}
 
-		r.SetContext(ctx)
-
-		w := c.MessageWriter(typ)
-		w.SetContext(ctx)
+		w := c.MessageWriter(ctx, typ)
 
 		_, err = io.Copy(w, r)
 		if err != nil {
