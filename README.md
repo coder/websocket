@@ -67,7 +67,7 @@ if err != nil {
 }
 ```
 
-For a production quality example that shows off the low level API, see the echo example on the [godoc](https://godoc.org/nhooyr.io/websocket#Accept).
+For a production quality example that shows off the low level API, see the [echo example](https://github.com/nhooyr/websocket/blob/7518ba4d5413de6c0f9a77f0166636c796d17bfb/example_test.go#L15-L78).
 
 ### Client
 
