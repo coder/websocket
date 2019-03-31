@@ -1,7 +1,7 @@
 package websocket
 
 // DataType represents the Opcode of a WebSocket data frame.
-//go:generate stringer -type=DataType
+//go:generate go run golang.org/x/tools/cmd/stringer -type=DataType
 type DataType int
 
 // DataType constants.

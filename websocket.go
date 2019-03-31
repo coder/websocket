@@ -4,10 +4,6 @@ import (
 	"context"
 )
 
-const (
-	secWebSocketProtocol = "Sec-WebSocket-Protocol"
-)
-
 // Conn represents a WebSocket connection.
 type Conn struct{}
 

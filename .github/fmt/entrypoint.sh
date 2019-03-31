@@ -8,7 +8,6 @@ gen() {
 	go list ./... > /dev/null
 	go mod tidy
 
-	go install golang.org/x/tools/cmd/stringer
 	go generate ./...
 }
 

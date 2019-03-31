@@ -8,7 +8,7 @@ import (
 )
 
 // StatusCode represents a WebSocket status code.
-//go:generate stringer -type=StatusCode
+//go:generate go run golang.org/x/tools/cmd/stringer -type=StatusCode
 type StatusCode int
 
 // These codes were retrieved from:

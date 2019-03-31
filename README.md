@@ -17,6 +17,7 @@ go get nhooyr.io/websocket@master
 ## Features
 
 - Full support of the WebSocket protocol
+- Only depends on the stdlib
 - Simple to use because of the minimal API
 - Uses the context package for cancellation
 - Uses net/http's Client to do WebSocket dials
