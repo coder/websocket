@@ -112,6 +112,10 @@ See [example_test.go](example_test.go) for more examples.
 
 ## Comparison
 
+While I believe nhooyr/websocket has a better API than existing libraries, 
+both gorilla/websocket and gobwas/ws were extremely useful in implementing the
+WebSocket protocol correctly so big thanks to the authors of both.
+
 ### gorilla/websocket
 
 https://github.com/gorilla/websocket
