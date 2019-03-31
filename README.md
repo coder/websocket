@@ -2,7 +2,7 @@
 
 [![GoDoc](https://godoc.org/nhooyr.io/websocket?status.svg)](https://godoc.org/nhooyr.io/websocket)
 [![Codecov](https://img.shields.io/codecov/c/github/nhooyr/websocket.svg)](https://codecov.io/gh/nhooyr/websocket)
-[![GitHub release](https://img.shields.io/github/release/nhooyr/websocket.svg)](https://github.com/nhooyr/websocket/releases)
+[![GitHub release](https://img.shields.io/github/release-pre/nhooyr/websocket.svg)](https://github.com/nhooyr/websocket/releases)
 
 websocket is a minimal and idiomatic WebSocket library for Go.
 
