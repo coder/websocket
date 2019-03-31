@@ -360,12 +360,12 @@ func echoLoop(ctx context.Context, c *websocket.Conn, t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()
 
-		typ, r, err := c.ReadMessage(ctx)
+		typ, r, err := c.Read(ctx)
 		if err != nil {
 			return err
 		}
 
-		w := c.MessageWriter(ctx, typ)
+		w := c.Write(ctx, typ)
 
 		_, err = io.Copy(w, r)
 		if err != nil {
@@ -447,7 +447,7 @@ func TestAutobahnClient(t *testing.T) {
 		}
 		defer c.Close(websocket.StatusInternalError, "")
 
-		_, r, err := c.ReadMessage(ctx)
+		_, r, err := c.Read(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}

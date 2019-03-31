@@ -401,11 +401,11 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 	}
 }
 
-// MessageWriter returns a writer bounded by the context that will write
+// Write returns a writer bounded by the context that will write
 // a WebSocket data frame of type dataType to the connection.
 // Ensure you close the messageWriter once you have written to entire message.
 // Concurrent calls to messageWriter are ok.
-func (c *Conn) MessageWriter(ctx context.Context, dataType DataType) io.WriteCloser {
+func (c *Conn) Write(ctx context.Context, dataType DataType) io.WriteCloser {
 	return &messageWriter{
 		c:        c,
 		ctx:      ctx,
@@ -487,7 +487,7 @@ func (w *messageWriter) Close() error {
 // Please use SetContext on the reader to bound the read operation.
 // Your application must keep reading messages for the Conn to automatically respond to ping
 // and close frames.
-func (c *Conn) ReadMessage(ctx context.Context) (DataType, io.Reader, error) {
+func (c *Conn) Read(ctx context.Context) (DataType, io.Reader, error) {
 	select {
 	case <-c.closed:
 		return 0, nil, xerrors.Errorf("failed to read message: %w", c.getCloseErr())

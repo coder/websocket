@@ -10,7 +10,7 @@ import (
 
 // JSONConn wraps around a Conn with JSON helpers.
 type JSONConn struct {
-	Conn *Conn
+	*Conn
 }
 
 // Read reads a json message into v.
@@ -23,7 +23,7 @@ func (jc JSONConn) Read(ctx context.Context, v interface{}) error {
 }
 
 func (jc *JSONConn) read(ctx context.Context, v interface{}) error {
-	typ, r, err := jc.Conn.ReadMessage(ctx)
+	typ, r, err := jc.Conn.Read(ctx)
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func (jc JSONConn) Write(ctx context.Context, v interface{}) error {
 }
 
 func (jc JSONConn) write(ctx context.Context, v interface{}) error {
-	w := jc.Conn.MessageWriter(ctx, DataText)
+	w := jc.Conn.Write(ctx, DataText)
 
 	e := json.NewEncoder(w)
 	err := e.Encode(v)

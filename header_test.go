@@ -19,7 +19,7 @@ func randBool() bool {
 
 func TestHeader(t *testing.T) {
 	t.Parallel()
-	
+
 	t.Run("negative", func(t *testing.T) {
 		t.Parallel()
 

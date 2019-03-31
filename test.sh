@@ -10,6 +10,7 @@ function docker_run() {
 	local IMAGE
 	IMAGE="$(docker build -q "$DIR")"
 	docker run \
+		-it \
 		-v "${PWD}:/repo" \
 		-v "$(go env GOPATH):/go" \
 		-v "$(go env GOCACHE):/root/.cache/go-build" \
