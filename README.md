@@ -97,8 +97,6 @@ log.Printf("received %v", v)
 c.Close(websocket.StatusNormalClosure, "")
 ```
 
-See [example_test.go](example_test.go) for more examples.
-
 ## Design considerations
 
 - Minimal API is easier to maintain and for others to learn
