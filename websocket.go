@@ -501,6 +501,14 @@ func (r *MessageReader) SetContext(ctx context.Context) {
 }
 
 // Limit limits the number of bytes read by the reader.
+//
+// Why not use io.LimitReader? io.LimitReader returns a io.EOF
+// after the limit bytes which means its not possible to tell
+// whether the message has been read or a limit has been hit.
+// This results in unclear error and log messages.
+// This function will cause the connection to be closed if the limit is hit
+// with a close reason explaining the error and also an error
+// indicating the limit was hit.
 func (r *MessageReader) Limit(bytes int) {
 	r.limit = bytes
 }
