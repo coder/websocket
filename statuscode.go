@@ -57,15 +57,16 @@ func parseClosePayload(p []byte) (code StatusCode, reason string, err error) {
 	if !utf8.ValidString(reason) {
 		return 0, "", xerrors.Errorf("invalid utf-8: %q", reason)
 	}
-	if !isValidReceivedCloseCode(code) {
+	if !validCloseCode(code) {
 		return 0, "", xerrors.Errorf("invalid code %v", code)
 	}
 
 	return code, reason, nil
 }
 
+// See http://www.iana.org/assignments/websocket/websocket.xhtml#close-code-number
+// and https://tools.ietf.org/html/rfc6455#section-7.4.1
 var validReceivedCloseCodes = map[StatusCode]bool{
-	// see http://www.iana.org/assignments/websocket/websocket.xhtml#close-code-number
 	StatusNormalClosure:           true,
 	StatusGoingAway:               true,
 	StatusProtocolError:           true,
@@ -82,7 +83,7 @@ var validReceivedCloseCodes = map[StatusCode]bool{
 	StatusTLSHandshake:            false,
 }
 
-func isValidReceivedCloseCode(code StatusCode) bool {
+func validCloseCode(code StatusCode) bool {
 	return validReceivedCloseCodes[code] || (code >= 3000 && code <= 4999)
 }
 
@@ -95,8 +96,8 @@ func closePayload(code StatusCode, reason string) ([]byte, error) {
 	if bits.Len(uint(code)) > 16 {
 		return nil, errors.New("status code is larger than 2 bytes")
 	}
-	if code == StatusNoStatusRcvd || code == StatusAbnormalClosure {
-		return nil, fmt.Errorf("status code %v cannot be set by applications", code)
+	if !validCloseCode(code) {
+		return nil, fmt.Errorf("status code %v cannot be set", code)
 	}
 
 	buf := make([]byte, 2+len(reason))
