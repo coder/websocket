@@ -12,7 +12,7 @@ import (
 func ReadJSON(ctx context.Context, c *Conn, v interface{}) error {
 	typ, r, err := c.ReadMessage(ctx)
 	if err != nil {
-		return xerrors.Errorf("failed to read json: %v", err)
+		return xerrors.Errorf("failed to read json: %w", err)
 	}
 
 	if typ != websocket.TextFrame {
@@ -25,7 +25,7 @@ func ReadJSON(ctx context.Context, c *Conn, v interface{}) error {
 	d := json.NewDecoder(r)
 	err = d.Decode(v)
 	if err != nil {
-		return xerrors.Errorf("failed to read json: %v", err)
+		return xerrors.Errorf("failed to read json: %w", err)
 	}
 	return nil
 }
@@ -38,12 +38,12 @@ func WriteJSON(ctx context.Context, c *Conn, v interface{}) error {
 	e := json.NewEncoder(w)
 	err := e.Encode(v)
 	if err != nil {
-		return xerrors.Errorf("failed to write json: %v", err)
+		return xerrors.Errorf("failed to write json: %w", err)
 	}
 
 	err = w.Close()
 	if err != nil {
-		return xerrors.Errorf("failed to write json: %v", err)
+		return xerrors.Errorf("failed to write json: %w", err)
 	}
 	return nil
 }

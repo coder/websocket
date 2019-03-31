@@ -12,6 +12,7 @@ import (
 
 // StatusCode represents a WebSocket status code.
 type StatusCode int
+
 //go:generate go run golang.org/x/tools/cmd/stringer -type=StatusCode
 
 // These codes were retrieved from:

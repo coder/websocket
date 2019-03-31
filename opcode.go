@@ -2,6 +2,7 @@ package websocket
 
 // opcode represents a WebSocket Opcode.
 type opcode int
+
 //go:generate go run golang.org/x/tools/cmd/stringer -type=opcode
 
 // opcode constants.

@@ -58,7 +58,7 @@ func (c *Conn) getCloseErr() error {
 
 func (c *Conn) close(err error) {
 	if err != nil {
-		err = xerrors.Errorf("websocket: connection broken: %v", err)
+		err = xerrors.Errorf("websocket: connection broken: %w", err)
 	}
 
 	c.closeOnce.Do(func() {
@@ -102,20 +102,20 @@ func (c *Conn) writeFrame(h header, p []byte) {
 	b2 := marshalHeader(h)
 	_, err := c.bw.Write(b2)
 	if err != nil {
-		c.close(xerrors.Errorf("failed to write to connection: %v", err))
+		c.close(xerrors.Errorf("failed to write to connection: %w", err))
 		return
 	}
 
 	_, err = c.bw.Write(p)
 	if err != nil {
-		c.close(xerrors.Errorf("failed to write to connection: %v", err))
+		c.close(xerrors.Errorf("failed to write to connection: %w", err))
 		return
 	}
 
 	if h.opcode.controlOp() {
 		err := c.bw.Flush()
 		if err != nil {
-			c.close(xerrors.Errorf("failed to write to connection: %v", err))
+			c.close(xerrors.Errorf("failed to write to connection: %w", err))
 			return
 		}
 	}
@@ -176,7 +176,7 @@ messageLoop:
 				if !ok {
 					err := c.bw.Flush()
 					if err != nil {
-						c.close(xerrors.Errorf("failed to write to connection: %v", err))
+						c.close(xerrors.Errorf("failed to write to connection: %w", err))
 						return
 					}
 				}
@@ -210,7 +210,7 @@ func (c *Conn) handleControl(h header) {
 	b := make([]byte, h.payloadLength)
 	_, err := io.ReadFull(c.br, b)
 	if err != nil {
-		c.close(xerrors.Errorf("failed to read control frame payload: %v", err))
+		c.close(xerrors.Errorf("failed to read control frame payload: %w", err))
 		return
 	}
 
@@ -226,7 +226,7 @@ func (c *Conn) handleControl(h header) {
 		if len(b) > 0 {
 			code, reason, err := parseClosePayload(b)
 			if err != nil {
-				c.close(xerrors.Errorf("read invalid close payload: %v", err))
+				c.close(xerrors.Errorf("read invalid close payload: %w", err))
 				return
 			}
 			c.Close(code, reason)
@@ -247,7 +247,7 @@ func (c *Conn) readLoop() {
 	for {
 		h, err := readHeader(c.br)
 		if err != nil {
-			c.close(xerrors.Errorf("failed to read header: %v", err))
+			c.close(xerrors.Errorf("failed to read header: %w", err))
 			return
 		}
 
@@ -298,7 +298,7 @@ func (c *Conn) readLoop() {
 
 				_, err = io.ReadFull(c.br, b)
 				if err != nil {
-					c.close(xerrors.Errorf("failed to read from connection: %v", err))
+					c.close(xerrors.Errorf("failed to read from connection: %w", err))
 					return
 				}
 				left -= int64(len(b))
@@ -355,14 +355,14 @@ func (c *Conn) MessageWriter(dataType DataType) *MessageWriter {
 func (c *Conn) ReadMessage(ctx context.Context) (DataType, *MessageReader, error) {
 	select {
 	case <-c.closed:
-		return 0, nil, xerrors.Errorf("failed to read message: %v", c.getCloseErr())
+		return 0, nil, xerrors.Errorf("failed to read message: %w", c.getCloseErr())
 	case opcode := <-c.read:
 		return DataType(opcode), &MessageReader{
 			ctx: context.Background(),
 			c:   c,
 		}, nil
 	case <-ctx.Done():
-		return 0, nil, xerrors.Errorf("failed to read message: %v", ctx.Err())
+		return 0, nil, xerrors.Errorf("failed to read message: %w", ctx.Err())
 	}
 }
 
