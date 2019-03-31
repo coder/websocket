@@ -18,7 +18,7 @@ go get nhooyr.io/websocket
 - Full support of the WebSocket protocol
 - Only depends on stdlib
 - Simple to use
-- context.Context is a first class feature
+- context.Context is first class
 - net/http is used for WebSocket dials and upgrades
 - Thoroughly tested, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 - JSON helpers
