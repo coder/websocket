@@ -11,21 +11,26 @@ This library is in heavy development.
 ## Install
 
 ```bash
-go get nhooyr.io/websocket@master
+go get nhooyr.io/websocket
 ```
 
 ## Features
 
-- WebSockets over HTTP/2 support
 - Full support of the WebSocket protocol
-- Only depends on the stdlib
-- Simple to use because of the minimal API
-- Uses the context package for cancellation
-- Uses net/http's Client to do WebSocket dials
-- Compression of text frames larger than 1024 bytes by default
-- Highly optimized where it matters
-- WASM support
+- Only depends on stdlib
+- Simple to use
+- context.Context is a first class feature
+- net/http is used for WebSocket dials and upgrades
 - Passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
+- JSON helpers
+
+## Roadmap
+
+- [ ] WebSockets over HTTP/2 #4
+- [ ] Deflate extension support #5
+- [ ] More optimization #11
+- [ ] WASM #15
+- [ ] Ping/pongs #1
 
 ## Example
 
@@ -99,11 +104,9 @@ See [example_test.go](example_test.go) for more examples.
 - Minimal API is easier to maintain and for others to learn
 - Context based cancellation is more ergonomic and robust than setting deadlines
 - No pings or pongs because TCP keep alives work fine for HTTP/1.1 and they do not make
-  sense with HTTP/2
+  sense with HTTP/2 (see #1)
 - net.Conn is never exposed as WebSocket's over HTTP/2 will not have a net.Conn.
 - Functional options make the API very clean and easy to extend
-- Compression is very useful for JSON payloads
-- JSON helpers make code terse
 - Using net/http's Client for dialing means we do not have to reinvent dialing hooks
   and configurations. Just pass in a custom net/http client if you want custom dialing.
 
@@ -125,6 +128,15 @@ is not clear. Just compare the godoc of
 
 The API for nhooyr/websocket has been designed such that there is only one way to do things
 which makes using it correctly and safely much easier.
+
+In terms of lines of code, this library is around 2000 whereas gorilla/websocket is
+at 7000. So while the API for nhooyr/websocket is simpler, the implementation is also
+significantly simpler and easier to test which reduces the surface are of bugs.
+
+Furthermore, nhooyr/websocket has support for newer Go idioms such as context.Context and
+also uses net/http's Client and ResponseWriter directly for WebSocket handshakes.
+gorilla/websocket writes its handshakes directly to a net.Conn which means
+it has to reinvent hooks for TLS and proxying and prevents support of HTTP/2.
 
 ### x/net/websocket
 
