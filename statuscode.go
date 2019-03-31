@@ -11,8 +11,8 @@ import (
 )
 
 // StatusCode represents a WebSocket status code.
-//go:generate go run golang.org/x/tools/cmd/stringer -type=StatusCode
 type StatusCode int
+//go:generate go run golang.org/x/tools/cmd/stringer -type=StatusCode
 
 // These codes were retrieved from:
 // https://www.iana.org/assignments/websocket/websocket.xhtml#close-code-number
@@ -21,8 +21,8 @@ const (
 	StatusGoingAway
 	StatusProtocolError
 	StatusUnsupportedData
-	// 1004 is reserved.
-	StatusNoStatusRcvd StatusCode = 1005 + iota - 4
+	_ // 1004 is reserved.
+	StatusNoStatusRcvd
 	StatusAbnormalClosure
 	StatusInvalidFramePayloadData
 	StatusPolicyViolation
