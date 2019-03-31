@@ -20,9 +20,8 @@ go get nhooyr.io/websocket
 - Simple to use
 - context.Context is a first class feature
 - net/http is used for WebSocket dials and upgrades
-- Passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
+- Thoroughly tested, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 - JSON helpers
-- Thoroughly tested
 
 ## Roadmap
 
