@@ -26,11 +26,11 @@ go get nhooyr.io/websocket
 
 ## Roadmap
 
-- [ ] WebSockets over HTTP/2 #4
-- [ ] Deflate extension support #5
-- [ ] More optimization #11
-- [ ] WASM #15
-- [ ] Ping/pongs #1
+- [ ] WebSockets over HTTP/2 [#4](https://github.com/nhooyr/websocket/issues/4)
+- [ ] Deflate extension support [#5](https://github.com/nhooyr/websocket/issues/5)
+- [ ] More optimization [#11](https://github.com/nhooyr/websocket/issues/11)
+- [ ] WASM [#15](https://github.com/nhooyr/websocket/issues/15)
+- [ ] Ping/pongs [#1](https://github.com/nhooyr/websocket/issues/1)
 
 ## Example
 
