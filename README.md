@@ -112,7 +112,9 @@ c.Close(websocket.StatusNormalClosure, "")
 
 While I believe nhooyr/websocket has a better API than existing libraries, 
 both gorilla/websocket and gobwas/ws were extremely useful in implementing the
-WebSocket protocol correctly so big thanks to the authors of both.
+WebSocket protocol correctly so big thanks to the authors of both. In particular,
+I made sure to go through the issue tracker of gorilla/websocket to make sure
+I implemented details correctly.
 
 ### gorilla/websocket
 
