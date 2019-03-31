@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/bits"
+	"unicode/utf8"
 
 	"golang.org/x/xerrors"
 )
@@ -53,7 +54,36 @@ func parseClosePayload(p []byte) (code StatusCode, reason string, err error) {
 	code = StatusCode(binary.BigEndian.Uint16(p))
 	reason = string(p[2:])
 
+	if !utf8.ValidString(reason) {
+		return 0, "", xerrors.Errorf("invalid utf-8: %q", reason)
+	}
+	if !isValidReceivedCloseCode(code) {
+		return 0, "", xerrors.Errorf("invalid code %v", code)
+	}
+
 	return code, reason, nil
+}
+
+var validReceivedCloseCodes = map[StatusCode]bool{
+	// see http://www.iana.org/assignments/websocket/websocket.xhtml#close-code-number
+	StatusNormalClosure:           true,
+	StatusGoingAway:               true,
+	StatusProtocolError:           true,
+	StatusUnsupportedData:         true,
+	StatusNoStatusRcvd:            false,
+	StatusAbnormalClosure:         false,
+	StatusInvalidFramePayloadData: true,
+	StatusPolicyViolation:         true,
+	StatusMessageTooBig:           true,
+	StatusMandatoryExtension:      true,
+	StatusInternalError:           true,
+	StatusServiceRestart:          true,
+	StatusTryAgainLater:           true,
+	StatusTLSHandshake:            false,
+}
+
+func isValidReceivedCloseCode(code StatusCode) bool {
+	return validReceivedCloseCodes[code] || (code >= 3000 && code <= 4999)
 }
 
 const maxControlFramePayload = 125

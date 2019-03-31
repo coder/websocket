@@ -12,9 +12,9 @@ import (
 	"golang.org/x/xerrors"
 )
 
-type controlFrame struct {
-	header header
-	data   []byte
+type control struct {
+	opcode  opcode
+	payload []byte
 }
 
 // Conn represents a WebSocket connection.
@@ -35,8 +35,10 @@ type Conn struct {
 	// Writers should send on write to begin sending
 	// a message and then follow that up with some data
 	// on writeBytes.
-	write      chan opcode
+	write      chan DataType
+	control    chan control
 	writeBytes chan []byte
+	writeDone  chan struct{}
 
 	// Readers should receive on read to begin reading a message.
 	// Then send a byte slice to readBytes to read into it.
@@ -81,7 +83,9 @@ func (c *Conn) Subprotocol() string {
 
 func (c *Conn) init() {
 	c.closed = make(chan struct{})
-	c.write = make(chan opcode)
+	c.write = make(chan DataType)
+	c.control = make(chan control)
+	c.writeDone = make(chan struct{})
 	c.read = make(chan opcode)
 	c.readDone = make(chan int)
 	c.readBytes = make(chan []byte)
@@ -94,15 +98,49 @@ func (c *Conn) init() {
 	go c.readLoop()
 }
 
+func (c *Conn) writeFrame(h header, p []byte) {
+	b2 := marshalHeader(h)
+	_, err := c.bw.Write(b2)
+	if err != nil {
+		c.close(xerrors.Errorf("failed to write to connection: %v", err))
+		return
+	}
+
+	_, err = c.bw.Write(p)
+	if err != nil {
+		c.close(xerrors.Errorf("failed to write to connection: %v", err))
+		return
+	}
+
+	if h.opcode.controlOp() {
+		err := c.bw.Flush()
+		if err != nil {
+			c.close(xerrors.Errorf("failed to write to connection: %v", err))
+			return
+		}
+	}
+}
+
 func (c *Conn) writeLoop() {
 messageLoop:
 	for {
 		c.writeBytes = make(chan []byte)
-		var opcode opcode
+
+		var dataType DataType
 		select {
 		case <-c.closed:
 			return
-		case opcode = <-c.write:
+		case dataType = <-c.write:
+		case control := <-c.control:
+			h := header{
+				fin:           true,
+				opcode:        control.opcode,
+				payloadLength: int64(len(control.payload)),
+				masked:        c.client,
+			}
+			c.writeFrame(h, control.payload)
+			c.writeDone <- struct{}{}
+			continue
 		}
 
 		var firstSent bool
@@ -110,51 +148,48 @@ messageLoop:
 			select {
 			case <-c.closed:
 				return
+			case control := <-c.control:
+				h := header{
+					fin:           true,
+					opcode:        control.opcode,
+					payloadLength: int64(len(control.payload)),
+					masked:        c.client,
+				}
+				c.writeFrame(h, control.payload)
+				c.writeDone <- struct{}{}
+				continue
 			case b, ok := <-c.writeBytes:
-				if !firstSent || !opcode.controlOp() {
-					h := header{
-						fin:           opcode.controlOp() || !ok,
-						opcode:        opcode,
-						payloadLength: int64(len(b)),
-						masked:        c.client,
-					}
+				h := header{
+					fin:           !ok,
+					opcode:        opcode(dataType),
+					payloadLength: int64(len(b)),
+					masked:        c.client,
+				}
 
-					if firstSent {
-						h.opcode = opContinuation
-					}
-					firstSent = true
+				if firstSent {
+					h.opcode = opContinuation
+				}
+				firstSent = true
 
-					b2 := marshalHeader(h)
-					_, err := c.bw.Write(b2)
-					if err != nil {
-						c.close(xerrors.Errorf("failed to write to connection: %v", err))
-						return
-					}
+				c.writeFrame(h, b)
 
-					_, err = c.bw.Write(b)
+				if !ok {
+					err := c.bw.Flush()
 					if err != nil {
 						c.close(xerrors.Errorf("failed to write to connection: %v", err))
 						return
 					}
 				}
 
-				if ok {
-					select {
-					case <-c.closed:
-						return
-					case c.writeBytes <- nil:
+				select {
+				case <-c.closed:
+					return
+				case c.writeDone <- struct{}{}:
+					if ok {
+						continue
+					} else {
+						continue messageLoop
 					}
-				} else {
-					err := c.bw.Flush()
-					if err != nil {
-						c.close(xerrors.Errorf("failed to write to connection: %v", err))
-						return
-					}
-					if opcode == opClose {
-						c.close(nil)
-						return
-					}
-					continue messageLoop
 				}
 			}
 		}
@@ -164,6 +199,11 @@ messageLoop:
 func (c *Conn) handleControl(h header) {
 	if h.payloadLength > maxControlFramePayload {
 		c.Close(StatusProtocolError, "control frame too large")
+		return
+	}
+
+	if !h.fin {
+		c.Close(StatusProtocolError, "control frame cannot be fragmented")
 		return
 	}
 
@@ -183,12 +223,20 @@ func (c *Conn) handleControl(h header) {
 		c.writePong(b)
 	case opPong:
 	case opClose:
-		code, reason, err := parseClosePayload(b)
-		if err != nil {
-			c.close(xerrors.Errorf("read invalid close payload: %v", err))
-			return
+		if len(b) > 0 {
+			code, reason, err := parseClosePayload(b)
+			if err != nil {
+				c.close(xerrors.Errorf("read invalid close payload: %v", err))
+				return
+			}
+			c.Close(code, reason)
+		} else {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+			defer cancel()
+
+			c.writeControl(ctx, opClose, nil)
+			c.close(nil)
 		}
-		c.Close(code, reason)
 	default:
 		panic(fmt.Sprintf("websocket: unexpected control opcode: %#v", h))
 	}
@@ -208,33 +256,38 @@ func (c *Conn) readLoop() {
 			return
 		}
 
-		// TODO this is fucked, as if they are reading a frame as they are writing, then we can't send ping/close so we'll just get stuck for 5s.
-		switch h.opcode {
-		case opClose, opPing, opPong:
+		if h.opcode.controlOp() {
 			c.handleControl(h)
 			continue
 		}
 
 		switch h.opcode {
 		case opBinary, opText:
+			if !indata {
+				select {
+				case <-c.closed:
+					return
+				case c.read <- h.opcode:
+				}
+				indata = true
+			} else {
+				c.Close(StatusProtocolError, "cannot send data frame when previous frame is not finished")
+				return
+			}
+		case opContinuation:
+			if !indata {
+				c.Close(StatusProtocolError, "continuation frame not after data or text frame")
+				return
+			}
 		default:
 			c.close(xerrors.Errorf("unexpected opcode in header: %#v", h))
 			return
 		}
 
-		if !indata {
-			select {
-			case <-c.closed:
-				return
-			case c.read <- h.opcode:
-			}
-		} else {
-			indata = true
-		}
-
-		var maskPos int
+		maskPos := 0
 		left := h.payloadLength
-		for left > 0 {
+		firstRead := false
+		for left > 0 || !firstRead {
 			select {
 			case <-c.closed:
 				return
@@ -258,6 +311,7 @@ func (c *Conn) readLoop() {
 				case <-c.closed:
 					return
 				case c.readDone <- len(b):
+					firstRead = true
 				}
 			}
 		}
@@ -277,13 +331,7 @@ func (c *Conn) writePong(p []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	w := c.messageWriter(opPong)
-	w.SetContext(ctx)
-	_, err := w.Write(p)
-	if err != nil {
-		return err
-	}
-	err = w.Close()
+	err := c.writeControl(ctx, opPong, p)
 	return err
 }
 
@@ -292,14 +340,10 @@ func (c *Conn) writePong(p []byte) error {
 // Ensure you close the MessageWriter once you have written to entire message.
 // Concurrent calls to MessageWriter are ok.
 func (c *Conn) MessageWriter(dataType DataType) *MessageWriter {
-	return c.messageWriter(opcode(dataType))
-}
-
-func (c *Conn) messageWriter(opcode opcode) *MessageWriter {
 	return &MessageWriter{
-		c:      c,
-		ctx:    context.Background(),
-		opcode: opcode,
+		c:        c,
+		ctx:      context.Background(),
+		datatype: dataType,
 	}
 }
 
@@ -337,10 +381,27 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
+	err = c.writeControl(ctx, opClose, p)
+	if err != nil {
+		return err
+	}
+
+	c.close(nil)
+
+	if err != nil {
+		return err
+	}
+	return c.closeErr
+}
+
+func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error {
 	select {
 	case <-c.closed:
 		return c.getCloseErr()
-	case c.write <- opClose:
+	case c.control <- control{
+		opcode:  opcode,
+		payload: p,
+	}:
 	case <-ctx.Done():
 		c.close(xerrors.New("force closed: close frame write timed out"))
 		return c.getCloseErr()
@@ -349,36 +410,17 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 	select {
 	case <-c.closed:
 		return c.getCloseErr()
-	case c.writeBytes <- p:
-		select {
-		case <-c.closed:
-			return c.getCloseErr()
-		case <-c.writeBytes:
-			close(c.writeBytes)
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+	case <-c.writeDone:
+		return nil
 	case <-ctx.Done():
-		c.close(xerrors.New("force closed: close frame write timed out"))
-		return c.getCloseErr()
-	}
-
-	select {
-	case <-c.closed:
-		if err != nil {
-			return err
-		}
-		return c.closeErr
-	case <-ctx.Done():
-		c.close(xerrors.New("force closed: close frame write timed out"))
-		return c.getCloseErr()
+		return ctx.Err()
 	}
 }
 
 // MessageWriter enables writing to a WebSocket connection.
 // Ensure you close the MessageWriter once you have written to entire message.
 type MessageWriter struct {
-	opcode       opcode
+	datatype     DataType
 	ctx          context.Context
 	c            *Conn
 	acquiredLock bool
@@ -396,7 +438,7 @@ func (w *MessageWriter) Write(p []byte) (int, error) {
 		select {
 		case <-w.c.closed:
 			return 0, w.c.getCloseErr()
-		case w.c.write <- w.opcode:
+		case w.c.write <- w.datatype:
 			w.acquiredLock = true
 		case <-w.ctx.Done():
 			return 0, w.ctx.Err()
@@ -410,7 +452,7 @@ func (w *MessageWriter) Write(p []byte) (int, error) {
 		select {
 		case <-w.c.closed:
 			return 0, w.c.getCloseErr()
-		case <-w.c.writeBytes:
+		case <-w.c.writeDone:
 			return len(p), nil
 		case <-w.ctx.Done():
 			return 0, w.ctx.Err()
@@ -432,13 +474,14 @@ func (w *MessageWriter) Close() error {
 		select {
 		case <-w.c.closed:
 			return w.c.getCloseErr()
-		case w.c.write <- w.opcode:
+		case w.c.write <- w.datatype:
 			w.acquiredLock = true
 		case <-w.ctx.Done():
 			return w.ctx.Err()
 		}
 	}
 	close(w.c.writeBytes)
+	<-w.c.writeDone
 	return nil
 }
 

@@ -3,7 +3,6 @@ package websocket_test
 import (
 	"context"
 	"encoding/json"
-	"golang.org/x/time/rate"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -118,14 +117,11 @@ func TestAutobahn(t *testing.T) {
 				return err
 			}
 
-			ctx, cancel = context.WithTimeout(ctx, time.Second*10)
-			defer cancel()
-
 			r.SetContext(ctx)
-			r.Limit(131072)
 
 			w := c.MessageWriter(typ)
 			w.SetContext(ctx)
+
 			_, err = io.Copy(w, r)
 			if err != nil {
 				return err
@@ -139,8 +135,7 @@ func TestAutobahn(t *testing.T) {
 			return nil
 		}
 
-		l := rate.NewLimiter(rate.Every(time.Millisecond*100), 10)
-		for l.Allow() {
+		for {
 			err := echo()
 			if err != nil {
 				t.Logf("%v: failed to echo message: %+v", time.Now(), err)
@@ -162,7 +157,7 @@ func TestAutobahn(t *testing.T) {
 			},
 		},
 		"cases":         []string{"*"},
-		"exclude-cases": []interface{}{},
+		"exclude-cases": []string{"6.*", "12.*", "13.*"},
 	}
 	specFile, err := ioutil.TempFile("", "websocket_fuzzingclient.json")
 	if err != nil {
@@ -216,7 +211,9 @@ func TestAutobahn(t *testing.T) {
 	var failed bool
 	for _, tests := range indexJSON {
 		for test, result := range tests {
-			if result.Behavior != "OK" {
+			switch result.Behavior {
+			case "OK", "NON-STRICT", "INFORMATIONAL":
+			default:
 				failed = true
 				t.Errorf("test %v failed", test)
 			}
