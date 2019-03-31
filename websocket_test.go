@@ -173,10 +173,14 @@ func TestHandshake(t *testing.T) {
 				ctx, cancel := context.WithTimeout(r.Context(), time.Second*5)
 				defer cancel()
 
+				jc := websocket.JSONConn{
+					Conn: c,
+				}
+
 				v := map[string]interface{}{
 					"anmol": "wowow",
 				}
-				err = websocket.WriteJSON(ctx, c, v)
+				err = jc.Write(ctx, v)
 				if err != nil {
 					return err
 				}
@@ -191,8 +195,12 @@ func TestHandshake(t *testing.T) {
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
+				jc := websocket.JSONConn{
+					Conn: c,
+				}
+
 				var v interface{}
-				err = websocket.ReadJSON(ctx, c, &v)
+				err = jc.Read(ctx, &v)
 				if err != nil {
 					return err
 				}

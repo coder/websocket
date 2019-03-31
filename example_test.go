@@ -88,13 +88,17 @@ func ExampleAccept() {
 		}
 		defer c.Close(websocket.StatusInternalError, "")
 
+		jc := websocket.JSONConn{
+			Conn: c,
+		}
+
 		ctx, cancel := context.WithTimeout(r.Context(), time.Second*10)
 		defer cancel()
 
 		v := map[string]interface{}{
 			"my_field": "foo",
 		}
-		err = websocket.WriteJSON(ctx, c, v)
+		err = jc.Write(ctx, v)
 		if err != nil {
 			log.Printf("failed to write json: %v", err)
 			return
@@ -123,8 +127,12 @@ func ExampleDial() {
 	}
 	defer c.Close(websocket.StatusInternalError, "")
 
+	jc := websocket.JSONConn{
+		Conn: c,
+	}
+
 	var v interface{}
-	err = websocket.ReadJSON(ctx, c, v)
+	err = jc.Read(ctx, v)
 	if err != nil {
 		log.Fatalf("failed to read json: %v", err)
 	}
