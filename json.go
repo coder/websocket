@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 
-	"golang.org/x/net/websocket"
 	"golang.org/x/xerrors"
 )
 
@@ -15,7 +14,7 @@ func ReadJSON(ctx context.Context, c *Conn, v interface{}) error {
 		return xerrors.Errorf("failed to read json: %w", err)
 	}
 
-	if typ != websocket.TextFrame {
+	if typ != Text {
 		return xerrors.Errorf("unexpected frame type for json (expected TextFrame): %v", typ)
 	}
 
@@ -32,7 +31,7 @@ func ReadJSON(ctx context.Context, c *Conn, v interface{}) error {
 
 // WriteJSON writes the json message v into c.
 func WriteJSON(ctx context.Context, c *Conn, v interface{}) error {
-	w := c.MessageWriter(websocket.TextFrame)
+	w := c.MessageWriter(Text)
 	w.SetContext(ctx)
 
 	e := json.NewEncoder(w)
