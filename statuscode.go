@@ -21,7 +21,7 @@ const (
 	StatusProtocolError
 	StatusUnsupportedData
 	// 1004 is reserved.
-	StatusNoStatusRcvd StatusCode = 1005 + iota
+	StatusNoStatusRcvd StatusCode = 1005 + iota - 4
 	StatusAbnormalClosure
 	StatusInvalidFramePayloadData
 	StatusPolicyViolation

@@ -23,9 +23,10 @@ type controlFrame struct {
 type Conn struct {
 	subprotocol string
 	br          *bufio.Reader
-	bw          *bufio.Writer
-	closer      io.Closer
-	client      bool
+	// TODO Cannot use bufio writer because for compression we need to know how much is buffered and compress it if large.
+	bw     *bufio.Writer
+	closer io.Closer
+	client bool
 
 	closeOnce sync.Once
 	closeErr  error
@@ -39,11 +40,11 @@ type Conn struct {
 
 	// Readers should receive on read to begin reading a message.
 	// Then send a byte slice to readBytes to read into it.
-	// A value on done will be sent once the read into a slice is complete.
-	// done will be closed when the message has been fully read.
+	// The n of bytes read will be sent on readDone once the read into a slice is complete.
+	// readDone will receive 0 when EOF is reached.
 	read      chan opcode
 	readBytes chan []byte
-	readDone  chan struct{}
+	readDone  chan int
 }
 
 func (c *Conn) getCloseErr() error {
@@ -82,6 +83,7 @@ func (c *Conn) init() {
 	c.closed = make(chan struct{})
 	c.write = make(chan opcode)
 	c.read = make(chan opcode)
+	c.readDone = make(chan int)
 	c.readBytes = make(chan []byte)
 
 	runtime.SetFinalizer(c, func(c *Conn) {
@@ -109,20 +111,40 @@ messageLoop:
 			case <-c.closed:
 				return
 			case b, ok := <-c.writeBytes:
-				if !ok {
-					if !opcode.controlOp() {
-						h := header{
-							fin:    true,
-							opcode: opContinuation,
-							masked: c.client,
-						}
-						b = marshalHeader(h)
-						_, err := c.bw.Write(b)
-						if err != nil {
-							c.close(xerrors.Errorf("failed to write to connection: %v", err))
-							return
-						}
+				if !firstSent || !opcode.controlOp() {
+					h := header{
+						fin:           opcode.controlOp() || !ok,
+						opcode:        opcode,
+						payloadLength: int64(len(b)),
+						masked:        c.client,
 					}
+
+					if firstSent {
+						h.opcode = opContinuation
+					}
+					firstSent = true
+
+					b2 := marshalHeader(h)
+					_, err := c.bw.Write(b2)
+					if err != nil {
+						c.close(xerrors.Errorf("failed to write to connection: %v", err))
+						return
+					}
+
+					_, err = c.bw.Write(b)
+					if err != nil {
+						c.close(xerrors.Errorf("failed to write to connection: %v", err))
+						return
+					}
+				}
+
+				if ok {
+					select {
+					case <-c.closed:
+						return
+					case c.writeBytes <- nil:
+					}
+				} else {
 					err := c.bw.Flush()
 					if err != nil {
 						c.close(xerrors.Errorf("failed to write to connection: %v", err))
@@ -134,37 +156,46 @@ messageLoop:
 					}
 					continue messageLoop
 				}
-
-				h := header{
-					fin:           opcode.controlOp(),
-					opcode:        opcode,
-					payloadLength: int64(len(b)),
-					masked:        c.client,
-				}
-
-				if firstSent {
-					h.opcode = opContinuation
-				}
-				firstSent = true
-
-				b2 := marshalHeader(h)
-				_, err := c.bw.Write(b2)
-				if err != nil {
-					c.close(xerrors.Errorf("failed to write to connection: %v", err))
-					return
-				}
-
-				_, err = c.bw.Write(b)
-				if err != nil {
-					c.close(xerrors.Errorf("failed to write to connection: %v", err))
-					return
-				}
 			}
 		}
 	}
 }
 
+func (c *Conn) handleControl(h header) {
+	if h.payloadLength > maxControlFramePayload {
+		c.Close(StatusProtocolError, "control frame too large")
+		return
+	}
+
+	b := make([]byte, h.payloadLength)
+	_, err := io.ReadFull(c.br, b)
+	if err != nil {
+		c.close(xerrors.Errorf("failed to read control frame payload: %v", err))
+		return
+	}
+
+	if h.masked {
+		mask(h.maskKey, 0, b)
+	}
+
+	switch h.opcode {
+	case opPing:
+		c.writePong(b)
+	case opPong:
+	case opClose:
+		code, reason, err := parseClosePayload(b)
+		if err != nil {
+			c.close(xerrors.Errorf("read invalid close payload: %v", err))
+			return
+		}
+		c.Close(code, reason)
+	default:
+		panic(fmt.Sprintf("websocket: unexpected control opcode: %#v", h))
+	}
+}
+
 func (c *Conn) readLoop() {
+	var indata bool
 	for {
 		h, err := readHeader(c.br)
 		if err != nil {
@@ -172,31 +203,16 @@ func (c *Conn) readLoop() {
 			return
 		}
 
-		switch h.opcode {
-		case opClose, opPing:
-			if h.payloadLength > maxControlFramePayload {
-				c.Close(StatusProtocolError, "control frame too large")
-				return
-			}
-			b := make([]byte, h.payloadLength)
-			_, err = io.ReadFull(c.br, b)
-			if err != nil {
-				c.close(xerrors.Errorf("failed to read control frame payload: %v", err))
-				return
-			}
-
-			if h.opcode == opPing {
-				c.writePing(b)
-				continue
-			}
-
-			code, reason, err := parseClosePayload(b)
-			if err != nil {
-				c.close(xerrors.Errorf("invalid close payload: %v", err))
-				return
-			}
-			c.Close(code, reason)
+		if h.rsv1 || h.rsv2 || h.rsv3 {
+			c.Close(StatusProtocolError, fmt.Sprintf("read header with rsv bits set: %v:%v:%v", h.rsv1, h.rsv2, h.rsv3))
 			return
+		}
+
+		// TODO this is fucked, as if they are reading a frame as they are writing, then we can't send ping/close so we'll just get stuck for 5s.
+		switch h.opcode {
+		case opClose, opPing, opPong:
+			c.handleControl(h)
+			continue
 		}
 
 		switch h.opcode {
@@ -206,55 +222,69 @@ func (c *Conn) readLoop() {
 			return
 		}
 
-		c.readDone = make(chan struct{})
-		c.read <- h.opcode
-		for {
-			var maskPos int
-			left := h.payloadLength
-			for left > 0 {
+		if !indata {
+			select {
+			case <-c.closed:
+				return
+			case c.read <- h.opcode:
+			}
+		} else {
+			indata = true
+		}
+
+		var maskPos int
+		left := h.payloadLength
+		for left > 0 {
+			select {
+			case <-c.closed:
+				return
+			case b := <-c.readBytes:
+				if int64(len(b)) > left {
+					b = b[:left]
+				}
+
+				_, err = io.ReadFull(c.br, b)
+				if err != nil {
+					c.close(xerrors.Errorf("failed to read from connection: %v", err))
+					return
+				}
+				left -= int64(len(b))
+
+				if h.masked {
+					maskPos = mask(h.maskKey, maskPos, b)
+				}
+
 				select {
 				case <-c.closed:
 					return
-				case b := <-c.readBytes:
-					if int64(len(b)) > left {
-						b = b[:left]
-					}
-
-					_, err = io.ReadFull(c.br, b)
-					if err != nil {
-						c.close(xerrors.Errorf("failed to read from connection: %v", err))
-						return
-					}
-					left -= int64(len(b))
-
-					if h.masked {
-						maskPos = mask(h.maskKey, maskPos, b)
-					}
-
-					select {
-					case <-c.closed:
-						return
-					case c.readDone <- struct{}{}:
-					}
+				case c.readDone <- len(b):
 				}
 			}
-
-			if h.fin {
-				break
-			}
-			h, err = readHeader(c.br)
-			if err != nil {
-				c.close(xerrors.Errorf("failed to read header: %v", err))
-				return
-			}
-			// TODO check opcode.
 		}
-		close(c.readDone)
+
+		if h.fin {
+			indata = false
+			select {
+			case <-c.closed:
+				return
+			case c.readDone <- 0:
+			}
+		}
 	}
 }
 
-func (c *Conn) writePing(p []byte) {
-	panic("TODO")
+func (c *Conn) writePong(p []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	w := c.messageWriter(opPong)
+	w.SetContext(ctx)
+	_, err := w.Write(p)
+	if err != nil {
+		return err
+	}
+	err = w.Close()
+	return err
 }
 
 // MessageWriter returns a writer bounded by the context that will write
@@ -281,14 +311,14 @@ func (c *Conn) messageWriter(opcode opcode) *MessageWriter {
 func (c *Conn) ReadMessage(ctx context.Context) (DataType, *MessageReader, error) {
 	select {
 	case <-c.closed:
-		return 0, nil, c.getCloseErr()
+		return 0, nil, xerrors.Errorf("failed to read message: %v", c.getCloseErr())
 	case opcode := <-c.read:
 		return DataType(opcode), &MessageReader{
 			ctx: context.Background(),
 			c:   c,
 		}, nil
 	case <-ctx.Done():
-		return 0, nil, ctx.Err()
+		return 0, nil, xerrors.Errorf("failed to read message: %v", ctx.Err())
 	}
 }
 
@@ -313,26 +343,36 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 	case c.write <- opClose:
 	case <-ctx.Done():
 		c.close(xerrors.New("force closed: close frame write timed out"))
+		return c.getCloseErr()
 	}
 
 	select {
 	case <-c.closed:
 		return c.getCloseErr()
 	case c.writeBytes <- p:
-		close(c.writeBytes)
+		select {
+		case <-c.closed:
+			return c.getCloseErr()
+		case <-c.writeBytes:
+			close(c.writeBytes)
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	case <-ctx.Done():
 		c.close(xerrors.New("force closed: close frame write timed out"))
+		return c.getCloseErr()
 	}
 
 	select {
 	case <-c.closed:
+		if err != nil {
+			return err
+		}
+		return c.closeErr
 	case <-ctx.Done():
 		c.close(xerrors.New("force closed: close frame write timed out"))
+		return c.getCloseErr()
 	}
-	if err != nil {
-		return err
-	}
-	return c.closeErr
 }
 
 // MessageWriter enables writing to a WebSocket connection.
@@ -367,7 +407,14 @@ func (w *MessageWriter) Write(p []byte) (int, error) {
 	case <-w.c.closed:
 		return 0, w.c.getCloseErr()
 	case w.c.writeBytes <- p:
-		return len(p), nil
+		select {
+		case <-w.c.closed:
+			return 0, w.c.getCloseErr()
+		case <-w.c.writeBytes:
+			return len(p), nil
+		case <-w.ctx.Done():
+			return 0, w.ctx.Err()
+		}
 	case <-w.ctx.Done():
 		return 0, w.ctx.Err()
 	}
@@ -382,7 +429,14 @@ func (w *MessageWriter) SetContext(ctx context.Context) {
 // This must be called for every MessageWriter.
 func (w *MessageWriter) Close() error {
 	if !w.acquiredLock {
-		return xerrors.New("websocket: MessageWriter closed without writing any bytes")
+		select {
+		case <-w.c.closed:
+			return w.c.getCloseErr()
+		case w.c.write <- w.opcode:
+			w.acquiredLock = true
+		case <-w.ctx.Done():
+			return w.ctx.Err()
+		}
 	}
 	close(w.c.writeBytes)
 	return nil
@@ -419,13 +473,13 @@ func (r *MessageReader) Read(p []byte) (n int, err error) {
 		select {
 		case <-r.c.closed:
 			return 0, r.c.getCloseErr()
-		case <-r.c.readDone:
-			r.n += len(p)
+		case n := <-r.c.readDone:
+			r.n += n
 			// TODO make this better later and inside readLoop to prevent the read from actually occuring if over limit.
-			if r.limit > 0 && n > r.limit {
+			if r.limit > 0 && r.n > r.limit {
 				return 0, xerrors.New("message too big")
 			}
-			return len(p), nil
+			return n, nil
 		case <-r.ctx.Done():
 			return 0, r.ctx.Err()
 		}
