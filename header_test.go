@@ -18,6 +18,10 @@ func randBool() bool {
 }
 
 func TestHeader(t *testing.T) {
+
+}
+
+func TestFuzzHeader(t *testing.T) {
 	t.Parallel()
 
 	for i := 0; i < 1000; i++ {

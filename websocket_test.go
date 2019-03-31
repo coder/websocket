@@ -378,13 +378,11 @@ func echoLoop(ctx context.Context, c *websocket.Conn, t *testing.T) {
 	for {
 		err := echo()
 		if err != nil {
-			// t.Logf("%v: failed to echo message: %+v", time.Now(), err)
 			return
 		}
 	}
 }
 
-// TODO
 // https://github.com/crossbario/autobahn-python/blob/master/wstest/testee_client_aio.py
 func TestAutobahnClient(t *testing.T) {
 	t.Parallel()

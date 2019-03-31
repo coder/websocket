@@ -50,10 +50,10 @@ type Conn struct {
 }
 
 func (c *Conn) getCloseErr() error {
-	if c.closeErr == nil {
-		return xerrors.New("websocket: use of closed connection")
+	if c.closeErr != nil {
+		return c.closeErr
 	}
-	return c.closeErr
+	return nil
 }
 
 func (c *Conn) close(err error) {
@@ -235,11 +235,9 @@ func (c *Conn) handleControl(h header) {
 			}
 			c.Close(code, reason)
 		} else {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-			defer cancel()
-
-			c.writeControl(ctx, opClose, nil)
-			c.close(nil)
+			c.writeClose(nil, CloseError{
+				Code: StatusNoStatusRcvd,
+			})
 		}
 	default:
 		panic(fmt.Sprintf("websocket: unexpected control opcode: %#v", h))
@@ -340,40 +338,8 @@ func (c *Conn) writePong(p []byte) error {
 	return err
 }
 
-// MessageWriter returns a writer bounded by the context that will write
-// a WebSocket data frame of type dataType to the connection.
-// Ensure you close the MessageWriter once you have written to entire message.
-// Concurrent calls to MessageWriter are ok.
-func (c *Conn) MessageWriter(dataType DataType) *MessageWriter {
-	return &MessageWriter{
-		c:        c,
-		ctx:      context.Background(),
-		datatype: dataType,
-	}
-}
-
-// ReadMessage will wait until there is a WebSocket data frame to read from the connection.
-// It returns the type of the data, a reader to read it and also an error.
-// Please use SetContext on the reader to bound the read operation.
-// Your application must keep reading messages for the Conn to automatically respond to ping
-// and close frames.
-func (c *Conn) ReadMessage(ctx context.Context) (DataType, *MessageReader, error) {
-	select {
-	case <-c.closed:
-		return 0, nil, xerrors.Errorf("failed to read message: %w", c.getCloseErr())
-	case opcode := <-c.read:
-		return DataType(opcode), &MessageReader{
-			ctx: context.Background(),
-			c:   c,
-		}, nil
-	case <-ctx.Done():
-		return 0, nil, xerrors.Errorf("failed to read message: %w", ctx.Err())
-	}
-}
-
 // Close closes the WebSocket connection with the given status code and reason.
 // It will write a WebSocket close frame with a timeout of 5 seconds.
-// TODO close error should become c.closeErr to indicate we closed.
 func (c *Conn) Close(code StatusCode, reason string) error {
 	// This function also will not wait for a close frame from the peer like the RFC
 	// wants because that makes no sense and I don't think anyone actually follows that.
@@ -383,20 +349,33 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 		p, _ = closePayload(StatusInternalError, fmt.Sprintf("websocket: application tried to send code %v but code or reason was invalid", code))
 	}
 
+	err2 := c.writeClose(p, CloseError{
+		Code:   code,
+		Reason: reason,
+	})
+	if err != nil {
+		return err
+	}
+	return err2
+}
+
+func (c *Conn) writeClose(p []byte, cerr CloseError) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	err = c.writeControl(ctx, opClose, p)
-	if err != nil {
-		return err
-	}
+	err := c.writeControl(ctx, opClose, p)
 
-	c.close(nil)
+	c.close(cerr)
 
 	if err != nil {
 		return err
 	}
-	return c.closeErr
+
+	if cerr != c.closeErr {
+		return c.closeErr
+	}
+
+	return nil
 }
 
 func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error {
@@ -419,6 +398,18 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+}
+
+// MessageWriter returns a writer bounded by the context that will write
+// a WebSocket data frame of type dataType to the connection.
+// Ensure you close the MessageWriter once you have written to entire message.
+// Concurrent calls to MessageWriter are ok.
+func (c *Conn) MessageWriter(dataType DataType) *MessageWriter {
+	return &MessageWriter{
+		c:        c,
+		ctx:      context.Background(),
+		datatype: dataType,
 	}
 }
 
@@ -493,6 +484,25 @@ func (w *MessageWriter) Close() error {
 		return w.ctx.Err()
 	case <-w.c.writeDone:
 		return nil
+	}
+}
+
+// ReadMessage will wait until there is a WebSocket data frame to read from the connection.
+// It returns the type of the data, a reader to read it and also an error.
+// Please use SetContext on the reader to bound the read operation.
+// Your application must keep reading messages for the Conn to automatically respond to ping
+// and close frames.
+func (c *Conn) ReadMessage(ctx context.Context) (DataType, *MessageReader, error) {
+	select {
+	case <-c.closed:
+		return 0, nil, xerrors.Errorf("failed to read message: %w", c.getCloseErr())
+	case opcode := <-c.read:
+		return DataType(opcode), &MessageReader{
+			ctx: context.Background(),
+			c:   c,
+		}, nil
+	case <-ctx.Done():
+		return 0, nil, xerrors.Errorf("failed to read message: %w", ctx.Err())
 	}
 }
 
