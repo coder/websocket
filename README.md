@@ -25,6 +25,7 @@ go get nhooyr.io/websocket@master
 - Compression of text frames larger than 1024 bytes by default
 - Highly optimized where it matters
 - WASM support
+- Passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 
 ## Example
 
