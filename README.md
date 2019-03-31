@@ -22,7 +22,7 @@ go get nhooyr.io/websocket
 - net/http is used for WebSocket dials and upgrades
 - Passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 - JSON helpers
-- Thoroughly testing
+- Thoroughly tested
 
 ## Roadmap
 
