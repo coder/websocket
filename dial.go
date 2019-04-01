@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -132,5 +133,14 @@ func Dial(ctx context.Context, u string, opts ...DialOption) (_ *Conn, _ *http.R
 		return nil, resp, xerrors.Errorf("websocket: body is not a read write closer but should be: %T", rwc)
 	}
 
-	return nil, resp, nil
+	c := &Conn{
+		subprotocol: resp.Header.Get("Sec-WebSocket-Protocol"),
+		br:          bufio.NewReader(rwc),
+		bw:          bufio.NewWriter(rwc),
+		closer:      rwc,
+		client:      true,
+	}
+	c.init()
+
+	return c, resp, nil
 }

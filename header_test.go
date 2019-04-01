@@ -38,11 +38,7 @@ func TestHeader(t *testing.T) {
 
 		t.Logf("header: %#v", h)
 
-		b, err := marshalHeader(h)
-		if err != nil {
-			t.Fatalf("failed to marshal header: %v", err)
-		}
-
+		b := marshalHeader(h)
 		t.Logf("bytes: %b", b)
 
 		r := bytes.NewReader(b)

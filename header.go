@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 
 	"golang.org/x/xerrors"
@@ -16,7 +17,6 @@ const maxHeaderSize = 1 + 1 + 8 + 4
 
 // header represents a WebSocket frame header.
 // See https://tools.ietf.org/html/rfc6455#section-5.2
-// The fields are exported for easy printing for debugging.
 type header struct {
 	fin    bool
 	rsv1   bool
@@ -34,7 +34,7 @@ type header struct {
 
 // bytes returns the bytes of the header.
 // See https://tools.ietf.org/html/rfc6455#section-5.2
-func marshalHeader(h header) ([]byte, error) {
+func marshalHeader(h header) []byte {
 	b := make([]byte, 2, maxHeaderSize)
 
 	if h.fin {
@@ -54,7 +54,7 @@ func marshalHeader(h header) ([]byte, error) {
 
 	switch {
 	case h.payloadLength < 0:
-		return nil, xerrors.Errorf("invalid header: negative length: %v", h.payloadLength)
+		panic(fmt.Sprintf("websocket: invalid header: negative length: %v", h.payloadLength))
 	case h.payloadLength <= 125:
 		b[1] = byte(h.payloadLength)
 	case h.payloadLength <= 1<<16:
@@ -73,7 +73,7 @@ func marshalHeader(h header) ([]byte, error) {
 		copy(b[len(b)-4:], h.maskKey[:])
 	}
 
-	return b, nil
+	return b
 }
 
 // readHeader reads a header from the reader.
@@ -130,6 +130,9 @@ func readHeader(r io.Reader) (header, error) {
 		b = b[2:]
 	case payloadLength == 127:
 		h.payloadLength = int64(binary.BigEndian.Uint64(b))
+		if h.payloadLength < 0 {
+			return header{}, xerrors.Errorf("websocket: header has negative payload length: %v", h.payloadLength)
+		}
 		b = b[8:]
 	}
 

@@ -15,3 +15,11 @@ const (
 	opPong
 	// 11-16 are reserved for further control frames.
 )
+
+func (o opcode) controlOp() bool {
+	switch o {
+	case opClose, opPing, opPong:
+		return true
+	}
+	return false
+}

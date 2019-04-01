@@ -116,17 +116,22 @@ func Accept(w http.ResponseWriter, r *http.Request, opts ...AcceptOption) (*Conn
 
 	w.WriteHeader(http.StatusSwitchingProtocols)
 
-	c, brw, err := hj.Hijack()
+	netConn, brw, err := hj.Hijack()
 	if err != nil {
 		err = xerrors.Errorf("websocket: failed to hijack connection: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return nil, err
 	}
 
-	_ = c
-	_ = brw
+	c := &Conn{
+		subprotocol: w.Header().Get("Sec-WebSocket-Protocol"),
+		br:          brw.Reader,
+		bw:          brw.Writer,
+		closer:      netConn,
+	}
+	c.init()
 
-	return nil, nil
+	return c, nil
 }
 
 func selectSubprotocol(w http.ResponseWriter, r *http.Request, subprotocols []string) {
