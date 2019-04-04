@@ -16,14 +16,14 @@ go get nhooyr.io/websocket@master
 
 ## Features
 
+- HTTP/2 over WebSocket's support
 - Full support of the WebSocket protocol
 - Only depends on the stdlib
 - Simple to use because of the minimal API
 - Uses the context package for cancellation
 - Uses net/http's Client to do WebSocket dials
 - Compression of text frames larger than 1024 bytes by default
-- Highly optimized
-- API will transparently work with WebSockets over HTTP/2
+- Highly optimized where it matters
 - WASM support
 
 ## Example
@@ -31,38 +31,36 @@ go get nhooyr.io/websocket@master
 ### Server
 
 ```go
-func main() {
-	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := websocket.Accept(w, r,
-			websocket.AcceptSubprotocols("test"),
-		)
-		if err != nil {
-			log.Printf("server handshake failed: %v", err)
-			return
-		}
-		defer c.Close(websocket.StatusInternalError, "")
-
-		ctx, cancel := context.WithTimeout(r.Context(), time.Second*10)
-		defer cancel()
-
-		v := map[string]interface{}{
-			"my_field": "foo",
-		}
-		err = websocket.WriteJSON(ctx, c, v)
-		if err != nil {
-			log.Printf("failed to write json: %v", err)
-			return
-		}
-
-		log.Printf("wrote %v", v)
-
-		c.Close(websocket.StatusNormalClosure, "")
-	})
-	err := http.ListenAndServe("localhost:8080", fn)
+fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c, err := websocket.Accept(w, r,
+		websocket.AcceptSubprotocols("test"),
+	)
 	if err != nil {
-		log.Fatalf("failed to listen and serve: %v", err)
+		log.Printf("server handshake failed: %v", err)
+		return
 	}
- }
+	defer c.Close(websocket.StatusInternalError, "")
+
+	ctx, cancel := context.WithTimeout(r.Context(), time.Second*10)
+	defer cancel()
+
+	v := map[string]interface{}{
+		"my_field": "foo",
+	}
+	err = websocket.WriteJSON(ctx, c, v)
+	if err != nil {
+		log.Printf("failed to write json: %v", err)
+		return
+	}
+
+	log.Printf("wrote %v", v)
+
+	c.Close(websocket.StatusNormalClosure, "")
+})
+err := http.ListenAndServe("localhost:8080", fn)
+if err != nil {
+	log.Fatalf("failed to listen and serve: %v", err)
+}
 ```
 
 For a production quality example that shows off the low level API, see the echo example on the [godoc](https://godoc.org/nhooyr.io/websocket#Accept).
@@ -70,29 +68,27 @@ For a production quality example that shows off the low level API, see the echo 
 ### Client
 
 ```go
-func main() {
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
-	defer cancel()
+ctx := context.Background()
+ctx, cancel := context.WithTimeout(ctx, time.Second*10)
+defer cancel()
 
-	c, _, err := websocket.Dial(ctx, "ws://localhost:8080",
-		websocket.DialSubprotocols("test"),
-	)
-	if err != nil {
-		log.Fatalf("failed to ws dial: %v", err)
-	}
-	defer c.Close(websocket.StatusInternalError, "")
-
-	var v interface{}
-	err = websocket.ReadJSON(ctx, c, v)
-	if err != nil {
-		log.Fatalf("failed to read json: %v", err)
-	}
-
-	log.Printf("received %v", v)
-
-	c.Close(websocket.StatusNormalClosure, "")
+c, _, err := websocket.Dial(ctx, "ws://localhost:8080",
+	websocket.DialSubprotocols("test"),
+)
+if err != nil {
+	log.Fatalf("failed to ws dial: %v", err)
 }
+defer c.Close(websocket.StatusInternalError, "")
+
+var v interface{}
+err = websocket.ReadJSON(ctx, c, v)
+if err != nil {
+	log.Fatalf("failed to read json: %v", err)
+}
+
+log.Printf("received %v", v)
+
+c.Close(websocket.StatusNormalClosure, "")
 ```
 
 See [example_test.go](example_test.go) for more examples.
@@ -106,7 +102,7 @@ See [example_test.go](example_test.go) for more examples.
 - net.Conn is never exposed as WebSocket's over HTTP/2 will not have a net.Conn.
 - Functional options make the API very clean and easy to extend
 - Compression is very useful for JSON payloads
-- Protobuf and JSON helpers make code terse
+- JSON helpers make code terse
 - Using net/http's Client for dialing means we do not have to reinvent dialing hooks
   and configurations. Just pass in a custom net/http client if you want custom dialing.
 
@@ -120,14 +116,14 @@ WebSocket protocol correctly so big thanks to the authors of both.
 
 https://github.com/gorilla/websocket
 
-This package is the community standard but it is very old and over timennn
+This package is the community standard but it is very old and over time
 has accumulated cruft. There are many ways to do the same thing and the API
-overall is just not very clear. Just compare the godoc of
+is not clear. Just compare the godoc of
 [nhooyr/websocket](godoc.org/github.com/nhooyr/websocket) side by side with
 [gorilla/websocket](godoc.org/github.com/gorilla/websocket).
 
 The API for nhooyr/websocket has been designed such that there is only one way to do things
-and with HTTP/2 in mind which makes using it correctly and safely much easier.
+which makes using it correctly and safely much easier.
 
 ### x/net/websocket
 
@@ -142,12 +138,12 @@ See https://github.com/golang/go/issues/18152
 https://github.com/gobwas/ws
 
 This library has an extremely flexible API but that comes at the cost of usability
-and clarity. Its just not clear how to do things in a safe manner. 
+and clarity. Its not clear what the best way to do anything is.
 
-This library is fantastic in terms of performance though. The author put in significant
-effort to ensure its speed and I have tried to apply as many of its teachings as
+This library is fantastic in terms of performance. The author put in significant
+effort to ensure its speed and I have applied as many of its optimizations as
 I could into nhooyr/websocket.
 
 If you want a library that gives you absolute control over everything, this is the library,
 but for most users, the API provided by nhooyr/websocket will definitely fit better as it will
-be just as performant but much easier to use.
+be just as performant but much easier to use correctly.
