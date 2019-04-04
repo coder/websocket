@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"sync"
 	"time"
 
@@ -211,8 +210,6 @@ func (c *Conn) readLoop() {
 				case <-c.closed:
 					return
 				case b := <-c.readBytes:
-					log.Println("readbytes", left)
-
 					if int64(len(b)) > left {
 						b = b[:left]
 					}

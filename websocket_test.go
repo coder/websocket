@@ -30,7 +30,7 @@ func TestConnection(t *testing.T) {
 		}
 		defer c.Close(websocket.StatusInternalError, "")
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		ctx, cancel := context.WithTimeout(r.Context(), time.Second*5)
 		defer cancel()
 
 		var v interface{}
