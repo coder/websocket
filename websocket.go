@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"sync"
 	"time"
 
@@ -19,6 +20,7 @@ type controlFrame struct {
 // Conn represents a WebSocket connection.
 // Pings will always be automatically responded to with pongs, you do not
 // have to do anything special.
+// TODO set finalizer
 type Conn struct {
 	subprotocol string
 	br          *bufio.Reader
@@ -80,6 +82,9 @@ func (c *Conn) init() {
 	c.write = make(chan opcode)
 	c.read = make(chan opcode)
 	c.readBytes = make(chan []byte)
+
+	go c.writeLoop()
+	go c.readLoop()
 }
 
 func (c *Conn) writeLoop() {
@@ -197,29 +202,49 @@ func (c *Conn) readLoop() {
 		}
 
 		c.readDone = make(chan struct{})
-
-		var maskPos int
-		left := h.payloadLength
+		c.read <- h.opcode
 		for {
-			select {
-			case <-c.closed:
-				return
-			case b := <-c.readBytes:
-				if int64(len(b)) > left {
-					b = b[left:]
-				}
-				_, err = io.ReadFull(c.br, b)
-				if err != nil {
-					c.close(xerrors.Errorf("failed to read from connection: %v", err))
+			var maskPos int
+			left := h.payloadLength
+			for left > 0 {
+				select {
+				case <-c.closed:
 					return
-				}
+				case b := <-c.readBytes:
+					log.Println("readbytes", left)
 
-				if h.masked {
-					maskPos = mask(h.maskKey, maskPos, b)
-				}
+					if int64(len(b)) > left {
+						b = b[:left]
+					}
 
-				c.readDone <- struct{}{}
+					_, err = io.ReadFull(c.br, b)
+					if err != nil {
+						c.close(xerrors.Errorf("failed to read from connection: %v", err))
+						return
+					}
+					left -= int64(len(b))
+
+					if h.masked {
+						maskPos = mask(h.maskKey, maskPos, b)
+					}
+
+					select {
+					case <-c.closed:
+						return
+					case c.readDone <- struct{}{}:
+					}
+				}
 			}
+
+			if h.fin {
+				break
+			}
+			h, err = readHeader(c.br)
+			if err != nil {
+				c.close(xerrors.Errorf("failed to read header: %v", err))
+				return
+			}
+			// TODO check opcode.
 		}
 		close(c.readDone)
 	}

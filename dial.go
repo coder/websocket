@@ -108,8 +108,8 @@ func Dial(ctx context.Context, u string, opts ...DialOption) (_ *Conn, _ *http.R
 			r := io.LimitReader(resp.Body, 1024)
 			b, _ := ioutil.ReadAll(r)
 			resp.Body = ioutil.NopCloser(bytes.NewReader(b))
+			respBody.Close()
 		}
-		respBody.Close()
 	}()
 
 	if resp.StatusCode != http.StatusSwitchingProtocols {

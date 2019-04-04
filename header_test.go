@@ -36,18 +36,18 @@ func TestHeader(t *testing.T) {
 			rand.Read(h.maskKey[:])
 		}
 
-		t.Logf("header: %#v", h)
-
 		b := marshalHeader(h)
-		t.Logf("bytes: %b", b)
-
 		r := bytes.NewReader(b)
 		h2, err := readHeader(r)
 		if err != nil {
+			t.Logf("header: %#v", h)
+			t.Logf("bytes: %b", b)
 			t.Fatalf("failed to read header: %v", err)
 		}
 
 		if !cmp.Equal(h, h2, cmp.AllowUnexported(header{})) {
+			t.Logf("header: %#v", h)
+			t.Logf("bytes: %b", b)
 			t.Fatalf("parsed and read header differ: %v", cmp.Diff(h, h2, cmp.AllowUnexported(header{})))
 		}
 	}
