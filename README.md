@@ -16,7 +16,7 @@ go get nhooyr.io/websocket@master
 
 ## Features
 
-- HTTP/2 over WebSocket's support
+- WebSockets over HTTP/2 support
 - Full support of the WebSocket protocol
 - Only depends on the stdlib
 - Simple to use because of the minimal API
