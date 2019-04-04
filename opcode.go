@@ -1,7 +1,7 @@
 package websocket
 
 // opcode represents a WebSocket Opcode.
-//go:generate stringer -type=opcode
+//go:generate go run golang.org/x/tools/cmd/stringer -type=opcode
 type opcode int
 
 // opcode constants.
@@ -15,3 +15,11 @@ const (
 	opPong
 	// 11-16 are reserved for further control frames.
 )
+
+func (o opcode) controlOp() bool {
+	switch o {
+	case opClose, opPing, opPong:
+		return true
+	}
+	return false
+}
