@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime"
 	"sync"
 	"time"
 
@@ -19,7 +20,6 @@ type controlFrame struct {
 // Conn represents a WebSocket connection.
 // Pings will always be automatically responded to with pongs, you do not
 // have to do anything special.
-// TODO set finalizer
 type Conn struct {
 	subprotocol string
 	br          *bufio.Reader
@@ -59,6 +59,8 @@ func (c *Conn) close(err error) {
 	}
 
 	c.closeOnce.Do(func() {
+		runtime.SetFinalizer(c, nil)
+
 		c.closeErr = err
 
 		cerr := c.closer.Close()
@@ -81,6 +83,10 @@ func (c *Conn) init() {
 	c.write = make(chan opcode)
 	c.read = make(chan opcode)
 	c.readBytes = make(chan []byte)
+
+	runtime.SetFinalizer(c, func(c *Conn) {
+		c.Close(StatusInternalError, "websocket: connection ended up being garbage collected")
+	})
 
 	go c.writeLoop()
 	go c.readLoop()
