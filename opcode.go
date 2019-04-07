@@ -10,7 +10,7 @@ const (
 	opText
 	opBinary
 	// 3 - 7 are reserved for further non-control frames.
-	opClose opcode = 8 + iota
+	opClose opcode = 8 + iota - 3
 	opPing
 	opPong
 	// 11-16 are reserved for further control frames.

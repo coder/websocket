@@ -11,9 +11,9 @@ func _() {
 	_ = x[opContinuation-0]
 	_ = x[opText-1]
 	_ = x[opBinary-2]
-	_ = x[opClose-11]
-	_ = x[opPing-12]
-	_ = x[opPong-13]
+	_ = x[opClose-8]
+	_ = x[opPing-9]
+	_ = x[opPong-10]
 }
 
 const (
@@ -30,8 +30,8 @@ func (i opcode) String() string {
 	switch {
 	case 0 <= i && i <= 2:
 		return _opcode_name_0[_opcode_index_0[i]:_opcode_index_0[i+1]]
-	case 11 <= i && i <= 13:
-		i -= 11
+	case 8 <= i && i <= 10:
+		i -= 8
 		return _opcode_name_1[_opcode_index_1[i]:_opcode_index_1[i+1]]
 	default:
 		return "opcode(" + strconv.FormatInt(int64(i), 10) + ")"
