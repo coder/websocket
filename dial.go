@@ -74,19 +74,19 @@ func Dial(ctx context.Context, u string, opts ...DialOption) (_ *Conn, _ *http.R
 
 	parsedURL, err := url.Parse(u)
 	if err != nil {
-		return nil, nil, xerrors.Errorf("failed to parse websocket url: %v", err)
+		return nil, nil, xerrors.Errorf("failed to parse websocket url: %w", err)
 	}
 
 	switch parsedURL.Scheme {
-	case "ws", "http":
+	case "ws":
 		parsedURL.Scheme = "http"
-	case "wss", "https":
+	case "wss":
 		parsedURL.Scheme = "https"
 	default:
 		return nil, nil, xerrors.Errorf("unknown scheme in url: %q", parsedURL.Scheme)
 	}
 
-	req, _ := http.NewRequest("GET", u, nil)
+	req, _ := http.NewRequest("GET", parsedURL.String(), nil)
 	req = req.WithContext(ctx)
 	req.Header = header
 	req.Header.Set("Connection", "Upgrade")
@@ -113,7 +113,7 @@ func Dial(ctx context.Context, u string, opts ...DialOption) (_ *Conn, _ *http.R
 	}()
 
 	if resp.StatusCode != http.StatusSwitchingProtocols {
-		return nil, resp, xerrors.Errorf("websocket: expected status code %v but got %v", http.StatusSwitchingProtocols)
+		return nil, resp, xerrors.Errorf("websocket: expected status code %v but got %v", http.StatusSwitchingProtocols, resp.StatusCode)
 	}
 
 	if !httpguts.HeaderValuesContainsToken(resp.Header["Connection"], "Upgrade") {

@@ -1,7 +1,6 @@
 # websocket
 
 [![GoDoc](https://godoc.org/nhooyr.io/websocket?status.svg)](https://godoc.org/nhooyr.io/websocket)
-[![Codecov](https://img.shields.io/codecov/c/github/nhooyr/websocket.svg)](https://codecov.io/gh/nhooyr/websocket)
 [![GitHub release](https://img.shields.io/github/release-pre/nhooyr/websocket.svg)](https://github.com/nhooyr/websocket/releases)
 
 websocket is a minimal and idiomatic WebSocket library for Go.
@@ -23,6 +22,7 @@ go get nhooyr.io/websocket
 - net/http is used for WebSocket dials and upgrades
 - Passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 - JSON helpers
+- Thoroughly testing
 
 ## Roadmap
 
@@ -112,7 +112,9 @@ c.Close(websocket.StatusNormalClosure, "")
 
 While I believe nhooyr/websocket has a better API than existing libraries, 
 both gorilla/websocket and gobwas/ws were extremely useful in implementing the
-WebSocket protocol correctly so big thanks to the authors of both.
+WebSocket protocol correctly so big thanks to the authors of both. In particular,
+I made sure to go through the issue tracker of gorilla/websocket to make sure
+I implemented details correctly.
 
 ### gorilla/websocket
 
