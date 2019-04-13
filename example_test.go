@@ -29,19 +29,14 @@ func ExampleAccept_echo() {
 			ctx, cancel := context.WithTimeout(ctx, time.Minute)
 			defer cancel()
 
-			typ, r, err := c.ReadMessage(ctx)
+			typ, r, err := c.Read(ctx)
 			if err != nil {
 				return err
 			}
 
-			ctx, cancel = context.WithTimeout(ctx, time.Second*10)
-			defer cancel()
+			r = io.LimitReader(r, 32768)
 
-			r.SetContext(ctx)
-			r.Limit(32768)
-
-			w := c.MessageWriter(typ)
-			w.SetContext(ctx)
+			w := c.Write(ctx, typ)
 			_, err = io.Copy(w, r)
 			if err != nil {
 				return err
@@ -88,13 +83,17 @@ func ExampleAccept() {
 		}
 		defer c.Close(websocket.StatusInternalError, "")
 
+		jc := websocket.JSONConn{
+			Conn: c,
+		}
+
 		ctx, cancel := context.WithTimeout(r.Context(), time.Second*10)
 		defer cancel()
 
 		v := map[string]interface{}{
 			"my_field": "foo",
 		}
-		err = websocket.WriteJSON(ctx, c, v)
+		err = jc.Write(ctx, v)
 		if err != nil {
 			log.Printf("failed to write json: %v", err)
 			return
@@ -123,8 +122,12 @@ func ExampleDial() {
 	}
 	defer c.Close(websocket.StatusInternalError, "")
 
+	jc := websocket.JSONConn{
+		Conn: c,
+	}
+
 	var v interface{}
-	err = websocket.ReadJSON(ctx, c, v)
+	err = jc.Read(ctx, v)
 	if err != nil {
 		log.Fatalf("failed to read json: %v", err)
 	}

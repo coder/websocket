@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"strings"
 
@@ -45,6 +46,40 @@ func AcceptOrigins(origins ...string) AcceptOption {
 	return acceptOrigins(origins)
 }
 
+func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
+	if !headerValuesContainsToken(r.Header, "Connection", "Upgrade") {
+		err := xerrors.Errorf("websocket: protocol violation: Connection header does not contain Upgrade: %q", r.Header.Get("Connection"))
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return err
+	}
+
+	if !headerValuesContainsToken(r.Header, "Upgrade", "WebSocket") {
+		err := xerrors.Errorf("websocket: protocol violation: Upgrade header does not contain websocket: %q", r.Header.Get("Upgrade"))
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return err
+	}
+
+	if r.Method != "GET" {
+		err := xerrors.Errorf("websocket: protocol violation: handshake request method is not GET: %q", r.Method)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return err
+	}
+
+	if r.Header.Get("Sec-WebSocket-Version") != "13" {
+		err := xerrors.Errorf("websocket: unsupported protocol version: %q", r.Header.Get("Sec-WebSocket-Version"))
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return err
+	}
+
+	if r.Header.Get("Sec-WebSocket-Key") == "" {
+		err := xerrors.New("websocket: protocol violation: missing Sec-WebSocket-Key")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return err
+	}
+
+	return nil
+}
+
 // Accept accepts a WebSocket handshake from a client and upgrades the
 // the connection to WebSocket.
 // Accept will reject the handshake if the Origin is not the same as the Host unless
@@ -62,39 +97,14 @@ func Accept(w http.ResponseWriter, r *http.Request, opts ...AcceptOption) (*Conn
 		}
 	}
 
-	if !httpguts.HeaderValuesContainsToken(r.Header["Connection"], "Upgrade") {
-		err := xerrors.Errorf("websocket: protocol violation: Connection header does not contain Upgrade: %q", r.Header.Get("Connection"))
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return nil, err
-	}
-
-	if !httpguts.HeaderValuesContainsToken(r.Header["Upgrade"], "websocket") {
-		err := xerrors.Errorf("websocket: protocol violation: Upgrade header does not contain websocket: %q", r.Header.Get("Upgrade"))
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return nil, err
-	}
-
-	if r.Method != "GET" {
-		err := xerrors.Errorf("websocket: protocol violation: handshake request method is not GET: %q", r.Method)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return nil, err
-	}
-
-	if r.Header.Get("Sec-WebSocket-Version") != "13" {
-		err := xerrors.Errorf("websocket: unsupported protocol version: %q", r.Header.Get("Sec-WebSocket-Version"))
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return nil, err
-	}
-
-	if r.Header.Get("Sec-WebSocket-Key") == "" {
-		err := xerrors.New("websocket: protocol violation: missing Sec-WebSocket-Key")
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	err := verifyClientRequest(w, r)
+	if err != nil {
 		return nil, err
 	}
 
 	origins = append(origins, r.Host)
 
-	err := authenticateOrigin(r, origins)
+	err = authenticateOrigin(r, origins)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return nil, err
@@ -112,7 +122,10 @@ func Accept(w http.ResponseWriter, r *http.Request, opts ...AcceptOption) (*Conn
 
 	handleKey(w, r)
 
-	selectSubprotocol(w, r, subprotocols)
+	subproto := selectSubprotocol(r, subprotocols)
+	if subproto != "" {
+		w.Header().Set("Sec-WebSocket-Protocol", subproto)
+	}
 
 	w.WriteHeader(http.StatusSwitchingProtocols)
 
@@ -134,16 +147,18 @@ func Accept(w http.ResponseWriter, r *http.Request, opts ...AcceptOption) (*Conn
 	return c, nil
 }
 
-func selectSubprotocol(w http.ResponseWriter, r *http.Request, subprotocols []string) {
-	clientSubprotocols := strings.Split(r.Header.Get("Sec-WebSocket-Protocol"), ",")
+func headerValuesContainsToken(h http.Header, key, val string) bool {
+	key = textproto.CanonicalMIMEHeaderKey(key)
+	return httpguts.HeaderValuesContainsToken(h[key], val)
+}
+
+func selectSubprotocol(r *http.Request, subprotocols []string) string {
 	for _, sp := range subprotocols {
-		for _, cp := range clientSubprotocols {
-			if sp == strings.TrimSpace(cp) {
-				w.Header().Set("Sec-WebSocket-Protocol", sp)
-				return
-			}
+		if headerValuesContainsToken(r.Header, "Sec-WebSocket-Protocol", sp) {
+			return sp
 		}
 	}
+	return ""
 }
 
 var keyGUID = []byte("258EAFA5-E914-47DA-95CA-C5AB0DC85B11")

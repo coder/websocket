@@ -7,6 +7,6 @@ type DataType int
 
 // DataType constants.
 const (
-	Text   DataType = DataType(opText)
-	Binary DataType = DataType(opBinary)
+	DataText   DataType = DataType(opText)
+	DataBinary DataType = DataType(opBinary)
 )

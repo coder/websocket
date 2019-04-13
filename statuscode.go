@@ -68,11 +68,12 @@ func parseClosePayload(p []byte) (code StatusCode, reason string, err error) {
 // See http://www.iana.org/assignments/websocket/websocket.xhtml#close-code-number
 // and https://tools.ietf.org/html/rfc6455#section-7.4.1
 var validReceivedCloseCodes = map[StatusCode]bool{
-	StatusNormalClosure:           true,
-	StatusGoingAway:               true,
-	StatusProtocolError:           true,
-	StatusUnsupportedData:         true,
-	StatusNoStatusRcvd:            false,
+	StatusNormalClosure:   true,
+	StatusGoingAway:       true,
+	StatusProtocolError:   true,
+	StatusUnsupportedData: true,
+	StatusNoStatusRcvd:    false,
+	// TODO use
 	StatusAbnormalClosure:         false,
 	StatusInvalidFramePayloadData: true,
 	StatusPolicyViolation:         true,
@@ -90,6 +91,7 @@ func validCloseCode(code StatusCode) bool {
 
 const maxControlFramePayload = 125
 
+// TODO make method on CloseError
 func closePayload(code StatusCode, reason string) ([]byte, error) {
 	if len(reason) > maxControlFramePayload-2 {
 		return nil, xerrors.Errorf("reason string max is %v but got %q with length %v", maxControlFramePayload-2, reason, len(reason))

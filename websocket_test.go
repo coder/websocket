@@ -173,10 +173,14 @@ func TestHandshake(t *testing.T) {
 				ctx, cancel := context.WithTimeout(r.Context(), time.Second*5)
 				defer cancel()
 
+				jc := websocket.JSONConn{
+					Conn: c,
+				}
+
 				v := map[string]interface{}{
 					"anmol": "wowow",
 				}
-				err = websocket.WriteJSON(ctx, c, v)
+				err = jc.Write(ctx, v)
 				if err != nil {
 					return err
 				}
@@ -191,8 +195,12 @@ func TestHandshake(t *testing.T) {
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
+				jc := websocket.JSONConn{
+					Conn: c,
+				}
+
 				var v interface{}
-				err = websocket.ReadJSON(ctx, c, &v)
+				err = jc.Read(ctx, &v)
 				if err != nil {
 					return err
 				}
@@ -352,15 +360,12 @@ func echoLoop(ctx context.Context, c *websocket.Conn, t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()
 
-		typ, r, err := c.ReadMessage(ctx)
+		typ, r, err := c.Read(ctx)
 		if err != nil {
 			return err
 		}
 
-		r.SetContext(ctx)
-
-		w := c.MessageWriter(typ)
-		w.SetContext(ctx)
+		w := c.Write(ctx, typ)
 
 		_, err = io.Copy(w, r)
 		if err != nil {
@@ -378,13 +383,11 @@ func echoLoop(ctx context.Context, c *websocket.Conn, t *testing.T) {
 	for {
 		err := echo()
 		if err != nil {
-			// t.Logf("%v: failed to echo message: %+v", time.Now(), err)
 			return
 		}
 	}
 }
 
-// TODO
 // https://github.com/crossbario/autobahn-python/blob/master/wstest/testee_client_aio.py
 func TestAutobahnClient(t *testing.T) {
 	t.Parallel()
@@ -444,7 +447,7 @@ func TestAutobahnClient(t *testing.T) {
 		}
 		defer c.Close(websocket.StatusInternalError, "")
 
-		_, r, err := c.ReadMessage(ctx)
+		_, r, err := c.Read(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}

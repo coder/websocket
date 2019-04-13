@@ -8,13 +8,13 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[Text-1]
-	_ = x[Binary-2]
+	_ = x[DataText-1]
+	_ = x[DataBinary-2]
 }
 
-const _DataType_name = "TextBinary"
+const _DataType_name = "DataTextDataBinary"
 
-var _DataType_index = [...]uint8{0, 4, 10}
+var _DataType_index = [...]uint8{0, 8, 18}
 
 func (i DataType) String() string {
 	i -= 1

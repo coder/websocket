@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"strings"
 
-	"golang.org/x/net/http/httpguts"
 	"golang.org/x/xerrors"
 )
 
@@ -112,21 +111,10 @@ func Dial(ctx context.Context, u string, opts ...DialOption) (_ *Conn, _ *http.R
 		}
 	}()
 
-	if resp.StatusCode != http.StatusSwitchingProtocols {
-		return nil, resp, xerrors.Errorf("websocket: expected status code %v but got %v", http.StatusSwitchingProtocols, resp.StatusCode)
+	err = verifyServerResponse(resp)
+	if err != nil {
+		return nil, resp, err
 	}
-
-	if !httpguts.HeaderValuesContainsToken(resp.Header["Connection"], "Upgrade") {
-		return nil, resp, xerrors.Errorf("websocket: protocol violation: Connection header does not contain Upgrade: %q", resp.Header.Get("Connection"))
-	}
-
-	if !httpguts.HeaderValuesContainsToken(resp.Header["Upgrade"], "websocket") {
-		return nil, resp, xerrors.Errorf("websocket: protocol violation: Upgrade header does not contain websocket: %q", resp.Header.Get("Upgrade"))
-
-	}
-
-	// We do not care about Sec-WebSocket-Accept because it does not matter.
-	// See the secWebSocketKey global variable.
 
 	rwc, ok := resp.Body.(io.ReadWriteCloser)
 	if !ok {
@@ -143,4 +131,23 @@ func Dial(ctx context.Context, u string, opts ...DialOption) (_ *Conn, _ *http.R
 	c.init()
 
 	return c, resp, nil
+}
+
+func verifyServerResponse(resp *http.Response) error {
+	if resp.StatusCode != http.StatusSwitchingProtocols {
+		return xerrors.Errorf("websocket: expected status code %v but got %v", http.StatusSwitchingProtocols, resp.StatusCode)
+	}
+
+	if !headerValuesContainsToken(resp.Header, "Connection", "Upgrade") {
+		return xerrors.Errorf("websocket: protocol violation: Connection header does not contain Upgrade: %q", resp.Header.Get("Connection"))
+	}
+
+	if !headerValuesContainsToken(resp.Header, "Upgrade", "WebSocket") {
+		return xerrors.Errorf("websocket: protocol violation: Upgrade header does not contain websocket: %q", resp.Header.Get("Upgrade"))
+	}
+
+	// We do not care about Sec-WebSocket-Accept because it does not matter.
+	// See the secWebSocketKey global variable.
+
+	return nil
 }
