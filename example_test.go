@@ -43,18 +43,14 @@ func ExampleAccept_echo() {
 			}
 
 			err = w.Close()
-			if err != nil {
-				return err
-			}
-
-			return nil
+			return err
 		}
 
 		l := rate.NewLimiter(rate.Every(time.Millisecond*100), 10)
 		for l.Allow() {
 			err := echo()
 			if err != nil {
-				log.Printf("failed to read message: %v", err)
+				log.Printf("failed to echo message: %v", err)
 				return
 			}
 		}
