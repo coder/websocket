@@ -282,9 +282,6 @@ func TestAutobahnServer(t *testing.T) {
 			map[string]interface{}{
 				"agent": "main",
 				"url":   strings.Replace(s.URL, "http", "ws", 1),
-				"options": map[string]interface{}{
-					"version": 18,
-				},
 			},
 		},
 		"cases":         []string{"*"},
@@ -319,45 +316,14 @@ func TestAutobahnServer(t *testing.T) {
 		t.Fatalf("failed to run wstest: %v\nout:\n%s", err, out)
 	}
 
-	b, err := ioutil.ReadFile("./wstest_reports/server/index.json")
-	if err != nil {
-		t.Fatalf("failed to read index.json: %v", err)
-	}
-
-	var indexJSON map[string]map[string]struct {
-		Behavior string `json:"behavior"`
-	}
-	err = json.Unmarshal(b, &indexJSON)
-	if err != nil {
-		t.Fatalf("failed to unmarshal index.json: %v", err)
-	}
-
-	var failed bool
-	for _, tests := range indexJSON {
-		for test, result := range tests {
-			switch result.Behavior {
-			case "OK", "NON-STRICT", "INFORMATIONAL":
-			default:
-				failed = true
-				t.Errorf("test %v failed", test)
-			}
-		}
-	}
-
-	if failed {
-		if os.Getenv("CI") == "" {
-			t.Errorf("wstest found failure, please see ./wstest_reports/server/index.html")
-		} else {
-			t.Errorf("wstest found failure, please run test.sh locally to see ./wstest_reports/server/index.html")
-		}
-	}
+	checkWSTestIndex(t, "./wstest_reports/server/index.json")
 }
 
 func echoLoop(ctx context.Context, c *websocket.Conn, t *testing.T) {
 	defer c.Close(websocket.StatusInternalError, "")
 
 	echo := func() error {
-		ctx, cancel := context.WithTimeout(ctx, time.Minute)
+		ctx, cancel := context.WithTimeout(ctx, time.Second*15)
 		defer cancel()
 
 		typ, r, err := c.Read(ctx)
@@ -465,7 +431,7 @@ func TestAutobahnClient(t *testing.T) {
 
 	for i := 1; i <= cases; i++ {
 		func() {
-			ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+			ctx, cancel := context.WithTimeout(ctx, time.Second*15)
 			defer cancel()
 
 			c, _, err := websocket.Dial(ctx, fmt.Sprintf("ws://localhost:9001/runCase?case=%v&agent=main", i))
@@ -482,13 +448,18 @@ func TestAutobahnClient(t *testing.T) {
 	}
 	c.Close(websocket.StatusNormalClosure, "")
 
-	wstestOut, err := ioutil.ReadFile("./wstest_reports/client/index.json")
+	checkWSTestIndex(t, "./wstest_reports/client/index.json")
+}
+
+func checkWSTestIndex(t *testing.T, path string) {
+	wstestOut, err := ioutil.ReadFile(path)
 	if err != nil {
 		t.Fatalf("failed to read index.json: %v", err)
 	}
 
 	var indexJSON map[string]map[string]struct {
-		Behavior string `json:"behavior"`
+		Behavior      string `json:"behavior"`
+		BehaviorClose string `json:"behaviorClose"`
 	}
 	err = json.Unmarshal(wstestOut, &indexJSON)
 	if err != nil {
@@ -504,14 +475,21 @@ func TestAutobahnClient(t *testing.T) {
 				failed = true
 				t.Errorf("test %v failed", test)
 			}
+			switch result.BehaviorClose {
+			case "OK", "INFORMATIONAL":
+			default:
+				failed = true
+				t.Errorf("bad close behaviour for test %v", test)
+			}
 		}
 	}
 
 	if failed {
+		path = strings.Replace(path, ".json", ".html", 1)
 		if os.Getenv("CI") == "" {
-			t.Errorf("wstest found failure, please see ./wstest_reports/client/index.html")
+			t.Errorf("wstest found failure, please see %q", path)
 		} else {
-			t.Errorf("wstest found failure, please run test.sh locally to see ./wstest_reports/client/index.html")
+			t.Errorf("wstest found failure, please run test.sh locally to see %q", path)
 		}
 	}
 }

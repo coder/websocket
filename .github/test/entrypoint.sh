@@ -3,7 +3,7 @@
 source .github/lib.sh || exit 1
 
 COVERAGE_PROFILE=$(mktemp)
-go test -race -v "-coverprofile=${COVERAGE_PROFILE}" -vet=off ./...
+go test -race "-coverprofile=${COVERAGE_PROFILE}" -vet=off ./...
 go tool cover "-func=${COVERAGE_PROFILE}"
 
 if [[ $CI ]]; then
