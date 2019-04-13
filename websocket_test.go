@@ -7,7 +7,9 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"reflect"
@@ -213,6 +215,52 @@ func TestHandshake(t *testing.T) {
 				}
 
 				c.Close(websocket.StatusNormalClosure, "")
+				return nil
+			},
+		},
+		{
+			name: "cookies",
+			server: func(w http.ResponseWriter, r *http.Request) error {
+				cookie, err := r.Cookie("mycookie")
+				if err != nil {
+					return xerrors.Errorf("request is missing mycookie: %w", err)
+				}
+				if cookie.Value != "myvalue" {
+					return xerrors.Errorf("expected %q but got %q", "myvalue", cookie.Value)
+				}
+				c, err := websocket.Accept(w, r)
+				if err != nil {
+					return err
+				}
+				c.Close(websocket.StatusInternalError, "")
+				return nil
+			},
+			client: func(ctx context.Context, u string) error {
+				jar, err := cookiejar.New(nil)
+				if err != nil {
+					return xerrors.Errorf("failed to create cookie jar: %w", err)
+				}
+				parsedURL, err := url.Parse(u)
+				if err != nil {
+					return xerrors.Errorf("failed to parse url: %w", err)
+				}
+				parsedURL.Scheme = "http"
+				jar.SetCookies(parsedURL, []*http.Cookie{
+					{
+						Name:  "mycookie",
+						Value: "myvalue",
+					},
+				})
+				hc := &http.Client{
+					Jar: jar,
+				}
+				c, _, err := websocket.Dial(ctx, u,
+					websocket.DialHTTPClient(hc),
+				)
+				if err != nil {
+					return err
+				}
+				c.Close(websocket.StatusInternalError, "")
 				return nil
 			},
 		},

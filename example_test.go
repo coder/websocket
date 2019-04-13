@@ -71,7 +71,7 @@ func ExampleAccept() {
 			log.Printf("server handshake failed: %v", err)
 			return
 		}
-		defer c.Close(websocket.StatusInternalError, "")
+		defer c.Close(websocket.StatusInternalError, "") // TODO returning internal is incorect if its a timeout error.
 
 		jc := websocket.JSONConn{
 			Conn: c,

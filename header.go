@@ -30,8 +30,6 @@ type header struct {
 	maskKey [4]byte
 }
 
-// TODO bitwise helpers
-
 // bytes returns the bytes of the header.
 // See https://tools.ietf.org/html/rfc6455#section-5.2
 func marshalHeader(h header) []byte {
