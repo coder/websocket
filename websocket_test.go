@@ -323,7 +323,7 @@ func echoLoop(ctx context.Context, c *websocket.Conn, t *testing.T) {
 	defer c.Close(websocket.StatusInternalError, "")
 
 	echo := func() error {
-		ctx, cancel := context.WithTimeout(ctx, time.Second*15)
+		ctx, cancel := context.WithTimeout(ctx, time.Second*30)
 		defer cancel()
 
 		typ, r, err := c.Read(ctx)
@@ -431,7 +431,7 @@ func TestAutobahnClient(t *testing.T) {
 
 	for i := 1; i <= cases; i++ {
 		func() {
-			ctx, cancel := context.WithTimeout(ctx, time.Second*15)
+			ctx, cancel := context.WithTimeout(ctx, time.Second*45)
 			defer cancel()
 
 			c, _, err := websocket.Dial(ctx, fmt.Sprintf("ws://localhost:9001/runCase?case=%v&agent=main", i))
