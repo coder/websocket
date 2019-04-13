@@ -34,7 +34,7 @@ func TestHandshake(t *testing.T) {
 		{
 			name: "handshake",
 			server: func(w http.ResponseWriter, r *http.Request) error {
-				c, err := websocket.Accept(w, r, websocket.AcceptSubprotocols("myproto"))
+				c, err := websocket.Accept(w, r, websocket.AcceptProtocols("myproto"))
 				if err != nil {
 					return err
 				}
@@ -74,8 +74,8 @@ func TestHandshake(t *testing.T) {
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
-				if c.Subprotocol() != "" {
-					return xerrors.Errorf("unexpected subprotocol: %v", c.Subprotocol())
+				if c.Protocol() != "" {
+					return xerrors.Errorf("unexpected subprotocol: %v", c.Protocol())
 				}
 				return nil
 			},
@@ -86,8 +86,8 @@ func TestHandshake(t *testing.T) {
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
-				if c.Subprotocol() != "" {
-					return xerrors.Errorf("unexpected subprotocol: %v", c.Subprotocol())
+				if c.Protocol() != "" {
+					return xerrors.Errorf("unexpected subprotocol: %v", c.Protocol())
 				}
 				return nil
 			},
@@ -95,14 +95,14 @@ func TestHandshake(t *testing.T) {
 		{
 			name: "subprotocol",
 			server: func(w http.ResponseWriter, r *http.Request) error {
-				c, err := websocket.Accept(w, r, websocket.AcceptSubprotocols("echo", "lar"))
+				c, err := websocket.Accept(w, r, websocket.AcceptProtocols("echo", "lar"))
 				if err != nil {
 					return err
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
-				if c.Subprotocol() != "echo" {
-					return xerrors.Errorf("unexpected subprotocol: %q", c.Subprotocol())
+				if c.Protocol() != "echo" {
+					return xerrors.Errorf("unexpected subprotocol: %q", c.Protocol())
 				}
 				return nil
 			},
@@ -113,8 +113,8 @@ func TestHandshake(t *testing.T) {
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
-				if c.Subprotocol() != "echo" {
-					return xerrors.Errorf("unexpected subprotocol: %q", c.Subprotocol())
+				if c.Protocol() != "echo" {
+					return xerrors.Errorf("unexpected subprotocol: %q", c.Protocol())
 				}
 				return nil
 			},
@@ -266,7 +266,7 @@ func TestAutobahnServer(t *testing.T) {
 
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r,
-			websocket.AcceptSubprotocols("echo"),
+			websocket.AcceptProtocols("echo"),
 		)
 		if err != nil {
 			t.Logf("server handshake failed: %+v", err)

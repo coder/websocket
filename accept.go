@@ -22,11 +22,10 @@ type acceptSubprotocols []string
 
 func (o acceptSubprotocols) acceptOption() {}
 
-// AcceptSubprotocols list the subprotocols that Accept will negotiate with a client.
-// The first protocol that a client supports will be negotiated.
+// AcceptProtocols lists the websocket protocols that Accept will negotiate with a client.
 // The empty protocol will always be negotiated as per RFC 6455. If you would like to
-// reject it, close the connection is c.Subprotocol() == "".
-func AcceptSubprotocols(subprotocols ...string) AcceptOption {
+// reject it, close the connection if c.Subprotocol() == "".
+func AcceptProtocols(subprotocols ...string) AcceptOption {
 	return acceptSubprotocols(subprotocols)
 }
 

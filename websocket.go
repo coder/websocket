@@ -70,7 +70,7 @@ func (c *Conn) close(err error) {
 
 // Subprotocol returns the negotiated subprotocol.
 // An empty string means the default protocol.
-func (c *Conn) Subprotocol() string {
+func (c *Conn) Protocol() string {
 	return c.subprotocol
 }
 
