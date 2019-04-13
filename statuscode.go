@@ -24,7 +24,10 @@ const (
 	StatusUnsupportedData
 	_ // 1004 is reserved.
 	StatusNoStatusRcvd
-	StatusAbnormalClosure
+	// statusAbnormalClosure is unexported because it isn't necessary, at least until WASM.
+	// The error returned will indicate whether the connection was closed or not or what happened.
+	// It only makes sense for browser clients.
+	statusAbnormalClosure
 	StatusInvalidFramePayloadData
 	StatusPolicyViolation
 	StatusMessageTooBig
@@ -33,7 +36,10 @@ const (
 	StatusServiceRestart
 	StatusTryAgainLater
 	StatusBadGateway
-	StatusTLSHandshake
+	// statusTLSHandshake is unexported because we just return
+	// handshake error in dial. We do not return a conn
+	// so there is nothing to use this on. At least until WASM.
+	statusTLSHandshake
 )
 
 // CloseError represents an error from a WebSocket close frame.
@@ -43,68 +49,63 @@ type CloseError struct {
 	Reason string
 }
 
-func (e CloseError) Error() string {
-	return fmt.Sprintf("WebSocket closed with status = %v and reason = %q", e.Code, e.Reason)
+func (ce CloseError) Error() string {
+	return fmt.Sprintf("WebSocket closed with status = %v and reason = %q", ce.Code, ce.Reason)
 }
 
-func parseClosePayload(p []byte) (code StatusCode, reason string, err error) {
+func parseClosePayload(p []byte) (CloseError, error) {
 	if len(p) < 2 {
-		return 0, "", fmt.Errorf("close payload too small, cannot even contain the 2 byte status code")
+		return CloseError{}, fmt.Errorf("close payload too small, cannot even contain the 2 byte status code")
 	}
 
-	code = StatusCode(binary.BigEndian.Uint16(p))
-	reason = string(p[2:])
-
-	if !utf8.ValidString(reason) {
-		return 0, "", xerrors.Errorf("invalid utf-8: %q", reason)
-	}
-	if !validCloseCode(code) {
-		return 0, "", xerrors.Errorf("invalid code %v", code)
+	ce := CloseError{
+		Code:   StatusCode(binary.BigEndian.Uint16(p)),
+		Reason: string(p[2:]),
 	}
 
-	return code, reason, nil
+	if !utf8.ValidString(ce.Reason) {
+		return CloseError{}, xerrors.Errorf("invalid utf-8: %q", ce.Reason)
+	}
+	if !validWireCloseCode(ce.Code) {
+		return CloseError{}, xerrors.Errorf("invalid code %v", ce.Code)
+	}
+
+	return ce, nil
 }
 
 // See http://www.iana.org/assignments/websocket/websocket.xhtml#close-code-number
 // and https://tools.ietf.org/html/rfc6455#section-7.4.1
-var validReceivedCloseCodes = map[StatusCode]bool{
-	StatusNormalClosure:   true,
-	StatusGoingAway:       true,
-	StatusProtocolError:   true,
-	StatusUnsupportedData: true,
-	StatusNoStatusRcvd:    false,
-	// TODO use
-	StatusAbnormalClosure:         false,
-	StatusInvalidFramePayloadData: true,
-	StatusPolicyViolation:         true,
-	StatusMessageTooBig:           true,
-	StatusMandatoryExtension:      true,
-	StatusInternalError:           true,
-	StatusServiceRestart:          true,
-	StatusTryAgainLater:           true,
-	StatusTLSHandshake:            false,
-}
+func validWireCloseCode(code StatusCode) bool {
+	if code >= StatusNormalClosure && code <= statusTLSHandshake {
+		switch code {
+		case 1004, StatusNoStatusRcvd, statusAbnormalClosure, statusTLSHandshake:
+			return false
+		default:
+			return true
+		}
+	}
+	if code >= 3000 && code <= 4999 {
+		return true
+	}
 
-func validCloseCode(code StatusCode) bool {
-	return validReceivedCloseCodes[code] || (code >= 3000 && code <= 4999)
+	return false
 }
 
 const maxControlFramePayload = 125
 
-// TODO make method on CloseError
-func closePayload(code StatusCode, reason string) ([]byte, error) {
-	if len(reason) > maxControlFramePayload-2 {
-		return nil, xerrors.Errorf("reason string max is %v but got %q with length %v", maxControlFramePayload-2, reason, len(reason))
+func (ce CloseError) bytes() ([]byte, error) {
+	if len(ce.Reason) > maxControlFramePayload-2 {
+		return nil, xerrors.Errorf("reason string max is %v but got %q with length %v", maxControlFramePayload-2, ce.Reason, len(ce.Reason))
 	}
-	if bits.Len(uint(code)) > 16 {
+	if bits.Len(uint(ce.Code)) > 16 {
 		return nil, errors.New("status code is larger than 2 bytes")
 	}
-	if !validCloseCode(code) {
-		return nil, fmt.Errorf("status code %v cannot be set", code)
+	if !validWireCloseCode(ce.Code) {
+		return nil, fmt.Errorf("status code %v cannot be set", ce.Code)
 	}
 
-	buf := make([]byte, 2+len(reason))
-	binary.BigEndian.PutUint16(buf[:], uint16(code))
-	copy(buf[2:], reason)
+	buf := make([]byte, 2+len(ce.Reason))
+	binary.BigEndian.PutUint16(buf[:], uint16(ce.Code))
+	copy(buf[2:], ce.Reason)
 	return buf, nil
 }

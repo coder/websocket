@@ -23,7 +23,8 @@ type control struct {
 type Conn struct {
 	subprotocol string
 	br          *bufio.Reader
-	// TODO Cannot use bufio writer because for compression we need to know how much is buffered and compress it if large.
+	// TODO switch to []byte for write buffering because for messages larger than buffers, there will always be 3 writes. One for the frame, one for the message, one for the fin.
+	// Also will help for compression.
 	bw     *bufio.Writer
 	closer io.Closer
 	client bool
@@ -225,12 +226,12 @@ func (c *Conn) handleControl(h header) {
 	case opPong:
 	case opClose:
 		if len(b) > 0 {
-			code, reason, err := parseClosePayload(b)
+			ce, err := parseClosePayload(b)
 			if err != nil {
 				c.close(xerrors.Errorf("read invalid close payload: %w", err))
 				return
 			}
-			c.Close(code, reason)
+			c.Close(ce.Code, ce.Reason)
 		} else {
 			c.writeClose(nil, CloseError{
 				Code: StatusNoStatusRcvd,
@@ -279,8 +280,7 @@ func (c *Conn) readLoop() {
 				return
 			}
 		default:
-			// TODO send back protocol violation message or figure out what RFC wants.
-			c.close(xerrors.Errorf("unexpected opcode in header: %#v", h))
+			c.Close(StatusProtocolError, fmt.Sprintf("unknown opcode %v", h.opcode))
 			return
 		}
 
@@ -338,18 +338,23 @@ func (c *Conn) writePong(p []byte) error {
 // Close closes the WebSocket connection with the given status code and reason.
 // It will write a WebSocket close frame with a timeout of 5 seconds.
 func (c *Conn) Close(code StatusCode, reason string) error {
+	ce := CloseError{
+		Code:   code,
+		Reason: reason,
+	}
+
 	// This function also will not wait for a close frame from the peer like the RFC
 	// wants because that makes no sense and I don't think anyone actually follows that.
 	// Definitely worth seeing what popular browsers do later.
-	p, err := closePayload(code, reason)
+	p, err := ce.bytes()
 	if err != nil {
-		p, _ = closePayload(StatusInternalError, fmt.Sprintf("websocket: application tried to send code %v but code or reason was invalid", code))
+		ce = CloseError{
+			Code: StatusInternalError,
+		}
+		p, _ = ce.bytes()
 	}
 
-	cerr := c.writeClose(p, CloseError{
-		Code:   code,
-		Reason: reason,
-	})
+	cerr := c.writeClose(p, ce)
 	if err != nil {
 		return err
 	}

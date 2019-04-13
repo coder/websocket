@@ -112,7 +112,7 @@ func Accept(w http.ResponseWriter, r *http.Request, opts ...AcceptOption) (*Conn
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		err = xerrors.New("websocket: response writer does not implement http.Hijacker")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return nil, err
 	}
 
@@ -131,7 +131,7 @@ func Accept(w http.ResponseWriter, r *http.Request, opts ...AcceptOption) (*Conn
 	netConn, brw, err := hj.Hijack()
 	if err != nil {
 		err = xerrors.Errorf("websocket: failed to hijack connection: %w", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return nil, err
 	}
 
