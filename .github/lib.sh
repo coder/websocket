@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -euxo pipefail
+set -euxo pipefail || exit 1
 
 export GO111MODULE=on
 export PAGER=cat

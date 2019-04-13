@@ -22,11 +22,11 @@ type acceptSubprotocols []string
 
 func (o acceptSubprotocols) acceptOption() {}
 
-// AcceptProtocols lists the websocket protocols that Accept will negotiate with a client.
-// The empty protocol will always be negotiated as per RFC 6455. If you would like to
+// AcceptSubprotocols lists the websocket subprotocols that Accept will negotiate with a client.
+// The empty subprotocol will always be negotiated as per RFC 6455. If you would like to
 // reject it, close the connection if c.Subprotocol() == "".
-func AcceptProtocols(subprotocols ...string) AcceptOption {
-	return acceptSubprotocols(subprotocols)
+func AcceptSubprotocols(protocols ...string) AcceptOption {
+	return acceptSubprotocols(protocols)
 }
 
 type acceptOrigins []string
@@ -34,13 +34,13 @@ type acceptOrigins []string
 func (o acceptOrigins) acceptOption() {}
 
 // AcceptOrigins lists the origins that Accept will accept.
-// Accept will always accept r.Host as the origin so you do not need to
-// specify that with this option.
+// Accept will always accept r.Host as the origin. Use this
+// option when you want to accept an origin with a different domain
+// than the one the WebSocket server is running on.
 //
 // Use this option with caution to avoid exposing your WebSocket
 // server to a CSRF attack.
 // See https://stackoverflow.com/a/37837709/4283659
-// You can use a * for wildcards.
 func AcceptOrigins(origins ...string) AcceptOption {
 	return acceptOrigins(origins)
 }
