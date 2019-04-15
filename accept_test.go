@@ -140,37 +140,39 @@ func Test_authenticateOrigin(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name              string
-		origin            string
-		authorizedOrigins []string
-		success           bool
+		name    string
+		origin  string
+		host    string
+		success bool
 	}{
 		{
 			name:    "none",
 			success: true,
+			host:    "example.com",
 		},
 		{
 			name:    "invalid",
 			origin:  "$#)(*)$#@*$(#@*$)#@*%)#(@*%)#(@%#@$#@$#$#@$#@}{}{}",
+			host:    "example.com",
 			success: false,
 		},
 		{
-			name:              "unauthorized",
-			origin:            "https://example.com",
-			authorizedOrigins: []string{"example1.com"},
-			success:           false,
+			name:    "unauthorized",
+			origin:  "https://example.com",
+			host:    "example1.com",
+			success: false,
 		},
 		{
-			name:              "authorized",
-			origin:            "https://example.com",
-			authorizedOrigins: []string{"example.com"},
-			success:           true,
+			name:    "authorized",
+			origin:  "https://example.com",
+			host:    "example.com",
+			success: true,
 		},
 		{
-			name:              "authorizedCaseInsensitive",
-			origin:            "https://examplE.com",
-			authorizedOrigins: []string{"example.com"},
-			success:           true,
+			name:    "authorizedCaseInsensitive",
+			origin:  "https://examplE.com",
+			host:    "example.com",
+			success: true,
 		},
 	}
 
@@ -179,10 +181,10 @@ func Test_authenticateOrigin(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			r := httptest.NewRequest("GET", "/", nil)
+			r := httptest.NewRequest("GET", "http://"+tc.host+"/", nil)
 			r.Header.Set("Origin", tc.origin)
 
-			err := authenticateOrigin(r, tc.authorizedOrigins)
+			err := authenticateOrigin(r)
 			if (err == nil) != tc.success {
 				t.Fatalf("unexpected error value: %+v", err)
 			}

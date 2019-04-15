@@ -143,9 +143,30 @@ func TestHandshake(t *testing.T) {
 			},
 		},
 		{
-			name: "authorizedOrigin",
+			name: "acceptSecureOrigin",
 			server: func(w http.ResponseWriter, r *http.Request) error {
-				c, err := websocket.Accept(w, r, websocket.AcceptOrigins("har.bar.com", "example.com"))
+				c, err := websocket.Accept(w, r, websocket.AcceptInsecureOrigin())
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+				return nil
+			},
+			client: func(ctx context.Context, u string) error {
+				h := http.Header{}
+				h.Set("Origin", "https://127.0.0.1")
+				c, _, err := websocket.Dial(ctx, u, websocket.DialHeader(h))
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+				return nil
+			},
+		},
+		{
+			name: "acceptInsecureOrigin",
+			server: func(w http.ResponseWriter, r *http.Request) error {
+				c, err := websocket.Accept(w, r, websocket.AcceptInsecureOrigin())
 				if err != nil {
 					return err
 				}
