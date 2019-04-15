@@ -41,6 +41,7 @@ func (o acceptOrigins) acceptOption() {}
 // Use this option with caution to avoid exposing your WebSocket
 // server to a CSRF attack.
 // See https://stackoverflow.com/a/37837709/4283659
+// TODO remove in favour of AcceptInsecureOrigin
 func AcceptOrigins(origins ...string) AcceptOption {
 	return acceptOrigins(origins)
 }

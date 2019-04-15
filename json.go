@@ -28,7 +28,7 @@ func (jc *JSONConn) read(ctx context.Context, v interface{}) error {
 		return err
 	}
 
-	if typ != DataText {
+	if typ != MessageText {
 		return xerrors.Errorf("unexpected frame type for json (expected DataText): %v", typ)
 	}
 
@@ -39,6 +39,7 @@ func (jc *JSONConn) read(ctx context.Context, v interface{}) error {
 	if err != nil {
 		return xerrors.Errorf("failed to decode json: %w", err)
 	}
+
 	return nil
 }
 
@@ -52,7 +53,7 @@ func (jc JSONConn) Write(ctx context.Context, v interface{}) error {
 }
 
 func (jc JSONConn) write(ctx context.Context, v interface{}) error {
-	w := jc.Conn.Write(ctx, DataText)
+	w := jc.Conn.Write(ctx, MessageText)
 
 	e := json.NewEncoder(w)
 	err := e.Encode(v)
