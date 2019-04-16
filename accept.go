@@ -29,20 +29,26 @@ func AcceptSubprotocols(protocols ...string) AcceptOption {
 	return acceptSubprotocols(protocols)
 }
 
-type acceptOrigins []string
+type acceptInsecureOrigin struct{}
 
-func (o acceptOrigins) acceptOption() {}
+func (o acceptInsecureOrigin) acceptOption() {}
 
-// AcceptOrigins lists the origins that Accept will accept.
-// Accept will always accept r.Host as the origin. Use this
-// option when you want to accept an origin with a different domain
-// than the one the WebSocket server is running on.
+// AcceptInsecureOrigin disables Accept's origin verification
+// behaviour. By default Accept only allows the handshake to
+// succeed if the javascript  that is initiating the handshake
+// is on the same domain as the server. This is to prevent CSRF
+// when secure data is stored in cookies.
 //
-// Use this option with caution to avoid exposing your WebSocket
-// server to a CSRF attack.
 // See https://stackoverflow.com/a/37837709/4283659
-func AcceptOrigins(origins ...string) AcceptOption {
-	return acceptOrigins(origins)
+//
+// Use this if you want a WebSocket server any javascript can
+// connect to or you want to perform Origin verification yourself
+// and allow some whitelist of domains.
+//
+// Ensure you understand exactly what the above means before you use
+// this option in conjugation with cookies containing secure data.
+func AcceptInsecureOrigin() AcceptOption {
+	return acceptInsecureOrigin{}
 }
 
 func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
@@ -86,11 +92,11 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 // Accept uses w to write the handshake response so the timeouts on the http.Server apply.
 func Accept(w http.ResponseWriter, r *http.Request, opts ...AcceptOption) (*Conn, error) {
 	var subprotocols []string
-	origins := []string{r.Host}
+	verifyOrigin := true
 	for _, opt := range opts {
 		switch opt := opt.(type) {
-		case acceptOrigins:
-			origins = []string(opt)
+		case acceptInsecureOrigin:
+			verifyOrigin = false
 		case acceptSubprotocols:
 			subprotocols = []string(opt)
 		}
@@ -101,12 +107,12 @@ func Accept(w http.ResponseWriter, r *http.Request, opts ...AcceptOption) (*Conn
 		return nil, err
 	}
 
-	origins = append(origins, r.Host)
-
-	err = authenticateOrigin(r, origins)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return nil, err
+	if verifyOrigin {
+		err = authenticateOrigin(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return nil, err
+		}
 	}
 
 	hj, ok := w.(http.Hijacker)
@@ -172,7 +178,7 @@ func handleKey(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Sec-WebSocket-Accept", responseKey)
 }
 
-func authenticateOrigin(r *http.Request, origins []string) error {
+func authenticateOrigin(r *http.Request) error {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
 		return nil
@@ -181,10 +187,8 @@ func authenticateOrigin(r *http.Request, origins []string) error {
 	if err != nil {
 		return xerrors.Errorf("failed to parse Origin header %q: %w", origin, err)
 	}
-	for _, o := range origins {
-		if strings.EqualFold(u.Host, o) {
-			return nil
-		}
+	if strings.EqualFold(u.Host, r.Host) {
+		return nil
 	}
-	return xerrors.Errorf("request origin %q is not authorized", r.Header.Get("Origin"))
+	return xerrors.Errorf("request origin %q is not authorized", origin)
 }

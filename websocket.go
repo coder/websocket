@@ -23,11 +23,9 @@ type control struct {
 type Conn struct {
 	subprotocol string
 	br          *bufio.Reader
-	// TODO switch to []byte for write buffering because for messages larger than buffers, there will always be 3 writes. One for the frame, one for the message, one for the fin.
-	// Also will help for compression.
-	bw     *bufio.Writer
-	closer io.Closer
-	client bool
+	bw          *bufio.Writer
+	closer      io.Closer
+	client      bool
 
 	closeOnce sync.Once
 	closeErr  error
@@ -36,7 +34,7 @@ type Conn struct {
 	// Writers should send on write to begin sending
 	// a message and then follow that up with some data
 	// on writeBytes.
-	write      chan DataType
+	write      chan MessageType
 	control    chan control
 	writeBytes chan []byte
 	writeDone  chan struct{}
@@ -45,9 +43,10 @@ type Conn struct {
 	// Then send a byte slice to readBytes to read into it.
 	// The n of bytes read will be sent on readDone once the read into a slice is complete.
 	// readDone will receive 0 when EOF is reached.
-	read      chan opcode
-	readBytes chan []byte
-	readDone  chan int
+	read       chan opcode
+	readBytes  chan []byte
+	readDone   chan int
+	readerDone chan struct{}
 }
 
 func (c *Conn) close(err error) {
@@ -77,12 +76,13 @@ func (c *Conn) Subprotocol() string {
 
 func (c *Conn) init() {
 	c.closed = make(chan struct{})
-	c.write = make(chan DataType)
+	c.write = make(chan MessageType)
 	c.control = make(chan control)
 	c.writeDone = make(chan struct{})
 	c.read = make(chan opcode)
 	c.readDone = make(chan int)
 	c.readBytes = make(chan []byte)
+	c.readerDone = make(chan struct{})
 
 	runtime.SetFinalizer(c, func(c *Conn) {
 		c.Close(StatusInternalError, "websocket: connection ended up being garbage collected")
@@ -120,7 +120,7 @@ messageLoop:
 	for {
 		c.writeBytes = make(chan []byte)
 
-		var dataType DataType
+		var dataType MessageType
 		select {
 		case <-c.closed:
 			return
@@ -321,7 +321,7 @@ func (c *Conn) readLoop() {
 			select {
 			case <-c.closed:
 				return
-			case c.readDone <- 0:
+			case c.readerDone <- struct{}{}:
 			}
 		}
 	}
@@ -407,7 +407,8 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 // a WebSocket data frame of type dataType to the connection.
 // Ensure you close the messageWriter once you have written to entire message.
 // Concurrent calls to messageWriter are ok.
-func (c *Conn) Write(ctx context.Context, dataType DataType) io.WriteCloser {
+func (c *Conn) Write(ctx context.Context, dataType MessageType) io.WriteCloser {
+	// TODO acquire write here, move state into Conn and make messageWriter allocation free.
 	return &messageWriter{
 		c:        c,
 		ctx:      ctx,
@@ -418,7 +419,7 @@ func (c *Conn) Write(ctx context.Context, dataType DataType) io.WriteCloser {
 // messageWriter enables writing to a WebSocket connection.
 // Ensure you close the messageWriter once you have written to entire message.
 type messageWriter struct {
-	datatype     DataType
+	datatype     MessageType
 	ctx          context.Context
 	c            *Conn
 	acquiredLock bool
@@ -489,12 +490,16 @@ func (w *messageWriter) Close() error {
 // Please use SetContext on the reader to bound the read operation.
 // Your application must keep reading messages for the Conn to automatically respond to ping
 // and close frames.
-func (c *Conn) Read(ctx context.Context) (DataType, io.Reader, error) {
+func (c *Conn) Read(ctx context.Context) (MessageType, io.Reader, error) {
+	// TODO error if the reader is not done
 	select {
+	case <-c.readerDone:
+		// The previous reader just hit a io.EOF, we handle it for users
+		return c.Read(ctx)
 	case <-c.closed:
 		return 0, nil, xerrors.Errorf("failed to read message: %w", c.closeErr)
 	case opcode := <-c.read:
-		return DataType(opcode), &messageReader{
+		return MessageType(opcode), messageReader{
 			ctx: ctx,
 			c:   c,
 		}, nil
@@ -510,13 +515,26 @@ type messageReader struct {
 }
 
 // Read reads as many bytes as possible into p.
-func (r *messageReader) Read(p []byte) (n int, err error) {
+func (r messageReader) Read(p []byte) (int, error) {
+	n, err := r.read(p)
+	if err != nil {
+		// Have to return io.EOF directly for now.
+		if err == io.EOF {
+			return 0, io.EOF
+		}
+		return n, xerrors.Errorf("failed to read: %w", err)
+	}
+	return n, nil
+}
+
+func (r messageReader) read(p []byte) (int, error) {
 	select {
 	case <-r.c.closed:
 		return 0, r.c.closeErr
-	case <-r.c.readDone:
+	case <-r.c.readerDone:
 		return 0, io.EOF
 	case r.c.readBytes <- p:
+		// TODO this is potentially racey as if we return if the context is cancelled, or the conn is closed we don't know if the p is ok to use. we must close the connection and also ensure the readLoop is done before returning, likewise with writes.
 		select {
 		case <-r.c.closed:
 			return 0, r.c.closeErr

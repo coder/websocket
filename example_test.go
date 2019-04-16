@@ -14,12 +14,17 @@ import (
 
 func ExampleAccept_echo() {
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := websocket.Accept(w, r)
+		c, err := websocket.Accept(w, r, websocket.AcceptSubprotocols("echo"))
 		if err != nil {
 			log.Printf("server handshake failed: %v", err)
 			return
 		}
 		defer c.Close(websocket.StatusInternalError, "")
+
+		if c.Subprotocol() == "" {
+			c.Close(websocket.StatusPolicyViolation, "cannot communicate with the default protocol")
+			return
+		}
 
 		echo := func() error {
 			ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
