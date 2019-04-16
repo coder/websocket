@@ -23,10 +23,9 @@ type control struct {
 type Conn struct {
 	subprotocol string
 	br          *bufio.Reader
-	// TODO switch to []byte for write buffering for predicting compression in memory maybe
-	bw     *bufio.Writer
-	closer io.Closer
-	client bool
+	bw          *bufio.Writer
+	closer      io.Closer
+	client      bool
 
 	closeOnce sync.Once
 	closeErr  error
