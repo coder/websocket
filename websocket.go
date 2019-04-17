@@ -5,8 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/xerrors"
@@ -34,6 +36,11 @@ type Conn struct {
 	// Writers should send on write to begin sending
 	// a message and then follow that up with some data
 	// on writeBytes.
+	// Send on control to write a control message.
+	// writeDone will be sent back when the message is written
+	// Close writeBytes to flush the message and wait for a
+	// ping on writeDone. // TODO should I care about this allocation?
+	// writeDone will be closed if the data message write errors.
 	write      chan MessageType
 	control    chan control
 	writeBytes chan []byte
@@ -42,17 +49,17 @@ type Conn struct {
 	// Readers should receive on read to begin reading a message.
 	// Then send a byte slice to readBytes to read into it.
 	// The n of bytes read will be sent on readDone once the read into a slice is complete.
-	// readDone will receive 0 when EOF is reached.
-	read       chan opcode
-	readBytes  chan []byte
-	readDone   chan int
-	readerDone chan struct{}
+	// readDone will be closed if the read fails.
+	// readInProgress will be set to 0 on io.EOF.
+	activeReader int64
+	inMsg        bool
+	read         chan opcode
+	readBytes    chan []byte
+	readDone     chan int
 }
 
 func (c *Conn) close(err error) {
-	if err != nil {
-		err = xerrors.Errorf("websocket: connection broken: %w", err)
-	}
+	err = xerrors.Errorf("websocket: connection broken: %w", err)
 
 	c.closeOnce.Do(func() {
 		runtime.SetFinalizer(c, nil)
@@ -76,13 +83,14 @@ func (c *Conn) Subprotocol() string {
 
 func (c *Conn) init() {
 	c.closed = make(chan struct{})
+
 	c.write = make(chan MessageType)
 	c.control = make(chan control)
 	c.writeDone = make(chan struct{})
+
 	c.read = make(chan opcode)
-	c.readDone = make(chan int)
 	c.readBytes = make(chan []byte)
-	c.readerDone = make(chan struct{})
+	c.readDone = make(chan int)
 
 	runtime.SetFinalizer(c, func(c *Conn) {
 		c.Close(StatusInternalError, "websocket: connection ended up being garbage collected")
@@ -116,6 +124,8 @@ func (c *Conn) writeFrame(h header, p []byte) {
 }
 
 func (c *Conn) writeLoop() {
+	defer close(c.writeDone)
+
 messageLoop:
 	for {
 		c.writeBytes = make(chan []byte)
@@ -173,6 +183,10 @@ messageLoop:
 				}
 				firstSent = true
 
+				if c.client {
+					log.Printf("client %#v", h)
+				}
+
 				c.writeFrame(h, b)
 
 				if !ok {
@@ -225,17 +239,15 @@ func (c *Conn) handleControl(h header) {
 		c.writePong(b)
 	case opPong:
 	case opClose:
-		if len(b) > 0 {
-			ce, err := parseClosePayload(b)
-			if err != nil {
-				c.close(xerrors.Errorf("read invalid close payload: %w", err))
-				return
-			}
-			c.Close(ce.Code, ce.Reason)
+		ce, err := parseClosePayload(b)
+		if err != nil {
+			c.close(xerrors.Errorf("read invalid close payload: %w", err))
+			return
+		}
+		if ce.Code == StatusNoStatusRcvd {
+			c.writeClose(nil, ce)
 		} else {
-			c.writeClose(nil, CloseError{
-				Code: StatusNoStatusRcvd,
-			})
+			c.Close(ce.Code, ce.Reason)
 		}
 	default:
 		panic(fmt.Sprintf("websocket: unexpected control opcode: %#v", h))
@@ -243,12 +255,17 @@ func (c *Conn) handleControl(h header) {
 }
 
 func (c *Conn) readLoop() {
-	var indata bool
+	defer close(c.readDone)
+
 	for {
 		h, err := readHeader(c.br)
 		if err != nil {
 			c.close(xerrors.Errorf("failed to read header: %w", err))
 			return
+		}
+
+		if !c.client {
+			log.Printf("%#v", h)
 		}
 
 		if h.rsv1 || h.rsv2 || h.rsv3 {
@@ -263,19 +280,19 @@ func (c *Conn) readLoop() {
 
 		switch h.opcode {
 		case opBinary, opText:
-			if !indata {
-				select {
-				case <-c.closed:
-					return
-				case c.read <- h.opcode:
-				}
-				indata = true
-			} else {
-				c.Close(StatusProtocolError, "cannot send data frame when previous frame is not finished")
+			if c.inMsg {
+				c.Close(StatusProtocolError, "cannot read data frame when previous frame is not finished")
 				return
 			}
+
+			select {
+			case <-c.closed:
+				return
+			case c.read <- h.opcode:
+				c.inMsg = true
+			}
 		case opContinuation:
-			if !indata {
+			if !c.inMsg {
 				c.Close(StatusProtocolError, "continuation frame not after data or text frame")
 				return
 			}
@@ -284,47 +301,55 @@ func (c *Conn) readLoop() {
 			return
 		}
 
-		maskPos := 0
-		left := h.payloadLength
-		firstRead := false
-		for left > 0 || !firstRead {
-			select {
-			case <-c.closed:
-				return
-			case b := <-c.readBytes:
-				if int64(len(b)) > left {
-					b = b[:left]
-				}
-
-				_, err = io.ReadFull(c.br, b)
-				if err != nil {
-					c.close(xerrors.Errorf("failed to read from connection: %w", err))
-					return
-				}
-				left -= int64(len(b))
-
-				if h.masked {
-					maskPos = mask(h.maskKey, maskPos, b)
-				}
-
-				select {
-				case <-c.closed:
-					return
-				case c.readDone <- len(b):
-					firstRead = true
-				}
-			}
+		err = c.dataReadLoop(h)
+		if err != nil {
+			c.close(xerrors.Errorf("failed to read from connection: %w", err))
+			return
 		}
+	}
+}
 
-		if h.fin {
-			indata = false
+func (c *Conn) dataReadLoop(h header) (err error) {
+	maskPos := 0
+	left := h.payloadLength
+	firstReadDone := false
+	for left > 0 || !firstReadDone {
+		select {
+		case <-c.closed:
+			return c.closeErr
+		case b := <-c.readBytes:
+			if int64(len(b)) > left {
+				b = b[:left]
+			}
+
+			_, err := io.ReadFull(c.br, b)
+			if err != nil {
+				return xerrors.Errorf("failed to read from connection: %w", err)
+			}
+			left -= int64(len(b))
+
+			if h.masked {
+				maskPos = mask(h.maskKey, maskPos, b)
+			}
+
+			// Must set this before we signal the read is done.
+			// The reader will use this to return io.EOF and
+			// c.Read will use it to check if the reader has been completed.
+			if left == 0 && h.fin {
+				atomic.StoreInt64(&c.activeReader, 0)
+				c.inMsg = false
+			}
+
 			select {
 			case <-c.closed:
-				return
-			case c.readerDone <- struct{}{}:
+				return c.closeErr
+			case c.readDone <- len(b):
+				firstReadDone = true
 			}
 		}
 	}
+
+	return nil
 }
 
 func (c *Conn) writePong(p []byte) error {
@@ -404,76 +429,57 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 }
 
 // Write returns a writer bounded by the context that will write
-// a WebSocket data frame of type dataType to the connection.
-// Ensure you close the messageWriter once you have written to entire message.
-// Concurrent calls to messageWriter are ok.
-func (c *Conn) Write(ctx context.Context, dataType MessageType) io.WriteCloser {
-	// TODO acquire write here, move state into Conn and make messageWriter allocation free.
-	return &messageWriter{
-		c:        c,
-		ctx:      ctx,
-		datatype: dataType,
+// a WebSocket message of type dataType to the connection.
+// Ensure you close the writer once you have written the entire message.
+// Concurrent calls to Write are ok.
+func (c *Conn) Write(ctx context.Context, dataType MessageType) (io.WriteCloser, error) {
+	select {
+	case <-c.closed:
+		return nil, c.closeErr
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case c.write <- dataType:
+		return messageWriter{
+			ctx: ctx,
+			c:   c,
+		}, nil
 	}
 }
 
 // messageWriter enables writing to a WebSocket connection.
-// Ensure you close the messageWriter once you have written to entire message.
 type messageWriter struct {
-	datatype     MessageType
-	ctx          context.Context
-	c            *Conn
-	acquiredLock bool
+	ctx context.Context
+	c   *Conn
 }
 
 // Write writes the given bytes to the WebSocket connection.
 // The frame will automatically be fragmented as appropriate
 // with the buffers obtained from http.Hijacker.
 // Please ensure you call Close once you have written the full message.
-func (w *messageWriter) Write(p []byte) (int, error) {
-	err := w.acquire()
-	if err != nil {
-		return 0, err
-	}
-
+func (w messageWriter) Write(p []byte) (int, error) {
 	select {
 	case <-w.c.closed:
 		return 0, w.c.closeErr
 	case w.c.writeBytes <- p:
 		select {
-		case <-w.c.closed:
-			return 0, w.c.closeErr
-		case <-w.c.writeDone:
-			return len(p), nil
 		case <-w.ctx.Done():
+			w.c.close(xerrors.Errorf("write timed out: %w", w.ctx.Err()))
+			<-w.c.readDone
 			return 0, w.ctx.Err()
+		case _, ok := <-w.c.writeDone:
+			if !ok {
+				return 0, w.c.closeErr
+			}
+			return len(p), nil
 		}
 	case <-w.ctx.Done():
 		return 0, w.ctx.Err()
 	}
 }
 
-func (w *messageWriter) acquire() error {
-	if !w.acquiredLock {
-		select {
-		case <-w.c.closed:
-			return w.c.closeErr
-		case w.c.write <- w.datatype:
-			w.acquiredLock = true
-		case <-w.ctx.Done():
-			return w.ctx.Err()
-		}
-	}
-	return nil
-}
-
 // Close flushes the frame to the connection.
 // This must be called for every messageWriter.
-func (w *messageWriter) Close() error {
-	err := w.acquire()
-	if err != nil {
-		return err
-	}
-
+func (w messageWriter) Close() error {
 	close(w.c.writeBytes)
 	select {
 	case <-w.c.closed:
@@ -485,26 +491,28 @@ func (w *messageWriter) Close() error {
 	}
 }
 
-// ReadMessage will wait until there is a WebSocket data frame to read from the connection.
-// It returns the type of the data, a reader to read it and also an error.
-// Please use SetContext on the reader to bound the read operation.
+// ReadMessage will wait until there is a WebSocket data message to read from the connection.
+// It returns the type of the message and a reader to read it.
+// The passed context will also bound the reader.
 // Your application must keep reading messages for the Conn to automatically respond to ping
-// and close frames.
+// and close frames and not become stuck waiting for a data message to be read.
+// Please ensure to read the full message from io.Reader.
+// You can only read a single message at a time.
 func (c *Conn) Read(ctx context.Context) (MessageType, io.Reader, error) {
-	// TODO error if the reader is not done
+	if !atomic.CompareAndSwapInt64(&c.activeReader, 0, 1) {
+		return 0, nil, xerrors.New("websocket: previous message not fully read")
+	}
+
 	select {
-	case <-c.readerDone:
-		// The previous reader just hit a io.EOF, we handle it for users
-		return c.Read(ctx)
 	case <-c.closed:
-		return 0, nil, xerrors.Errorf("failed to read message: %w", c.closeErr)
+		return 0, nil, xerrors.Errorf("websocket: failed to read message: %w", c.closeErr)
 	case opcode := <-c.read:
 		return MessageType(opcode), messageReader{
 			ctx: ctx,
 			c:   c,
 		}, nil
 	case <-ctx.Done():
-		return 0, nil, xerrors.Errorf("failed to read message: %w", ctx.Err())
+		return 0, nil, xerrors.Errorf("websocket: failed to read message: %w", ctx.Err())
 	}
 }
 
@@ -518,30 +526,38 @@ type messageReader struct {
 func (r messageReader) Read(p []byte) (int, error) {
 	n, err := r.read(p)
 	if err != nil {
-		// Have to return io.EOF directly for now.
+		// Have to return io.EOF directly for now, cannot wrap.
 		if err == io.EOF {
-			return 0, io.EOF
+			return n, io.EOF
 		}
 		return n, xerrors.Errorf("failed to read: %w", err)
 	}
 	return n, nil
 }
 
-func (r messageReader) read(p []byte) (int, error) {
+func (r messageReader) read(p []byte) (_ int, err error) {
+	if atomic.LoadInt64(&r.c.activeReader) == 0 {
+		return 0, io.EOF
+	}
+
 	select {
 	case <-r.c.closed:
 		return 0, r.c.closeErr
-	case <-r.c.readerDone:
-		return 0, io.EOF
 	case r.c.readBytes <- p:
-		// TODO this is potentially racey as if we return if the context is cancelled, or the conn is closed we don't know if the p is ok to use. we must close the connection and also ensure the readLoop is done before returning, likewise with writes.
 		select {
-		case <-r.c.closed:
-			return 0, r.c.closeErr
-		case n := <-r.c.readDone:
-			return n, nil
 		case <-r.ctx.Done():
+			r.c.close(xerrors.Errorf("read timed out: %w", err))
+			// Wait for readloop to complete so we know p is done.
+			<-r.c.readDone
 			return 0, r.ctx.Err()
+		case n, ok := <-r.c.readDone:
+			if !ok {
+				return 0, r.c.closeErr
+			}
+			if atomic.LoadInt64(&r.c.activeReader) == 0 {
+				return n, io.EOF
+			}
+			return n, nil
 		}
 	case <-r.ctx.Done():
 		return 0, r.ctx.Err()

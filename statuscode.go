@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/bits"
-	"unicode/utf8"
 
 	"golang.org/x/xerrors"
 )
@@ -54,6 +53,12 @@ func (ce CloseError) Error() string {
 }
 
 func parseClosePayload(p []byte) (CloseError, error) {
+	if len(p) == 0 {
+		return CloseError{
+			Code: StatusNoStatusRcvd,
+		}, nil
+	}
+
 	if len(p) < 2 {
 		return CloseError{}, fmt.Errorf("close payload too small, cannot even contain the 2 byte status code")
 	}
@@ -63,9 +68,6 @@ func parseClosePayload(p []byte) (CloseError, error) {
 		Reason: string(p[2:]),
 	}
 
-	if !utf8.ValidString(ce.Reason) {
-		return CloseError{}, xerrors.Errorf("invalid utf-8: %q", ce.Reason)
-	}
 	if !validWireCloseCode(ce.Code) {
 		return CloseError{}, xerrors.Errorf("invalid code %v", ce.Code)
 	}

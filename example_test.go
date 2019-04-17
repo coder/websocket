@@ -34,10 +34,13 @@ func ExampleAccept_echo() {
 			if err != nil {
 				return err
 			}
-
 			r = io.LimitReader(r, 32768)
 
-			w := c.Write(ctx, typ)
+			w, err := c.Write(ctx, typ)
+			if err != nil {
+				return err
+			}
+
 			_, err = io.Copy(w, r)
 			if err != nil {
 				return err

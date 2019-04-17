@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -292,29 +293,14 @@ func TestHandshake(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			var conns int64
-			s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				atomic.AddInt64(&conns, 1)
-				defer atomic.AddInt64(&conns, -1)
-
+			s, closeFn := testServer(t, func(w http.ResponseWriter, r *http.Request) {
 				err := tc.server(w, r)
 				if err != nil {
 					t.Errorf("server failed: %+v", err)
 					return
 				}
-			}))
-			defer func() {
-				s.Close()
-
-				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-				defer cancel()
-
-				for atomic.LoadInt64(&conns) > 0 {
-					if ctx.Err() != nil {
-						t.Fatalf("waiting for server to come down timed out: %v", ctx.Err())
-					}
-				}
-			}()
+			})
+			defer closeFn()
 
 			wsURL := strings.Replace(s.URL, "http", "ws", 1)
 
@@ -326,6 +312,28 @@ func TestHandshake(t *testing.T) {
 				t.Fatalf("client failed: %+v", err)
 			}
 		})
+	}
+}
+
+func testServer(tb testing.TB, fn http.HandlerFunc) (s *httptest.Server, closeFn func()) {
+	var conns int64
+	s = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&conns, 1)
+		defer atomic.AddInt64(&conns, -1)
+
+		fn.ServeHTTP(w, r)
+	}))
+	return s, func() {
+		s.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+
+		for atomic.LoadInt64(&conns) > 0 {
+			if ctx.Err() != nil {
+				tb.Fatalf("waiting for server to come down timed out: %v", ctx.Err())
+			}
+		}
 	}
 }
 
@@ -341,7 +349,7 @@ func TestAutobahnServer(t *testing.T) {
 			t.Logf("server handshake failed: %+v", err)
 			return
 		}
-		echoLoop(r.Context(), c, t)
+		echoLoop(r.Context(), c)
 	}))
 	defer s.Close()
 
@@ -354,7 +362,7 @@ func TestAutobahnServer(t *testing.T) {
 			},
 		},
 		"cases":         []string{"*"},
-		"exclude-cases": []string{"6.*", "12.*", "13.*"},
+		"exclude-cases": []string{"6.*", "7.5.1", "12.*", "13.*"},
 	}
 	specFile, err := ioutil.TempFile("", "websocket_fuzzingclient.json")
 	if err != nil {
@@ -388,11 +396,11 @@ func TestAutobahnServer(t *testing.T) {
 	checkWSTestIndex(t, "./wstest_reports/server/index.json")
 }
 
-func echoLoop(ctx context.Context, c *websocket.Conn, t *testing.T) {
+func echoLoop(ctx context.Context, c *websocket.Conn) {
 	defer c.Close(websocket.StatusInternalError, "")
 
 	echo := func() error {
-		ctx, cancel := context.WithTimeout(ctx, time.Second*30)
+		ctx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()
 
 		typ, r, err := c.Read(ctx)
@@ -400,7 +408,13 @@ func echoLoop(ctx context.Context, c *websocket.Conn, t *testing.T) {
 			return err
 		}
 
-		w := c.Write(ctx, typ)
+		w, err := c.Write(ctx, typ)
+		if err != nil {
+			return err
+		}
+
+		b1, _ := ioutil.ReadAll(r)
+		log.Printf("%q", b1)
 
 		_, err = io.Copy(w, r)
 		if err != nil {
@@ -415,11 +429,14 @@ func echoLoop(ctx context.Context, c *websocket.Conn, t *testing.T) {
 		return nil
 	}
 
+	var i int
 	for {
 		err := echo()
 		if err != nil {
+			log.Println("WTF", err, i)
 			return
 		}
+		i++
 	}
 }
 
@@ -431,7 +448,7 @@ func TestAutobahnClient(t *testing.T) {
 		"url":           "ws://localhost:9001",
 		"outdir":        "wstest_reports/client",
 		"cases":         []string{"*"},
-		"exclude-cases": []string{"6.*", "12.*", "13.*"},
+		"exclude-cases": []string{"6.*", "7.5.1", "12.*", "13.*"},
 	}
 	specFile, err := ioutil.TempFile("", "websocket_fuzzingserver.json")
 	if err != nil {
@@ -507,7 +524,7 @@ func TestAutobahnClient(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to dial: %v", err)
 			}
-			echoLoop(ctx, c, t)
+			echoLoop(ctx, c)
 		}()
 	}
 
