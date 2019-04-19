@@ -4,10 +4,12 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"nhooyr.io/websocket"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"nhooyr.io/websocket"
 )
 
 func BenchmarkConn(b *testing.B) {
@@ -36,42 +38,50 @@ func BenchmarkConn(b *testing.B) {
 	}
 	defer c.Close(websocket.StatusInternalError, "")
 
-	msg := strings.Repeat("2", 4096*16)
-	buf := make([]byte, len(msg))
-	b.SetBytes(int64(len(msg)))
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		w, err := c.Write(ctx, websocket.MessageText)
-		if err != nil {
-			b.Fatal(err)
-		}
+	runN := func(n int) {
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			msg := []byte(strings.Repeat("2", n))
+			buf := make([]byte, len(msg))
+			b.SetBytes(int64(len(msg)))
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				w, err := c.Write(ctx, websocket.MessageText)
+				if err != nil {
+					b.Fatal(err)
+				}
 
-		_, err = io.WriteString(w, msg)
-		if err != nil {
-			b.Fatal(err)
-		}
+				_, err = w.Write(msg)
+				if err != nil {
+					b.Fatal(err)
+				}
 
-		err = w.Close()
-		if err != nil {
-			b.Fatal(err)
-		}
+				err = w.Close()
+				if err != nil {
+					b.Fatal(err)
+				}
 
-		_, r, err := c.Read(ctx)
-		if err != nil {
-			b.Fatal(err, b.N)
-		}
+				_, r, err := c.Read(ctx)
+				if err != nil {
+					b.Fatal(err, b.N)
+				}
 
-		_, err = io.ReadFull(r, buf)
-		if err != nil {
-			b.Fatal(err)
-		}
-
-		// TODO jank
-		_, err = r.Read(nil)
-		if err != io.EOF {
-			b.Fatalf("wtf %q", err)
-		}
+				_, err = io.ReadFull(r, buf)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+			b.StopTimer()
+		})
 	}
-	b.StopTimer()
+
+	runN(32)
+	runN(128)
+	runN(512)
+	runN(1024)
+	runN(4096)
+	runN(16384)
+	runN(65536)
+	runN(131072)
+
 	c.Close(websocket.StatusNormalClosure, "")
 }

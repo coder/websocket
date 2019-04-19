@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -38,19 +37,20 @@ type Conn struct {
 	// on writeBytes.
 	// Send on control to write a control message.
 	// writeDone will be sent back when the message is written
-	// Close writeBytes to flush the message and wait for a
-	// ping on writeDone. // TODO should I care about this allocation?
+	// Send on writeFlush to flush the message and wait for a
+	// ping on writeDone.
 	// writeDone will be closed if the data message write errors.
 	write      chan MessageType
 	control    chan control
 	writeBytes chan []byte
 	writeDone  chan struct{}
+	writeFlush chan struct{}
 
 	// Readers should receive on read to begin reading a message.
 	// Then send a byte slice to readBytes to read into it.
 	// The n of bytes read will be sent on readDone once the read into a slice is complete.
 	// readDone will be closed if the read fails.
-	// readInProgress will be set to 0 on io.EOF.
+	// activeReader will be set to 0 on io.EOF.
 	activeReader int64
 	inMsg        bool
 	read         chan opcode
@@ -86,7 +86,9 @@ func (c *Conn) init() {
 
 	c.write = make(chan MessageType)
 	c.control = make(chan control)
+	c.writeBytes = make(chan []byte)
 	c.writeDone = make(chan struct{})
+	c.writeFlush = make(chan struct{})
 
 	c.read = make(chan opcode)
 	c.readBytes = make(chan []byte)
@@ -128,8 +130,6 @@ func (c *Conn) writeLoop() {
 
 messageLoop:
 	for {
-		c.writeBytes = make(chan []byte)
-
 		var dataType MessageType
 		select {
 		case <-c.closed:
@@ -170,9 +170,9 @@ messageLoop:
 				case c.writeDone <- struct{}{}:
 					continue
 				}
-			case b, ok := <-c.writeBytes:
+			case b := <-c.writeBytes:
 				h := header{
-					fin:           !ok,
+					fin:           false,
 					opcode:        opcode(dataType),
 					payloadLength: int64(len(b)),
 					masked:        c.client,
@@ -183,30 +183,41 @@ messageLoop:
 				}
 				firstSent = true
 
-				if c.client {
-					log.Printf("client %#v", h)
-				}
-
 				c.writeFrame(h, b)
-
-				if !ok {
-					err := c.bw.Flush()
-					if err != nil {
-						c.close(xerrors.Errorf("failed to write to connection: %w", err))
-						return
-					}
-				}
 
 				select {
 				case <-c.closed:
 					return
 				case c.writeDone <- struct{}{}:
-					if ok {
-						continue
-					} else {
-						continue messageLoop
-					}
+					continue
 				}
+			case <-c.writeFlush:
+				h := header{
+					fin:           true,
+					opcode:        opcode(dataType),
+					payloadLength: 0,
+					masked:        c.client,
+				}
+
+				if firstSent {
+					h.opcode = opContinuation
+				}
+
+				c.writeFrame(h, nil)
+
+				select {
+				case <-c.closed:
+					return
+				case c.writeDone <- struct{}{}:
+				}
+
+				err := c.bw.Flush()
+				if err != nil {
+					c.close(xerrors.Errorf("failed to write to connection: %w", err))
+					return
+				}
+
+				continue messageLoop
 			}
 		}
 	}
@@ -262,10 +273,6 @@ func (c *Conn) readLoop() {
 		if err != nil {
 			c.close(xerrors.Errorf("failed to read header: %w", err))
 			return
-		}
-
-		if !c.client {
-			log.Printf("%#v", h)
 		}
 
 		if h.rsv1 || h.rsv2 || h.rsv3 {
@@ -480,7 +487,14 @@ func (w messageWriter) Write(p []byte) (int, error) {
 // Close flushes the frame to the connection.
 // This must be called for every messageWriter.
 func (w messageWriter) Close() error {
-	close(w.c.writeBytes)
+	select {
+	case <-w.c.closed:
+		return w.c.closeErr
+	case <-w.ctx.Done():
+		return w.ctx.Err()
+	case w.c.writeFlush <- struct{}{}:
+	}
+
 	select {
 	case <-w.c.closed:
 		return w.c.closeErr
@@ -499,8 +513,25 @@ func (w messageWriter) Close() error {
 // Please ensure to read the full message from io.Reader.
 // You can only read a single message at a time.
 func (c *Conn) Read(ctx context.Context) (MessageType, io.Reader, error) {
-	if !atomic.CompareAndSwapInt64(&c.activeReader, 0, 1) {
-		return 0, nil, xerrors.New("websocket: previous message not fully read")
+	for !atomic.CompareAndSwapInt64(&c.activeReader, 0, 1) {
+		select {
+		case <-c.closed:
+			return 0, nil, c.closeErr
+		case c.readBytes <- nil:
+			select {
+			case <-ctx.Done():
+				return 0, nil, ctx.Err()
+			case _, ok := <-c.readDone:
+				if !ok {
+					return 0, nil, c.closeErr
+				}
+				if atomic.LoadInt64(&c.activeReader) == 1 {
+					return 0, nil, xerrors.New("websocket: previous message not fully read")
+				}
+			}
+		case <-ctx.Done():
+			return 0, nil, ctx.Err()
+		}
 	}
 
 	select {
@@ -530,7 +561,7 @@ func (r messageReader) Read(p []byte) (int, error) {
 		if err == io.EOF {
 			return n, io.EOF
 		}
-		return n, xerrors.Errorf("failed to read: %w", err)
+		return n, xerrors.Errorf("websocket: failed to read: %w", err)
 	}
 	return n, nil
 }
@@ -546,7 +577,7 @@ func (r messageReader) read(p []byte) (_ int, err error) {
 	case r.c.readBytes <- p:
 		select {
 		case <-r.ctx.Done():
-			r.c.close(xerrors.Errorf("read timed out: %w", err))
+			r.c.close(xerrors.Errorf("read timed out: %w", r.ctx.Err()))
 			// Wait for readloop to complete so we know p is done.
 			<-r.c.readDone
 			return 0, r.ctx.Err()

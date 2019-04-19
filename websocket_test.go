@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -197,14 +196,25 @@ func TestHandshake(t *testing.T) {
 				ctx, cancel := context.WithTimeout(r.Context(), time.Second*5)
 				defer cancel()
 
-				jc := websocket.JSONConn{
-					Conn: c,
-				}
+				write := func() error {
+					jc := websocket.JSONConn{
+						Conn: c,
+					}
 
-				v := map[string]interface{}{
-					"anmol": "wowow",
+					v := map[string]interface{}{
+						"anmol": "wowow",
+					}
+					err = jc.Write(ctx, v)
+					if err != nil {
+						return err
+					}
+					return nil
 				}
-				err = jc.Write(ctx, v)
+				err = write()
+				if err != nil {
+					return err
+				}
+				err = write()
 				if err != nil {
 					return err
 				}
@@ -223,17 +233,29 @@ func TestHandshake(t *testing.T) {
 					Conn: c,
 				}
 
-				var v interface{}
-				err = jc.Read(ctx, &v)
+				read := func() error {
+					var v interface{}
+					err = jc.Read(ctx, &v)
+					if err != nil {
+						return err
+					}
+
+					exp := map[string]interface{}{
+						"anmol": "wowow",
+					}
+					if !reflect.DeepEqual(exp, v) {
+						return xerrors.Errorf("expected %v but got %v", exp, v)
+					}
+					return nil
+				}
+				err = read()
 				if err != nil {
 					return err
 				}
-
-				exp := map[string]interface{}{
-					"anmol": "wowow",
-				}
-				if !reflect.DeepEqual(exp, v) {
-					return xerrors.Errorf("expected %v but got %v", exp, v)
+				// Read twice to ensure the un EOFed previous reader works correctly.
+				err = read()
+				if err != nil {
+					return err
 				}
 
 				c.Close(websocket.StatusNormalClosure, "")
@@ -399,10 +421,11 @@ func TestAutobahnServer(t *testing.T) {
 func echoLoop(ctx context.Context, c *websocket.Conn) {
 	defer c.Close(websocket.StatusInternalError, "")
 
-	echo := func() error {
-		ctx, cancel := context.WithTimeout(ctx, time.Minute)
-		defer cancel()
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
 
+	b := make([]byte, 32768)
+	echo := func() error {
 		typ, r, err := c.Read(ctx)
 		if err != nil {
 			return err
@@ -413,10 +436,7 @@ func echoLoop(ctx context.Context, c *websocket.Conn) {
 			return err
 		}
 
-		b1, _ := ioutil.ReadAll(r)
-		log.Printf("%q", b1)
-
-		_, err = io.Copy(w, r)
+		_, err = io.CopyBuffer(w, r, b)
 		if err != nil {
 			return err
 		}
@@ -429,14 +449,11 @@ func echoLoop(ctx context.Context, c *websocket.Conn) {
 		return nil
 	}
 
-	var i int
 	for {
 		err := echo()
 		if err != nil {
-			log.Println("WTF", err, i)
 			return
 		}
-		i++
 	}
 }
 

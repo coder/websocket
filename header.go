@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 
 	"golang.org/x/xerrors"
 )
@@ -55,7 +56,7 @@ func marshalHeader(h header) []byte {
 		panic(fmt.Sprintf("websocket: invalid header: negative length: %v", h.payloadLength))
 	case h.payloadLength <= 125:
 		b[1] = byte(h.payloadLength)
-	case h.payloadLength <= 1<<16:
+	case h.payloadLength <= math.MaxUint16:
 		b[1] = 126
 		b = b[:len(b)+2]
 		binary.BigEndian.PutUint16(b[len(b)-2:], uint16(h.payloadLength))
@@ -105,10 +106,8 @@ func readHeader(r io.Reader) (header, error) {
 	case payloadLength < 126:
 		h.payloadLength = int64(payloadLength)
 	case payloadLength == 126:
-		h.payloadLength = 126
 		extra += 2
 	case payloadLength == 127:
-		h.payloadLength = 127
 		extra += 8
 	}
 
