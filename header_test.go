@@ -3,6 +3,7 @@ package websocket
 import (
 	"bytes"
 	"math/rand"
+	"strconv"
 	"testing"
 	"time"
 
@@ -36,10 +37,38 @@ func TestHeader(t *testing.T) {
 			t.Fatalf("unexpected error value: %+v", err)
 		}
 	})
+
+	t.Run("lengths", func(t *testing.T) {
+		t.Parallel()
+
+		lengths := []int{
+			124,
+			125,
+			126,
+			4096,
+			16384,
+			65535,
+			65536,
+			65537,
+			131072,
+		}
+
+		for _, n := range lengths {
+			n := n
+			t.Run(strconv.Itoa(n), func(t *testing.T) {
+				t.Parallel()
+
+				testHeader(t, header{
+					payloadLength: int64(n),
+				})
+			})
+		}
+	})
+
 	t.Run("fuzz", func(t *testing.T) {
 		t.Parallel()
 
-		for i := 0; i < 1000; i++ {
+		for i := 0; i < 10000; i++ {
 			h := header{
 				fin:    randBool(),
 				rsv1:   randBool(),
@@ -55,20 +84,24 @@ func TestHeader(t *testing.T) {
 				rand.Read(h.maskKey[:])
 			}
 
-			b := marshalHeader(h)
-			r := bytes.NewReader(b)
-			h2, err := readHeader(r)
-			if err != nil {
-				t.Logf("header: %#v", h)
-				t.Logf("bytes: %b", b)
-				t.Fatalf("failed to read header: %v", err)
-			}
-
-			if !cmp.Equal(h, h2, cmp.AllowUnexported(header{})) {
-				t.Logf("header: %#v", h)
-				t.Logf("bytes: %b", b)
-				t.Fatalf("parsed and read header differ: %v", cmp.Diff(h, h2, cmp.AllowUnexported(header{})))
-			}
+			testHeader(t, h)
 		}
 	})
+}
+
+func testHeader(t *testing.T, h header) {
+	b := marshalHeader(h)
+	r := bytes.NewReader(b)
+	h2, err := readHeader(r)
+	if err != nil {
+		t.Logf("header: %#v", h)
+		t.Logf("bytes: %b", b)
+		t.Fatalf("failed to read header: %v", err)
+	}
+
+	if !cmp.Equal(h, h2, cmp.AllowUnexported(header{})) {
+		t.Logf("header: %#v", h)
+		t.Logf("bytes: %b", b)
+		t.Fatalf("parsed and read header differ: %v", cmp.Diff(h, h2, cmp.AllowUnexported(header{})))
+	}
 }

@@ -53,19 +53,19 @@ func AcceptInsecureOrigin() AcceptOption {
 
 func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 	if !headerValuesContainsToken(r.Header, "Connection", "Upgrade") {
-		err := xerrors.Errorf("websocket: protocol violation: Connection header does not contain Upgrade: %q", r.Header.Get("Connection"))
+		err := xerrors.Errorf("websocket: protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
 
 	if !headerValuesContainsToken(r.Header, "Upgrade", "WebSocket") {
-		err := xerrors.Errorf("websocket: protocol violation: Upgrade header does not contain websocket: %q", r.Header.Get("Upgrade"))
+		err := xerrors.Errorf("websocket: protocol violation: Upgrade header %q does not contain websocket", r.Header.Get("Upgrade"))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
 
 	if r.Method != "GET" {
-		err := xerrors.Errorf("websocket: protocol violation: handshake request method is not GET: %q", r.Method)
+		err := xerrors.Errorf("websocket: protocol violation: handshake request method %q is not GET", r.Method)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
@@ -88,7 +88,7 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 // Accept accepts a WebSocket handshake from a client and upgrades the
 // the connection to WebSocket.
 // Accept will reject the handshake if the Origin is not the same as the Host unless
-// InsecureAcceptOrigin is passed.
+// the AcceptInsecureOrigin option is passed.
 // Accept uses w to write the handshake response so the timeouts on the http.Server apply.
 func Accept(w http.ResponseWriter, r *http.Request, opts ...AcceptOption) (*Conn, error) {
 	var subprotocols []string

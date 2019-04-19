@@ -22,7 +22,7 @@ func (jc JSONConn) Read(ctx context.Context, v interface{}) error {
 	return nil
 }
 
-func (jc *JSONConn) read(ctx context.Context, v interface{}) error {
+func (jc JSONConn) read(ctx context.Context, v interface{}) error {
 	typ, r, err := jc.Conn.Read(ctx)
 	if err != nil {
 		return err
@@ -53,10 +53,13 @@ func (jc JSONConn) Write(ctx context.Context, v interface{}) error {
 }
 
 func (jc JSONConn) write(ctx context.Context, v interface{}) error {
-	w := jc.Conn.Write(ctx, MessageText)
+	w, err := jc.Conn.Write(ctx, MessageText)
+	if err != nil {
+		return xerrors.Errorf("failed to get message writer: %w", err)
+	}
 
 	e := json.NewEncoder(w)
-	err := e.Encode(v)
+	err = e.Encode(v)
 	if err != nil {
 		return xerrors.Errorf("failed to encode json: %w", err)
 	}

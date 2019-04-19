@@ -196,14 +196,25 @@ func TestHandshake(t *testing.T) {
 				ctx, cancel := context.WithTimeout(r.Context(), time.Second*5)
 				defer cancel()
 
-				jc := websocket.JSONConn{
-					Conn: c,
-				}
+				write := func() error {
+					jc := websocket.JSONConn{
+						Conn: c,
+					}
 
-				v := map[string]interface{}{
-					"anmol": "wowow",
+					v := map[string]interface{}{
+						"anmol": "wowow",
+					}
+					err = jc.Write(ctx, v)
+					if err != nil {
+						return err
+					}
+					return nil
 				}
-				err = jc.Write(ctx, v)
+				err = write()
+				if err != nil {
+					return err
+				}
+				err = write()
 				if err != nil {
 					return err
 				}
@@ -222,17 +233,29 @@ func TestHandshake(t *testing.T) {
 					Conn: c,
 				}
 
-				var v interface{}
-				err = jc.Read(ctx, &v)
+				read := func() error {
+					var v interface{}
+					err = jc.Read(ctx, &v)
+					if err != nil {
+						return err
+					}
+
+					exp := map[string]interface{}{
+						"anmol": "wowow",
+					}
+					if !reflect.DeepEqual(exp, v) {
+						return xerrors.Errorf("expected %v but got %v", exp, v)
+					}
+					return nil
+				}
+				err = read()
 				if err != nil {
 					return err
 				}
-
-				exp := map[string]interface{}{
-					"anmol": "wowow",
-				}
-				if !reflect.DeepEqual(exp, v) {
-					return xerrors.Errorf("expected %v but got %v", exp, v)
+				// Read twice to ensure the un EOFed previous reader works correctly.
+				err = read()
+				if err != nil {
+					return err
 				}
 
 				c.Close(websocket.StatusNormalClosure, "")
@@ -292,29 +315,14 @@ func TestHandshake(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			var conns int64
-			s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				atomic.AddInt64(&conns, 1)
-				defer atomic.AddInt64(&conns, -1)
-
+			s, closeFn := testServer(t, func(w http.ResponseWriter, r *http.Request) {
 				err := tc.server(w, r)
 				if err != nil {
 					t.Errorf("server failed: %+v", err)
 					return
 				}
-			}))
-			defer func() {
-				s.Close()
-
-				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-				defer cancel()
-
-				for atomic.LoadInt64(&conns) > 0 {
-					if ctx.Err() != nil {
-						t.Fatalf("waiting for server to come down timed out: %v", ctx.Err())
-					}
-				}
-			}()
+			})
+			defer closeFn()
 
 			wsURL := strings.Replace(s.URL, "http", "ws", 1)
 
@@ -326,6 +334,28 @@ func TestHandshake(t *testing.T) {
 				t.Fatalf("client failed: %+v", err)
 			}
 		})
+	}
+}
+
+func testServer(tb testing.TB, fn http.HandlerFunc) (s *httptest.Server, closeFn func()) {
+	var conns int64
+	s = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&conns, 1)
+		defer atomic.AddInt64(&conns, -1)
+
+		fn.ServeHTTP(w, r)
+	}))
+	return s, func() {
+		s.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+
+		for atomic.LoadInt64(&conns) > 0 {
+			if ctx.Err() != nil {
+				tb.Fatalf("waiting for server to come down timed out: %v", ctx.Err())
+			}
+		}
 	}
 }
 
@@ -341,7 +371,7 @@ func TestAutobahnServer(t *testing.T) {
 			t.Logf("server handshake failed: %+v", err)
 			return
 		}
-		echoLoop(r.Context(), c, t)
+		echoLoop(r.Context(), c)
 	}))
 	defer s.Close()
 
@@ -354,7 +384,7 @@ func TestAutobahnServer(t *testing.T) {
 			},
 		},
 		"cases":         []string{"*"},
-		"exclude-cases": []string{"6.*", "12.*", "13.*"},
+		"exclude-cases": []string{"6.*", "7.5.1", "12.*", "13.*"},
 	}
 	specFile, err := ioutil.TempFile("", "websocket_fuzzingclient.json")
 	if err != nil {
@@ -388,21 +418,25 @@ func TestAutobahnServer(t *testing.T) {
 	checkWSTestIndex(t, "./wstest_reports/server/index.json")
 }
 
-func echoLoop(ctx context.Context, c *websocket.Conn, t *testing.T) {
+func echoLoop(ctx context.Context, c *websocket.Conn) {
 	defer c.Close(websocket.StatusInternalError, "")
 
-	echo := func() error {
-		ctx, cancel := context.WithTimeout(ctx, time.Second*30)
-		defer cancel()
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
 
+	b := make([]byte, 32768)
+	echo := func() error {
 		typ, r, err := c.Read(ctx)
 		if err != nil {
 			return err
 		}
 
-		w := c.Write(ctx, typ)
+		w, err := c.Write(ctx, typ)
+		if err != nil {
+			return err
+		}
 
-		_, err = io.Copy(w, r)
+		_, err = io.CopyBuffer(w, r, b)
 		if err != nil {
 			return err
 		}
@@ -431,7 +465,7 @@ func TestAutobahnClient(t *testing.T) {
 		"url":           "ws://localhost:9001",
 		"outdir":        "wstest_reports/client",
 		"cases":         []string{"*"},
-		"exclude-cases": []string{"6.*", "12.*", "13.*"},
+		"exclude-cases": []string{"6.*", "7.5.1", "12.*", "13.*"},
 	}
 	specFile, err := ioutil.TempFile("", "websocket_fuzzingserver.json")
 	if err != nil {
@@ -507,7 +541,7 @@ func TestAutobahnClient(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to dial: %v", err)
 			}
-			echoLoop(ctx, c, t)
+			echoLoop(ctx, c)
 		}()
 	}
 

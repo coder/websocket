@@ -34,10 +34,13 @@ func ExampleAccept_echo() {
 			if err != nil {
 				return err
 			}
-
 			r = io.LimitReader(r, 32768)
 
-			w := c.Write(ctx, typ)
+			w, err := c.Write(ctx, typ)
+			if err != nil {
+				return err
+			}
+
 			_, err = io.Copy(w, r)
 			if err != nil {
 				return err
@@ -76,7 +79,7 @@ func ExampleAccept() {
 			log.Printf("server handshake failed: %v", err)
 			return
 		}
-		defer c.Close(websocket.StatusInternalError, "") // TODO returning internal is incorect if its a timeout error.
+		defer c.Close(websocket.StatusInternalError, "")
 
 		jc := websocket.JSONConn{
 			Conn: c,

@@ -7,6 +7,8 @@ import (
 )
 
 func Test_verifyServerHandshake(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name     string
 		response func(w http.ResponseWriter)
