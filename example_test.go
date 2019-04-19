@@ -122,7 +122,7 @@ func ExampleDial() {
 	}
 
 	var v interface{}
-	err = jc.Read(ctx, v)
+	err = jc.Read(ctx, &v)
 	if err != nil {
 		log.Fatalf("failed to read json: %v", err)
 	}
