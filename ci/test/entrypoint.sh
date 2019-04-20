@@ -16,10 +16,9 @@ go tool cover -func=profs/coverage
 if [[ $CI ]]; then
 	bash <(curl -s https://codecov.io/bash) -f profs/coverage
 else
-	go tool cover -html=profs/coverage -o=coverage.html
+	go tool cover -html=profs/coverage -o=profs/coverage.html
 
 	set +x
 	echo
-	echo "please open coverage.html to see detailed test coverage stats"
-	echo "profiles are in ./prof/"
+	echo "please open profs/coverage.html to see detailed test coverage stats"
 fi

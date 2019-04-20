@@ -18,6 +18,19 @@ function docker_run() {
 		"${IMAGE}"
 }
 
+function help() {
+	set +x
+	echo
+	echo "$0 [-h] <step>"
+	cat << EOF
+
+If you do not pass in an explicit step, all steps will be ran in order.
+Pass "analyze" as the step to be put into an interactive container to analyze
+profiles.
+EOF
+	exit 1
+}
+
 # Use this to analyze benchmark profiles.
 if [[ ${1-} == "analyze" ]]; then
 	docker run \
@@ -29,7 +42,15 @@ if [[ ${1-} == "analyze" ]]; then
 		golang:1.12
 fi
 
+if [[ ${1-} == "-h" || ${1-} == "--help" || ${1-} == "help" ]]; then
+	help
+fi
+
 if [[ $# -gt 0 ]]; then
+	if [[ ! -d "ci/$*" ]]; then
+		help
+	fi
+
 	docker_run "ci/$*"
 	exit 0
 fi
