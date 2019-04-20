@@ -2,5 +2,8 @@
 //
 // See https://tools.ietf.org/html/rfc6455
 //
-// For now the docs are at https://github.com/nhooyr/websocket#websocket. I will move them here later.
+// The examples are the best way to understand how to correctly use the library.
+//
+// Please see https://nhooyr.io/websocket for detailed design docs and a comparison with existing
+// libraries.
 package websocket
