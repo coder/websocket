@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source .github/lib.sh || exit 1
+source ci/lib.sh || exit 1
 
 (
 	shopt -s globstar nullglob dotglob

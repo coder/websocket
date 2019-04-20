@@ -4,7 +4,12 @@
 
 websocket is a minimal and idiomatic WebSocket library for Go.
 
-This library is in heavy development.
+At minimum Go 1.12 is required as websocket uses a new [feature](https://github.com/golang/go/issues/26937#issuecomment-415855861) in net/http
+to perform WebSocket handshakes.
+
+This library is not final and the API is subject to change.
+
+If you have any feedback, please feel free to open an issue.
 
 ## Install
 
@@ -15,8 +20,8 @@ go get nhooyr.io/websocket
 ## Features
 
 - Full support of the WebSocket protocol
-- Only depends on stdlib
-- Simple to use
+- Zero dependencies outside of the stdlib
+- Very minimal and carefully considered API
 - context.Context is first class
 - net/http is used for WebSocket dials and upgrades
 - Thoroughly tested, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
@@ -26,9 +31,6 @@ go get nhooyr.io/websocket
 
 - [ ] WebSockets over HTTP/2 [#4](https://github.com/nhooyr/websocket/issues/4)
 - [ ] Deflate extension support [#5](https://github.com/nhooyr/websocket/issues/5)
-- [ ] More optimization [#11](https://github.com/nhooyr/websocket/issues/11)
-- [ ] WASM [#15](https://github.com/nhooyr/websocket/issues/15)
-- [ ] Ping/pongs [#1](https://github.com/nhooyr/websocket/issues/1)
 
 ## Example
 

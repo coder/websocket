@@ -14,7 +14,9 @@ import (
 
 func ExampleAccept_echo() {
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := websocket.Accept(w, r, websocket.AcceptSubprotocols("echo"))
+		c, err := websocket.Accept(w, r, websocket.AcceptOptions{
+			Subprotocols: []string{"echo"},
+		})
 		if err != nil {
 			log.Printf("server handshake failed: %v", err)
 			return
@@ -30,13 +32,13 @@ func ExampleAccept_echo() {
 			ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
 			defer cancel()
 
-			typ, r, err := c.Read(ctx)
+			typ, r, err := c.Reader(ctx)
 			if err != nil {
 				return err
 			}
 			r = io.LimitReader(r, 32768)
 
-			w, err := c.Write(ctx, typ)
+			w, err := c.Writer(ctx, typ)
 			if err != nil {
 				return err
 			}
@@ -74,7 +76,7 @@ func ExampleAccept_echo() {
 
 func ExampleAccept() {
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := websocket.Accept(w, r)
+		c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
 		if err != nil {
 			log.Printf("server handshake failed: %v", err)
 			return
@@ -111,7 +113,7 @@ func ExampleDial() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	c, _, err := websocket.Dial(ctx, "ws://localhost:8080")
+	c, _, err := websocket.Dial(ctx, "ws://localhost:8080", websocket.DialOptions{})
 	if err != nil {
 		log.Fatalf("failed to ws dial: %v", err)
 	}

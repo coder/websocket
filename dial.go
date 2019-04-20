@@ -14,40 +14,19 @@ import (
 	"golang.org/x/xerrors"
 )
 
-// DialOption represents a dial option that can be passed to Dial.
-// The implementations are printable for easy debugging.
-type DialOption interface {
-	dialOption()
-}
+// DialOptions represents the options available to pass to Dial.
+type DialOptions struct {
+	// HTTPClient is the http client used for the handshake.
+	// Its Transport must use HTTP/1.1 and must return writable bodies
+	// for WebSocket handshakes. This was introduced in Go 1.12.
+	// http.Transport does this correctly.
+	HTTPClient *http.Client
 
-type dialHTTPClient http.Client
+	// Header specifies the HTTP headers included in the handshake request.
+	Header http.Header
 
-func (o dialHTTPClient) dialOption() {}
-
-// DialHTTPClient is the http client used for the handshake.
-// Its Transport must use HTTP/1.1 and must return writable bodies
-// for WebSocket handshakes.
-// http.Transport does this correctly.
-func DialHTTPClient(hc *http.Client) DialOption {
-	return (*dialHTTPClient)(hc)
-}
-
-type dialHeader http.Header
-
-func (o dialHeader) dialOption() {}
-
-// DialHeader are the HTTP headers included in the handshake request.
-func DialHeader(h http.Header) DialOption {
-	return dialHeader(h)
-}
-
-type dialSubprotocols []string
-
-func (o dialSubprotocols) dialOption() {}
-
-// DialSubprotocols accepts a slice of protcols to include in the Sec-WebSocket-Protocol header.
-func DialSubprotocols(subprotocols ...string) DialOption {
-	return dialSubprotocols(subprotocols)
+	// Subprotocols lists the subprotocols to negotiate with the server.
+	Subprotocols []string
 }
 
 // We use this key for all client requests as the Sec-WebSocket-Key header is useless.
@@ -56,19 +35,12 @@ func DialSubprotocols(subprotocols ...string) DialOption {
 var secWebSocketKey = base64.StdEncoding.EncodeToString(make([]byte, 16))
 
 // Dial performs a WebSocket handshake on the given url with the given options.
-func Dial(ctx context.Context, u string, opts ...DialOption) (_ *Conn, _ *http.Response, err error) {
-	httpClient := http.DefaultClient
-	var subprotocols []string
-	header := http.Header{}
-	for _, o := range opts {
-		switch o := o.(type) {
-		case dialSubprotocols:
-			subprotocols = o
-		case dialHeader:
-			header = http.Header(o)
-		case *dialHTTPClient:
-			httpClient = (*http.Client)(o)
-		}
+func Dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Response, err error) {
+	if opts.HTTPClient == nil {
+		opts.HTTPClient = http.DefaultClient
+	}
+	if opts.Header == nil {
+		opts.Header = http.Header{}
 	}
 
 	parsedURL, err := url.Parse(u)
@@ -87,16 +59,16 @@ func Dial(ctx context.Context, u string, opts ...DialOption) (_ *Conn, _ *http.R
 
 	req, _ := http.NewRequest("GET", parsedURL.String(), nil)
 	req = req.WithContext(ctx)
-	req.Header = header
+	req.Header = opts.Header
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "websocket")
 	req.Header.Set("Sec-WebSocket-Version", "13")
 	req.Header.Set("Sec-WebSocket-Key", secWebSocketKey)
-	if len(subprotocols) > 0 {
-		req.Header.Set("Sec-WebSocket-Protocol", strings.Join(subprotocols, ","))
+	if len(opts.Subprotocols) > 0 {
+		req.Header.Set("Sec-WebSocket-Protocol", strings.Join(opts.Subprotocols, ","))
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := opts.HTTPClient.Do(req)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -121,6 +93,7 @@ func Dial(ctx context.Context, u string, opts ...DialOption) (_ *Conn, _ *http.R
 		return nil, resp, xerrors.Errorf("websocket: body is not a read write closer but should be: %T", rwc)
 	}
 
+	// TODO pool bufio
 	c := &Conn{
 		subprotocol: resp.Header.Get("Sec-WebSocket-Protocol"),
 		br:          bufio.NewReader(rwc),
