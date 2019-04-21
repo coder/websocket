@@ -4,18 +4,18 @@ workflow "main" {
 }
 
 action "lint" {
-  uses = "../test/lint"
+  uses = "./ci/lint"
 }
 
 action "fmt" {
-  uses = "../test/fmt"
+  uses = "./ci/fmt"
 }
 
 action "test" {
-  uses = "../test/test"
+  uses = "./ci/test"
   secrets = ["CODECOV_TOKEN"]
 }
 
 action "bench" {
-  uses = "../test/bench"
+  uses = "./ci/bench"
 }
