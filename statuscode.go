@@ -10,6 +10,7 @@ import (
 )
 
 // StatusCode represents a WebSocket status code.
+// https://tools.ietf.org/html/rfc6455#section-7.4
 type StatusCode int
 
 //go:generate go run golang.org/x/tools/cmd/stringer -type=StatusCode
@@ -42,7 +43,7 @@ const (
 )
 
 // CloseError represents an error from a WebSocket close frame.
-// Methods on the Conn will only return this for a non normal close code.
+// It is returned by Conn's methods when the Connection is closed with a WebSocket close frame.
 type CloseError struct {
 	Code   StatusCode
 	Reason string

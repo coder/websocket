@@ -36,7 +36,9 @@ func TestHandshake(t *testing.T) {
 		{
 			name: "handshake",
 			server: func(w http.ResponseWriter, r *http.Request) error {
-				c, err := websocket.Accept(w, r, websocket.AcceptSubprotocols("myproto"))
+				c, err := websocket.Accept(w, r, websocket.AcceptOptions{
+					Subprotocols: []string{"myproto"},
+				})
 				if err != nil {
 					return err
 				}
@@ -44,7 +46,9 @@ func TestHandshake(t *testing.T) {
 				return nil
 			},
 			client: func(ctx context.Context, u string) error {
-				c, resp, err := websocket.Dial(ctx, u, websocket.DialSubprotocols("myproto"))
+				c, resp, err := websocket.Dial(ctx, u, websocket.DialOptions{
+					Subprotocols: []string{"myproto"},
+				})
 				if err != nil {
 					return err
 				}
@@ -70,7 +74,7 @@ func TestHandshake(t *testing.T) {
 		{
 			name: "defaultSubprotocol",
 			server: func(w http.ResponseWriter, r *http.Request) error {
-				c, err := websocket.Accept(w, r)
+				c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
 				if err != nil {
 					return err
 				}
@@ -82,7 +86,9 @@ func TestHandshake(t *testing.T) {
 				return nil
 			},
 			client: func(ctx context.Context, u string) error {
-				c, _, err := websocket.Dial(ctx, u, websocket.DialSubprotocols("meow"))
+				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{
+					Subprotocols: []string{"meow"},
+				})
 				if err != nil {
 					return err
 				}
@@ -97,7 +103,9 @@ func TestHandshake(t *testing.T) {
 		{
 			name: "subprotocol",
 			server: func(w http.ResponseWriter, r *http.Request) error {
-				c, err := websocket.Accept(w, r, websocket.AcceptSubprotocols("echo", "lar"))
+				c, err := websocket.Accept(w, r, websocket.AcceptOptions{
+					Subprotocols: []string{"echo", "lar"},
+				})
 				if err != nil {
 					return err
 				}
@@ -109,7 +117,9 @@ func TestHandshake(t *testing.T) {
 				return nil
 			},
 			client: func(ctx context.Context, u string) error {
-				c, _, err := websocket.Dial(ctx, u, websocket.DialSubprotocols("poof", "echo"))
+				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{
+					Subprotocols: []string{"poof", "echo"},
+				})
 				if err != nil {
 					return err
 				}
@@ -124,7 +134,7 @@ func TestHandshake(t *testing.T) {
 		{
 			name: "badOrigin",
 			server: func(w http.ResponseWriter, r *http.Request) error {
-				c, err := websocket.Accept(w, r)
+				c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
 				if err == nil {
 					c.Close(websocket.StatusInternalError, "")
 					return xerrors.New("expected error regarding bad origin")
@@ -134,7 +144,9 @@ func TestHandshake(t *testing.T) {
 			client: func(ctx context.Context, u string) error {
 				h := http.Header{}
 				h.Set("Origin", "http://unauthorized.com")
-				c, _, err := websocket.Dial(ctx, u, websocket.DialHeader(h))
+				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{
+					Header: h,
+				})
 				if err == nil {
 					c.Close(websocket.StatusInternalError, "")
 					return xerrors.New("expected handshake failure")
@@ -145,7 +157,7 @@ func TestHandshake(t *testing.T) {
 		{
 			name: "acceptSecureOrigin",
 			server: func(w http.ResponseWriter, r *http.Request) error {
-				c, err := websocket.Accept(w, r, websocket.AcceptInsecureOrigin())
+				c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
 				if err != nil {
 					return err
 				}
@@ -154,8 +166,10 @@ func TestHandshake(t *testing.T) {
 			},
 			client: func(ctx context.Context, u string) error {
 				h := http.Header{}
-				h.Set("Origin", "https://127.0.0.1")
-				c, _, err := websocket.Dial(ctx, u, websocket.DialHeader(h))
+				h.Set("Origin", u)
+				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{
+					Header: h,
+				})
 				if err != nil {
 					return err
 				}
@@ -166,7 +180,9 @@ func TestHandshake(t *testing.T) {
 		{
 			name: "acceptInsecureOrigin",
 			server: func(w http.ResponseWriter, r *http.Request) error {
-				c, err := websocket.Accept(w, r, websocket.AcceptInsecureOrigin())
+				c, err := websocket.Accept(w, r, websocket.AcceptOptions{
+					InsecureSkipVerify: true,
+				})
 				if err != nil {
 					return err
 				}
@@ -176,7 +192,9 @@ func TestHandshake(t *testing.T) {
 			client: func(ctx context.Context, u string) error {
 				h := http.Header{}
 				h.Set("Origin", "https://example.com")
-				c, _, err := websocket.Dial(ctx, u, websocket.DialHeader(h))
+				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{
+					Header: h,
+				})
 				if err != nil {
 					return err
 				}
@@ -187,7 +205,7 @@ func TestHandshake(t *testing.T) {
 		{
 			name: "echo",
 			server: func(w http.ResponseWriter, r *http.Request) error {
-				c, err := websocket.Accept(w, r)
+				c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
 				if err != nil {
 					return err
 				}
@@ -223,7 +241,7 @@ func TestHandshake(t *testing.T) {
 				return nil
 			},
 			client: func(ctx context.Context, u string) error {
-				c, _, err := websocket.Dial(ctx, u)
+				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{})
 				if err != nil {
 					return err
 				}
@@ -272,7 +290,7 @@ func TestHandshake(t *testing.T) {
 				if cookie.Value != "myvalue" {
 					return xerrors.Errorf("expected %q but got %q", "myvalue", cookie.Value)
 				}
-				c, err := websocket.Accept(w, r)
+				c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
 				if err != nil {
 					return err
 				}
@@ -298,9 +316,9 @@ func TestHandshake(t *testing.T) {
 				hc := &http.Client{
 					Jar: jar,
 				}
-				c, _, err := websocket.Dial(ctx, u,
-					websocket.DialHTTPClient(hc),
-				)
+				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{
+					HTTPClient: hc,
+				})
 				if err != nil {
 					return err
 				}
@@ -364,14 +382,14 @@ func TestAutobahnServer(t *testing.T) {
 	t.Parallel()
 
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := websocket.Accept(w, r,
-			websocket.AcceptSubprotocols("echo"),
-		)
+		c, err := websocket.Accept(w, r, websocket.AcceptOptions{
+			Subprotocols: []string{"echo"},
+		})
 		if err != nil {
 			t.Logf("server handshake failed: %+v", err)
 			return
 		}
-		echoLoop(r.Context(), c)
+		streamEchoLoop(r.Context(), c)
 	}))
 	defer s.Close()
 
@@ -418,7 +436,7 @@ func TestAutobahnServer(t *testing.T) {
 	checkWSTestIndex(t, "./wstest_reports/server/index.json")
 }
 
-func echoLoop(ctx context.Context, c *websocket.Conn) {
+func streamEchoLoop(ctx context.Context, c *websocket.Conn) {
 	defer c.Close(websocket.StatusInternalError, "")
 
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
@@ -426,12 +444,12 @@ func echoLoop(ctx context.Context, c *websocket.Conn) {
 
 	b := make([]byte, 32768)
 	echo := func() error {
-		typ, r, err := c.Read(ctx)
+		typ, r, err := c.Reader(ctx)
 		if err != nil {
 			return err
 		}
 
-		w, err := c.Write(ctx, typ)
+		w, err := c.Writer(ctx, typ)
 		if err != nil {
 			return err
 		}
@@ -447,6 +465,35 @@ func echoLoop(ctx context.Context, c *websocket.Conn) {
 		}
 
 		return nil
+	}
+
+	for {
+		err := echo()
+		if err != nil {
+			return
+		}
+	}
+}
+
+func bufferedEchoLoop(ctx context.Context, c *websocket.Conn) {
+	defer c.Close(websocket.StatusInternalError, "")
+
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
+	b := make([]byte, 131072+2)
+	echo := func() error {
+		typ, r, err := c.Reader(ctx)
+		if err != nil {
+			return err
+		}
+
+		n, err := io.ReadFull(r, b)
+		if err != io.ErrUnexpectedEOF {
+			return err
+		}
+
+		return c.Write(ctx, typ, b[:n])
 	}
 
 	for {
@@ -510,13 +557,13 @@ func TestAutobahnClient(t *testing.T) {
 
 	var cases int
 	func() {
-		c, _, err := websocket.Dial(ctx, "ws://localhost:9001/getCaseCount")
+		c, _, err := websocket.Dial(ctx, "ws://localhost:9001/getCaseCount", websocket.DialOptions{})
 		if err != nil {
 			t.Fatalf("failed to dial: %v", err)
 		}
 		defer c.Close(websocket.StatusInternalError, "")
 
-		_, r, err := c.Read(ctx)
+		_, r, err := c.Reader(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -537,15 +584,15 @@ func TestAutobahnClient(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, time.Second*45)
 			defer cancel()
 
-			c, _, err := websocket.Dial(ctx, fmt.Sprintf("ws://localhost:9001/runCase?case=%v&agent=main", i))
+			c, _, err := websocket.Dial(ctx, fmt.Sprintf("ws://localhost:9001/runCase?case=%v&agent=main", i), websocket.DialOptions{})
 			if err != nil {
 				t.Fatalf("failed to dial: %v", err)
 			}
-			echoLoop(ctx, c)
+			streamEchoLoop(ctx, c)
 		}()
 	}
 
-	c, _, err := websocket.Dial(ctx, fmt.Sprintf("ws://localhost:9001/updateReports?agent=main"))
+	c, _, err := websocket.Dial(ctx, fmt.Sprintf("ws://localhost:9001/updateReports?agent=main"), websocket.DialOptions{})
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}

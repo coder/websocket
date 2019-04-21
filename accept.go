@@ -12,72 +12,60 @@ import (
 	"golang.org/x/xerrors"
 )
 
-// AcceptOption is an option that can be passed to Accept.
-// The implementations of this interface are printable.
-type AcceptOption interface {
-	acceptOption()
-}
+// AcceptOptions represents the options available to pass to Accept.
+type AcceptOptions struct {
+	// Subprotocols lists the websocket subprotocols that Accept will negotiate with a client.
+	// The empty subprotocol will always be negotiated as per RFC 6455. If you would like to
+	// reject it, close the connection if c.Subprotocol() == "".
+	Subprotocols []string
 
-type acceptSubprotocols []string
-
-func (o acceptSubprotocols) acceptOption() {}
-
-// AcceptSubprotocols lists the websocket subprotocols that Accept will negotiate with a client.
-// The empty subprotocol will always be negotiated as per RFC 6455. If you would like to
-// reject it, close the connection if c.Subprotocol() == "".
-func AcceptSubprotocols(protocols ...string) AcceptOption {
-	return acceptSubprotocols(protocols)
-}
-
-type acceptInsecureOrigin struct{}
-
-func (o acceptInsecureOrigin) acceptOption() {}
-
-// AcceptInsecureOrigin disables Accept's origin verification
-// behaviour. By default Accept only allows the handshake to
-// succeed if the javascript  that is initiating the handshake
-// is on the same domain as the server. This is to prevent CSRF
-// when secure data is stored in cookies.
-//
-// See https://stackoverflow.com/a/37837709/4283659
-//
-// Use this if you want a WebSocket server any javascript can
-// connect to or you want to perform Origin verification yourself
-// and allow some whitelist of domains.
-//
-// Ensure you understand exactly what the above means before you use
-// this option in conjugation with cookies containing secure data.
-func AcceptInsecureOrigin() AcceptOption {
-	return acceptInsecureOrigin{}
+	// InsecureSkipVerify disables Accept's origin verification
+	// behaviour. By default Accept only allows the handshake to
+	// succeed if the javascript that is initiating the handshake
+	// is on the same domain as the server. This is to prevent CSRF
+	// when secure data is stored in a cookie as there is no same
+	// origin policy for WebSockets. In other words, javascript from
+	// any domain can perform a WebSocket dial on an arbitrary server.
+	// This dial will include cookies which means the arbitrary javascript
+	// can perform actions as the authenticated user.
+	//
+	// See https://stackoverflow.com/a/37837709/4283659
+	//
+	// The only time you need this is if your javascript is running on a different domain
+	// than your WebSocket server.
+	// Please think carefully about whether you really need this option before you use it.
+	// If you do, remember if you store secure data in cookies, you wil need to verify the
+	// Origin header.
+	InsecureSkipVerify bool
 }
 
 func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 	if !headerValuesContainsToken(r.Header, "Connection", "Upgrade") {
-		err := xerrors.Errorf("websocket: protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
+		err := xerrors.Errorf("websocket protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
 
 	if !headerValuesContainsToken(r.Header, "Upgrade", "WebSocket") {
-		err := xerrors.Errorf("websocket: protocol violation: Upgrade header %q does not contain websocket", r.Header.Get("Upgrade"))
+		err := xerrors.Errorf("websocket protocol violation: Upgrade header %q does not contain websocket", r.Header.Get("Upgrade"))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
 
 	if r.Method != "GET" {
-		err := xerrors.Errorf("websocket: protocol violation: handshake request method %q is not GET", r.Method)
+		err := xerrors.Errorf("websocket protocol violation: handshake request method %q is not GET", r.Method)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
 
 	if r.Header.Get("Sec-WebSocket-Version") != "13" {
-		err := xerrors.Errorf("websocket: unsupported protocol version: %q", r.Header.Get("Sec-WebSocket-Version"))
+		err := xerrors.Errorf("unsupported websocket protocol version: %q", r.Header.Get("Sec-WebSocket-Version"))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
 
 	if r.Header.Get("Sec-WebSocket-Key") == "" {
-		err := xerrors.New("websocket: protocol violation: missing Sec-WebSocket-Key")
+		err := xerrors.New("websocket protocol violation: missing Sec-WebSocket-Key")
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
@@ -88,26 +76,22 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 // Accept accepts a WebSocket handshake from a client and upgrades the
 // the connection to WebSocket.
 // Accept will reject the handshake if the Origin is not the same as the Host unless
-// the AcceptInsecureOrigin option is passed.
-// Accept uses w to write the handshake response so the timeouts on the http.Server apply.
-func Accept(w http.ResponseWriter, r *http.Request, opts ...AcceptOption) (*Conn, error) {
-	var subprotocols []string
-	verifyOrigin := true
-	for _, opt := range opts {
-		switch opt := opt.(type) {
-		case acceptInsecureOrigin:
-			verifyOrigin = false
-		case acceptSubprotocols:
-			subprotocols = []string(opt)
-		}
+// the InsecureSkipVerify option is set.
+func Accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, error) {
+	c, err := accept(w, r, opts)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to accept websocket connection: %w", err)
 	}
+	return c, nil
+}
 
+func accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, error) {
 	err := verifyClientRequest(w, r)
 	if err != nil {
 		return nil, err
 	}
 
-	if verifyOrigin {
+	if !opts.InsecureSkipVerify {
 		err = authenticateOrigin(r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusForbidden)
@@ -117,7 +101,7 @@ func Accept(w http.ResponseWriter, r *http.Request, opts ...AcceptOption) (*Conn
 
 	hj, ok := w.(http.Hijacker)
 	if !ok {
-		err = xerrors.New("websocket: response writer does not implement http.Hijacker")
+		err = xerrors.New("response writer must implement http.Hijacker")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return nil, err
 	}
@@ -127,7 +111,7 @@ func Accept(w http.ResponseWriter, r *http.Request, opts ...AcceptOption) (*Conn
 
 	handleKey(w, r)
 
-	subproto := selectSubprotocol(r, subprotocols)
+	subproto := selectSubprotocol(r, opts.Subprotocols)
 	if subproto != "" {
 		w.Header().Set("Sec-WebSocket-Protocol", subproto)
 	}
@@ -136,7 +120,7 @@ func Accept(w http.ResponseWriter, r *http.Request, opts ...AcceptOption) (*Conn
 
 	netConn, brw, err := hj.Hijack()
 	if err != nil {
-		err = xerrors.Errorf("websocket: failed to hijack connection: %w", err)
+		err = xerrors.Errorf("failed to hijack connection: %w", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return nil, err
 	}
@@ -190,5 +174,5 @@ func authenticateOrigin(r *http.Request) error {
 	if strings.EqualFold(u.Host, r.Host) {
 		return nil
 	}
-	return xerrors.Errorf("request origin %q is not authorized", origin)
+	return xerrors.Errorf("request origin %q is not authorized for host %q", origin, r.Host)
 }

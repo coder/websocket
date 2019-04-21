@@ -1,17 +1,21 @@
 workflow "main" {
   on = "push"
-  resolves = ["fmt", "lint", "test"]
+  resolves = ["fmt", "lint", "test", "bench"]
 }
 
 action "lint" {
-  uses = "./.github/lint"
+  uses = "./ci/lint"
 }
 
 action "fmt" {
-  uses = "./.github/fmt"
+  uses = "./ci/fmt"
 }
 
 action "test" {
-  uses = "./.github/test"
+  uses = "./ci/test"
   secrets = ["CODECOV_TOKEN"]
+}
+
+action "bench" {
+  uses = "./ci/bench"
 }

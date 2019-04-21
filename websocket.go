@@ -19,8 +19,9 @@ type control struct {
 }
 
 // Conn represents a WebSocket connection.
-// Pings will always be automatically responded to with pongs, you do not
-// have to do anything special.
+// All methods except Reader can be used concurrently.
+// Please be sure to call Close on the connection when you
+// are finished with it to release resources.
 type Conn struct {
 	subprotocol string
 	br          *bufio.Reader
@@ -59,7 +60,7 @@ type Conn struct {
 }
 
 func (c *Conn) close(err error) {
-	err = xerrors.Errorf("websocket: connection broken: %w", err)
+	err = xerrors.Errorf("connection broken: %w", err)
 
 	c.closeOnce.Do(func() {
 		runtime.SetFinalizer(c, nil)
@@ -95,7 +96,7 @@ func (c *Conn) init() {
 	c.readDone = make(chan int)
 
 	runtime.SetFinalizer(c, func(c *Conn) {
-		c.Close(StatusInternalError, "websocket: connection ended up being garbage collected")
+		c.Close(StatusInternalError, "connection garbage collected")
 	})
 
 	go c.writeLoop()
@@ -116,7 +117,7 @@ func (c *Conn) writeFrame(h header, p []byte) {
 		return
 	}
 
-	if h.opcode.controlOp() {
+	if h.fin {
 		err := c.bw.Flush()
 		if err != nil {
 			c.close(xerrors.Errorf("failed to write to connection: %w", err))
@@ -134,7 +135,6 @@ messageLoop:
 		select {
 		case <-c.closed:
 			return
-		case dataType = <-c.write:
 		case control := <-c.control:
 			h := header{
 				fin:           true,
@@ -147,8 +147,9 @@ messageLoop:
 			case <-c.closed:
 				return
 			case c.writeDone <- struct{}{}:
+				continue
 			}
-			continue
+		case dataType = <-c.write:
 		}
 
 		var firstSent bool
@@ -204,18 +205,6 @@ messageLoop:
 				}
 
 				c.writeFrame(h, nil)
-
-				select {
-				case <-c.closed:
-					return
-				case c.writeDone <- struct{}{}:
-				}
-
-				err := c.bw.Flush()
-				if err != nil {
-					c.close(xerrors.Errorf("failed to write to connection: %w", err))
-					return
-				}
 
 				continue messageLoop
 			}
@@ -369,6 +358,7 @@ func (c *Conn) writePong(p []byte) error {
 
 // Close closes the WebSocket connection with the given status code and reason.
 // It will write a WebSocket close frame with a timeout of 5 seconds.
+// Concurrent calls to Close are ok.
 func (c *Conn) Close(code StatusCode, reason string) error {
 	ce := CloseError{
 		Code:   code,
@@ -435,17 +425,17 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 	}
 }
 
-// Write returns a writer bounded by the context that will write
+// Writer returns a writer bounded by the context that will write
 // a WebSocket message of type dataType to the connection.
 // Ensure you close the writer once you have written the entire message.
-// Concurrent calls to Write are ok.
-func (c *Conn) Write(ctx context.Context, dataType MessageType) (io.WriteCloser, error) {
+// Concurrent calls to Writer are ok.
+func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, error) {
 	select {
 	case <-c.closed:
 		return nil, c.closeErr
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case c.write <- dataType:
+	case c.write <- typ:
 		return messageWriter{
 			ctx: ctx,
 			c:   c,
@@ -460,9 +450,6 @@ type messageWriter struct {
 }
 
 // Write writes the given bytes to the WebSocket connection.
-// The frame will automatically be fragmented as appropriate
-// with the buffers obtained from http.Hijacker.
-// Please ensure you call Close once you have written the full message.
 func (w messageWriter) Write(p []byte) (int, error) {
 	select {
 	case <-w.c.closed:
@@ -493,26 +480,19 @@ func (w messageWriter) Close() error {
 	case <-w.ctx.Done():
 		return w.ctx.Err()
 	case w.c.writeFlush <- struct{}{}:
-	}
-
-	select {
-	case <-w.c.closed:
-		return w.c.closeErr
-	case <-w.ctx.Done():
-		return w.ctx.Err()
-	case <-w.c.writeDone:
 		return nil
 	}
 }
 
-// ReadMessage will wait until there is a WebSocket data message to read from the connection.
+// Reader will wait until there is a WebSocket data message to read from the connection.
 // It returns the type of the message and a reader to read it.
 // The passed context will also bound the reader.
 // Your application must keep reading messages for the Conn to automatically respond to ping
 // and close frames and not become stuck waiting for a data message to be read.
 // Please ensure to read the full message from io.Reader.
-// You can only read a single message at a time.
-func (c *Conn) Read(ctx context.Context) (MessageType, io.Reader, error) {
+// You can only read a single message at a time so do not call this method
+// concurrently.
+func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 	for !atomic.CompareAndSwapInt64(&c.activeReader, 0, 1) {
 		select {
 		case <-c.closed:

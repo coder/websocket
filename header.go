@@ -128,7 +128,7 @@ func readHeader(r io.Reader) (header, error) {
 	case payloadLength == 127:
 		h.payloadLength = int64(binary.BigEndian.Uint64(b))
 		if h.payloadLength < 0 {
-			return header{}, xerrors.Errorf("websocket: header has negative payload length: %v", h.payloadLength)
+			return header{}, xerrors.Errorf("header with negative payload length: %v", h.payloadLength)
 		}
 		b = b[8:]
 	}
