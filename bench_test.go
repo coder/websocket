@@ -28,7 +28,7 @@ func benchConn(b *testing.B, stream bool) {
 			if stream {
 				streamEchoLoop(r.Context(), c)
 			} else {
-				bufferedEchoLoop(r.Context(), c)
+				streamEchoLoop(r.Context(), c)
 			}
 
 		}))

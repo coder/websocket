@@ -39,7 +39,7 @@ func (jc JSONConn) read(ctx context.Context, v interface{}) error {
 	}
 
 	if typ != MessageText {
-		return xerrors.Errorf("unexpected frame type for json (expected DataText): %v", typ)
+		return xerrors.Errorf("unexpected frame type for json (expected %v): %v", MessageText, typ)
 	}
 
 	r = io.LimitReader(r, 131072)
@@ -65,7 +65,7 @@ func (jc JSONConn) Write(ctx context.Context, v interface{}) error {
 func (jc JSONConn) write(ctx context.Context, v interface{}) error {
 	w, err := jc.Conn.Writer(ctx, MessageText)
 	if err != nil {
-		return xerrors.Errorf("failed to get message writer: %w", err)
+		return err
 	}
 
 	e := json.NewEncoder(w)

@@ -41,31 +41,31 @@ type AcceptOptions struct {
 
 func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 	if !headerValuesContainsToken(r.Header, "Connection", "Upgrade") {
-		err := xerrors.Errorf("websocket: protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
+		err := xerrors.Errorf("websocket protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
 
 	if !headerValuesContainsToken(r.Header, "Upgrade", "WebSocket") {
-		err := xerrors.Errorf("websocket: protocol violation: Upgrade header %q does not contain websocket", r.Header.Get("Upgrade"))
+		err := xerrors.Errorf("websocket protocol violation: Upgrade header %q does not contain websocket", r.Header.Get("Upgrade"))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
 
 	if r.Method != "GET" {
-		err := xerrors.Errorf("websocket: protocol violation: handshake request method %q is not GET", r.Method)
+		err := xerrors.Errorf("websocket protocol violation: handshake request method %q is not GET", r.Method)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
 
 	if r.Header.Get("Sec-WebSocket-Version") != "13" {
-		err := xerrors.Errorf("websocket: unsupported protocol version: %q", r.Header.Get("Sec-WebSocket-Version"))
+		err := xerrors.Errorf("unsupported websocket protocol version: %q", r.Header.Get("Sec-WebSocket-Version"))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
 
 	if r.Header.Get("Sec-WebSocket-Key") == "" {
-		err := xerrors.New("websocket: protocol violation: missing Sec-WebSocket-Key")
+		err := xerrors.New("websocket protocol violation: missing Sec-WebSocket-Key")
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
@@ -78,6 +78,14 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 // Accept will reject the handshake if the Origin is not the same as the Host unless
 // the InsecureSkipVerify option is set.
 func Accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, error) {
+	c, err := accept(w, r, opts)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to accept websocket connection: %w", err)
+	}
+	return c, nil
+}
+
+func accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, error) {
 	err := verifyClientRequest(w, r)
 	if err != nil {
 		return nil, err
@@ -93,7 +101,7 @@ func Accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, 
 
 	hj, ok := w.(http.Hijacker)
 	if !ok {
-		err = xerrors.New("websocket: response writer does not implement http.Hijacker")
+		err = xerrors.New("response writer must implement http.Hijacker")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return nil, err
 	}
@@ -112,7 +120,7 @@ func Accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, 
 
 	netConn, brw, err := hj.Hijack()
 	if err != nil {
-		err = xerrors.Errorf("websocket: failed to hijack connection: %w", err)
+		err = xerrors.Errorf("failed to hijack connection: %w", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return nil, err
 	}
@@ -166,5 +174,5 @@ func authenticateOrigin(r *http.Request) error {
 	if strings.EqualFold(u.Host, r.Host) {
 		return nil
 	}
-	return xerrors.Errorf("request origin %q is not authorized for host %v", origin, r.Host)
+	return xerrors.Errorf("request origin %q is not authorized for host %q", origin, r.Host)
 }

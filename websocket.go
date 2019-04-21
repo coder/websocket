@@ -60,7 +60,7 @@ type Conn struct {
 }
 
 func (c *Conn) close(err error) {
-	err = xerrors.Errorf("websocket: connection broken: %w", err)
+	err = xerrors.Errorf("connection broken: %w", err)
 
 	c.closeOnce.Do(func() {
 		runtime.SetFinalizer(c, nil)
@@ -96,7 +96,7 @@ func (c *Conn) init() {
 	c.readDone = make(chan int)
 
 	runtime.SetFinalizer(c, func(c *Conn) {
-		c.Close(StatusInternalError, "websocket: connection ended up being garbage collected")
+		c.Close(StatusInternalError, "connection garbage collected")
 	})
 
 	go c.writeLoop()

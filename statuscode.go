@@ -43,7 +43,7 @@ const (
 )
 
 // CloseError represents an error from a WebSocket close frame.
-// It is returned by a Conn's method when the Connection was closed with a WebSocket close frame.
+// It is returned by Conn's methods when the Connection is closed with a WebSocket close frame.
 type CloseError struct {
 	Code   StatusCode
 	Reason string

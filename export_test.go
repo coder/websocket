@@ -12,7 +12,7 @@ import (
 // to write an additional fin frame when Close is called on the writer which
 // can result in worse performance if the full message exceeds the buffer size
 // which is 4096 right now as then two syscalls will be necessary to complete the message.
-// TODO this is no good as we cannot write daata frame msg in between other ones
+// TODO this is no good as we cannot write data frame msg in between other ones
 func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	return c.writeControl(ctx, opcode(typ), p)
 }

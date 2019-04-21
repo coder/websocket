@@ -35,7 +35,15 @@ type DialOptions struct {
 var secWebSocketKey = base64.StdEncoding.EncodeToString(make([]byte, 16))
 
 // Dial performs a WebSocket handshake on the given url with the given options.
-func Dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Response, err error) {
+func Dial(ctx context.Context, u string, opts DialOptions) (*Conn, *http.Response, error) {
+	c, r, err := dial(ctx, u, opts)
+	if err != nil {
+		return nil, r, xerrors.Errorf("failed to websocket dial: %w", err)
+	}
+	return c, r, nil
+}
+
+func dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Response, err error) {
 	if opts.HTTPClient == nil {
 		opts.HTTPClient = http.DefaultClient
 	}
@@ -45,7 +53,7 @@ func Dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Res
 
 	parsedURL, err := url.Parse(u)
 	if err != nil {
-		return nil, nil, xerrors.Errorf("failed to parse websocket url: %w", err)
+		return nil, nil, xerrors.Errorf("failed to parse url: %w", err)
 	}
 
 	switch parsedURL.Scheme {
@@ -54,7 +62,7 @@ func Dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Res
 	case "wss":
 		parsedURL.Scheme = "https"
 	default:
-		return nil, nil, xerrors.Errorf("unknown scheme in url: %q", parsedURL.Scheme)
+		return nil, nil, xerrors.Errorf("unexpected url scheme scheme: %q", parsedURL.Scheme)
 	}
 
 	req, _ := http.NewRequest("GET", parsedURL.String(), nil)
@@ -70,7 +78,7 @@ func Dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Res
 
 	resp, err := opts.HTTPClient.Do(req)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, xerrors.Errorf("failed to send handshake request: %w", err)
 	}
 	defer func() {
 		respBody := resp.Body
@@ -90,7 +98,7 @@ func Dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Res
 
 	rwc, ok := resp.Body.(io.ReadWriteCloser)
 	if !ok {
-		return nil, resp, xerrors.Errorf("websocket: body is not a read write closer but should be: %T", rwc)
+		return nil, resp, xerrors.Errorf("response body is not a read write closer: %T", rwc)
 	}
 
 	// TODO pool bufio
@@ -108,15 +116,15 @@ func Dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Res
 
 func verifyServerResponse(resp *http.Response) error {
 	if resp.StatusCode != http.StatusSwitchingProtocols {
-		return xerrors.Errorf("websocket: expected status code %v but got %v", http.StatusSwitchingProtocols, resp.StatusCode)
+		return xerrors.Errorf("expected handshake response status code %v but got %v", http.StatusSwitchingProtocols, resp.StatusCode)
 	}
 
 	if !headerValuesContainsToken(resp.Header, "Connection", "Upgrade") {
-		return xerrors.Errorf("websocket: protocol violation: Connection header does not contain Upgrade: %q", resp.Header.Get("Connection"))
+		return xerrors.Errorf("websocket protocol violation: Connection header does not contain Upgrade: %q", resp.Header.Get("Connection"))
 	}
 
 	if !headerValuesContainsToken(resp.Header, "Upgrade", "WebSocket") {
-		return xerrors.Errorf("websocket: protocol violation: Upgrade header does not contain websocket: %q", resp.Header.Get("Upgrade"))
+		return xerrors.Errorf("websocket protocol violation: Upgrade header does not contain websocket: %q", resp.Header.Get("Upgrade"))
 	}
 
 	// We do not care about Sec-WebSocket-Accept because it does not matter.

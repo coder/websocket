@@ -12,5 +12,6 @@ go test --vet=off --run=^$ -bench=. \
 	./...
 
 set +x
+echo
 echo "profiles are in ./profs
 keep in mind that every profiler Go provides is enabled so that may skew the benchmarks"

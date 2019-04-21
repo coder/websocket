@@ -13,4 +13,4 @@ Be sure to link to an existing issue if one exists. In general, try creating an 
 before making a PR to get some discussion going and to make sure you do not spend time
 on a PR that may be rejected.
 
-Run `test/run.sh` to test your changes. You only need docker and bash to run the tests.
+Run `ci/run.sh` to test your changes. You only need docker and bash to run the tests.
