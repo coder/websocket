@@ -79,9 +79,9 @@ For a production quality example that shows off the low level API, see the [echo
 ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 defer cancel()
 
-c, _, err := websocket.Dial(ctx, "ws://localhost:8080")
+c, _, err := websocket.Dial(ctx, "ws://localhost:8080", websocket.DialOptions{})
 if err != nil {
-	log.Fatalf("failed to ws dial: %v", err)
+	return err
 }
 defer c.Close(websocket.StatusInternalError, "")
 
@@ -92,7 +92,7 @@ jc := websocket.JSONConn{
 var v interface{}
 err = jc.Read(ctx, &v)
 if err != nil {
-	log.Fatalf("failed to read json: %v", err)
+	return err
 }
 
 log.Printf("received %v", v)

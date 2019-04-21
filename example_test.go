@@ -115,7 +115,7 @@ func ExampleDial() {
 
 	c, _, err := websocket.Dial(ctx, "ws://localhost:8080", websocket.DialOptions{})
 	if err != nil {
-		log.Fatalf("failed to ws dial: %v", err)
+		return
 	}
 	defer c.Close(websocket.StatusInternalError, "")
 
@@ -126,7 +126,7 @@ func ExampleDial() {
 	var v interface{}
 	err = jc.Read(ctx, &v)
 	if err != nil {
-		log.Fatalf("failed to read json: %v", err)
+		return
 	}
 
 	log.Printf("received %v", v)
