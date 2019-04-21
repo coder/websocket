@@ -28,7 +28,7 @@ func benchConn(b *testing.B, stream bool) {
 			if stream {
 				streamEchoLoop(r.Context(), c)
 			} else {
-				streamEchoLoop(r.Context(), c)
+				bufferedEchoLoop(r.Context(), c)
 			}
 
 		}))
@@ -46,11 +46,10 @@ func benchConn(b *testing.B, stream bool) {
 		defer c.Close(websocket.StatusInternalError, "")
 
 		runN := func(n int) {
+			msg := []byte(strings.Repeat("2", n))
+			buf := make([]byte, len(msg))
 			b.Run(strconv.Itoa(n), func(b *testing.B) {
-				msg := []byte(strings.Repeat("2", n))
-				buf := make([]byte, len(msg))
 				b.SetBytes(int64(len(msg)))
-				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
 					if stream {
 						w, err := c.Writer(ctx, websocket.MessageText)
@@ -83,18 +82,17 @@ func benchConn(b *testing.B, stream bool) {
 						b.Fatal(err)
 					}
 				}
-				b.StopTimer()
 			})
 		}
 
-		runN(32)
-		runN(128)
-		runN(512)
-		runN(1024)
+		// runN(32)
+		// runN(128)
+		// runN(512)
+		// runN(1024)
 		runN(4096)
 		runN(16384)
-		runN(65536)
-		runN(131072)
+		// runN(65536)
+		// runN(131072)
 
 		c.Close(websocket.StatusNormalClosure, "")
 	})

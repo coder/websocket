@@ -25,7 +25,7 @@ go get nhooyr.io/websocket
 - context.Context is first class
 - net/http is used for WebSocket dials and upgrades
 - Thoroughly tested, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
-- JSON helpers
+- All returned errors include detailed context
 
 ## Roadmap
 
@@ -34,44 +34,36 @@ go get nhooyr.io/websocket
 
 ## Example
 
+For a production quality example that shows off the full API, see the echo example on the godoc.
+
 ### Server
 
 ```go
-fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	c, err := websocket.Accept(w, r)
+http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
 	if err != nil {
-		log.Printf("server handshake failed: %v", err)
-		return
+		// ...
 	}
 	defer c.Close(websocket.StatusInternalError, "")
-
-	jc := websocket.JSONConn{
-		Conn: c,
-	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), time.Second*10)
 	defer cancel()
 
-	v := map[string]interface{}{
-		"my_field": "foo",
-	}
-	err = jc.Write(ctx, v)
+	_, r, err := c.Reader(ctx)
 	if err != nil {
-		log.Printf("failed to write json: %v", err)
-		return
+		// ...
 	}
-
-	log.Printf("wrote %v", v)
-
+	
+	b, err := ioutil.ReadAll(r)
+	if err != nil {
+		// ...
+	}
+	
+	fmt.Printf("received %q\n", b)
+	
 	c.Close(websocket.StatusNormalClosure, "")
 })
-err := http.ListenAndServe("localhost:8080", fn)
-if err != nil {
-	log.Fatalf("failed to listen and serve: %v", err)
-}
 ```
-
-For a production quality example that shows off the low level API, see the [echo server example](https://github.com/nhooyr/websocket/blob/master/example_test.go#L15).
 
 ### Client
 
@@ -85,17 +77,20 @@ if err != nil {
 }
 defer c.Close(websocket.StatusInternalError, "")
 
-jc := websocket.JSONConn{
-	Conn: c,
-}
-
-var v interface{}
-err = jc.Read(ctx, &v)
+ww, err := c.Writer(ctx)
 if err != nil {
-	return err
+	// ...
 }
 
-log.Printf("received %v", v)
+_, err = ww.Write([]byte("hi"))
+if err != nil {
+	// ...
+}
+
+err = ww.Close()
+if err != nil {
+	// ...
+}
 
 c.Close(websocket.StatusNormalClosure, "")
 ```

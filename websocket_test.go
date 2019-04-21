@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -202,84 +201,84 @@ func TestHandshake(t *testing.T) {
 				return nil
 			},
 		},
-		{
-			name: "echo",
-			server: func(w http.ResponseWriter, r *http.Request) error {
-				c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
-				if err != nil {
-					return err
-				}
-				defer c.Close(websocket.StatusInternalError, "")
-
-				ctx, cancel := context.WithTimeout(r.Context(), time.Second*5)
-				defer cancel()
-
-				write := func() error {
-					jc := websocket.JSONConn{
-						Conn: c,
-					}
-
-					v := map[string]interface{}{
-						"anmol": "wowow",
-					}
-					err = jc.Write(ctx, v)
-					if err != nil {
-						return err
-					}
-					return nil
-				}
-				err = write()
-				if err != nil {
-					return err
-				}
-				err = write()
-				if err != nil {
-					return err
-				}
-
-				c.Close(websocket.StatusNormalClosure, "")
-				return nil
-			},
-			client: func(ctx context.Context, u string) error {
-				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{})
-				if err != nil {
-					return err
-				}
-				defer c.Close(websocket.StatusInternalError, "")
-
-				jc := websocket.JSONConn{
-					Conn: c,
-				}
-
-				read := func() error {
-					var v interface{}
-					err = jc.Read(ctx, &v)
-					if err != nil {
-						return err
-					}
-
-					exp := map[string]interface{}{
-						"anmol": "wowow",
-					}
-					if !reflect.DeepEqual(exp, v) {
-						return xerrors.Errorf("expected %v but got %v", exp, v)
-					}
-					return nil
-				}
-				err = read()
-				if err != nil {
-					return err
-				}
-				// Read twice to ensure the un EOFed previous reader works correctly.
-				err = read()
-				if err != nil {
-					return err
-				}
-
-				c.Close(websocket.StatusNormalClosure, "")
-				return nil
-			},
-		},
+		// {
+		// 	name: "echo",
+		// 	server: func(w http.ResponseWriter, r *http.Request) error {
+		// 		c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
+		// 		if err != nil {
+		// 			return err
+		// 		}
+		// 		defer c.Close(websocket.StatusInternalError, "")
+		//
+		// 		ctx, cancel := context.WithTimeout(r.Context(), time.Second*5)
+		// 		defer cancel()
+		//
+		// 		write := func() error {
+		// 			jc := websocket.JSONConn{
+		// 				C: c,
+		// 			}
+		//
+		// 			v := map[string]interface{}{
+		// 				"anmol": "wowow",
+		// 			}
+		// 			err = jc.Write(ctx, v)
+		// 			if err != nil {
+		// 				return err
+		// 			}
+		// 			return nil
+		// 		}
+		// 		err = write()
+		// 		if err != nil {
+		// 			return err
+		// 		}
+		// 		err = write()
+		// 		if err != nil {
+		// 			return err
+		// 		}
+		//
+		// 		c.Close(websocket.StatusNormalClosure, "")
+		// 		return nil
+		// 	},
+		// 	client: func(ctx context.Context, u string) error {
+		// 		c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{})
+		// 		if err != nil {
+		// 			return err
+		// 		}
+		// 		defer c.Close(websocket.StatusInternalError, "")
+		//
+		// 		jc := websocket.JSONConn{
+		// 			C: c,
+		// 		}
+		//
+		// 		read := func() error {
+		// 			var v interface{}
+		// 			err = jc.Read(ctx, &v)
+		// 			if err != nil {
+		// 				return err
+		// 			}
+		//
+		// 			exp := map[string]interface{}{
+		// 				"anmol": "wowow",
+		// 			}
+		// 			if !reflect.DeepEqual(exp, v) {
+		// 				return xerrors.Errorf("expected %v but got %v", exp, v)
+		// 			}
+		// 			return nil
+		// 		}
+		// 		err = read()
+		// 		if err != nil {
+		// 			return err
+		// 		}
+		// 		// Read twice to ensure the un EOFed previous reader works correctly.
+		// 		err = read()
+		// 		if err != nil {
+		// 			return err
+		// 		}
+		//
+		// 		c.Close(websocket.StatusNormalClosure, "")
+		// 		return nil
+		// 	},
+		// },
 		{
 			name: "cookies",
 			server: func(w http.ResponseWriter, r *http.Request) error {
