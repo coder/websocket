@@ -34,7 +34,7 @@ go get nhooyr.io/websocket
 
 ## Example
 
-For a production quality example that shows off the full API, see the echo example on the godoc.
+For a production quality example that shows off the full API, see the [echo example on the godoc](https://godoc.org/nhooyr.io/websocket#example-package--Echo).
 
 ### Server
 
@@ -82,12 +82,12 @@ if err != nil {
 	// ...
 }
 
-_, err = ww.Write([]byte("hi"))
+_, err = w.Write([]byte("hi"))
 if err != nil {
 	// ...
 }
 
-err = ww.Close()
+err = w.Close()
 if err != nil {
 	// ...
 }
