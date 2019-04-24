@@ -4,7 +4,7 @@
 
 websocket is a minimal and idiomatic WebSocket library for Go.
 
-At minimum Go 1.12 is required as websocket uses a new [feature](https://github.com/golang/go/issues/26937#issuecomment-415855861) in net/http
+Go 1.12 is required as it uses a new [feature](https://github.com/golang/go/issues/26937#issuecomment-415855861) in net/http
 to perform WebSocket handshakes.
 
 This library is not final and the API is subject to change.
@@ -19,13 +19,11 @@ go get nhooyr.io/websocket
 
 ## Features
 
-- Full support of the WebSocket protocol
-- Zero dependencies outside of the stdlib
-- Very minimal and carefully considered API
-- context.Context is first class
-- net/http is used for WebSocket dials and upgrades
+- Minimal yet pragmatic API
+- First class context.Context support
 - Thoroughly tested, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
-- All returned errors include detailed context
+- Concurrent writes
+- Zero dependencies outside of the stdlib
 
 ## Roadmap
 
@@ -97,44 +95,44 @@ c.Close(websocket.StatusNormalClosure, "")
 
 ## Design considerations
 
-- Minimal API is easier to maintain and for others to learn
+- Minimal API is easier to maintain and learn
 - Context based cancellation is more ergonomic and robust than setting deadlines
-- No pings or pongs because TCP keep alives work fine for HTTP/1.1 and they do not make
+- No ping support because TCP keep alives work fine for HTTP/1.1 and they do not make
   sense with HTTP/2 (see #1)
 - net.Conn is never exposed as WebSocket's over HTTP/2 will not have a net.Conn.
-- Functional options make the API very clean and easy to extend
+- Structures are nicer than functional options, see [google/go-cloud#908](https://github.com/google/go-cloud/issues/908#issuecomment-445034143)
 - Using net/http's Client for dialing means we do not have to reinvent dialing hooks
-  and configurations. Just pass in a custom net/http client if you want custom dialing.
+  and configurations like other WebSocket libraries
 
 ## Comparison
 
 While I believe nhooyr/websocket has a better API than existing libraries, 
 both gorilla/websocket and gobwas/ws were extremely useful in implementing the
-WebSocket protocol correctly so big thanks to the authors of both. In particular,
+WebSocket protocol correctly so **big thanks** to the authors of both. In particular,
 I made sure to go through the issue tracker of gorilla/websocket to make sure
-I implemented details correctly.
+I implemented details correctly and understood how people were using the package
+in production.
 
 ### gorilla/websocket
 
 https://github.com/gorilla/websocket
 
-This package is the community standard but it is very old and over time
-has accumulated cruft. There are many ways to do the same thing and the API
-is not clear. Just compare the godoc of
+This package is the community standard but it is 6 years old and over time
+has accumulated cruft. There are many ways to do the same thing, usage is not clear
+and there are some rough edges. Just compare the godoc of
 [nhooyr/websocket](godoc.org/github.com/nhooyr/websocket) side by side with
 [gorilla/websocket](godoc.org/github.com/gorilla/websocket).
 
 The API for nhooyr/websocket has been designed such that there is only one way to do things
-which makes using it correctly and safely much easier.
-
-In terms of lines of code, this library is around 2000 whereas gorilla/websocket is
-at 7000. So while the API for nhooyr/websocket is simpler, the implementation is also
-significantly simpler and easier to test which reduces the surface are of bugs.
+which makes it easy to use correctly.
 
 Furthermore, nhooyr/websocket has support for newer Go idioms such as context.Context and
 also uses net/http's Client and ResponseWriter directly for WebSocket handshakes.
 gorilla/websocket writes its handshakes directly to a net.Conn which means
 it has to reinvent hooks for TLS and proxying and prevents support of HTTP/2.
+
+Another advantage of nhooyr/websocket is that it supports multiple concurrent writers out
+of the box.
 
 ### x/net/websocket
 
@@ -149,12 +147,12 @@ See https://github.com/golang/go/issues/18152
 https://github.com/gobwas/ws
 
 This library has an extremely flexible API but that comes at the cost of usability
-and clarity. Its not clear what the best way to do anything is.
+and clarity. 
 
 This library is fantastic in terms of performance. The author put in significant
 effort to ensure its speed and I have applied as many of its optimizations as
-I could into nhooyr/websocket.
+I could into nhooyr/websocket. Definitely check out his fantastic [blog post](https://medium.freecodecamp.org/million-websockets-and-go-cc58418460bb) about performant WebSocket servers.
 
 If you want a library that gives you absolute control over everything, this is the library,
-but for most users, the API provided by nhooyr/websocket will definitely fit better as it will
-be just as performant but much easier to use correctly.
+but for most users, the API provided by nhooyr/websocket will fit better as it is just as
+performant but much easier to use correctly and idiomatic.

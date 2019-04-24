@@ -17,7 +17,13 @@ import (
 	"nhooyr.io/websocket"
 )
 
+// Example_echo starts a WebSocket echo server and
+// then dials the server and sends 5 different messages
+// and prints out the server's responses.
 func Example_echo() {
+	// First we listen on port 0, that means the OS will
+	// assign us a random free port. This is the listener
+	// the server will serve on and the client will connect to.
 	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -37,6 +43,7 @@ func Example_echo() {
 	}
 	defer s.Close()
 
+	// This starts the echo server on the listener.
 	go func() {
 		err := s.Serve(l)
 		if err != http.ErrServerClosed {
@@ -44,6 +51,7 @@ func Example_echo() {
 		}
 	}()
 
+	// Now we dial the server and send the messages.
 	err = client("ws://" + l.Addr().String())
 	if err != nil {
 		log.Fatalf("client failed: %v", err)
@@ -57,6 +65,9 @@ func Example_echo() {
 	// {"i":4}
 }
 
+// echoServer is the WebSocket echo server implementation.
+// It ensures the client speaks the echo subprotocol and
+// only allows one message every 100ms with a 10 message burst.
 func echoServer(w http.ResponseWriter, r *http.Request) error {
 	c, err := websocket.Accept(w, r, websocket.AcceptOptions{
 		Subprotocols: []string{"echo"},
@@ -82,6 +93,10 @@ func echoServer(w http.ResponseWriter, r *http.Request) error {
 	}
 }
 
+// echo reads from the websocket connection and then writes
+// the received message back to it.
+// It only waits 1 minute to read and write the message and
+// limits the received message to 32768 bytes.
 func echo(ctx context.Context, c *websocket.Conn, l *rate.Limiter) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
@@ -111,6 +126,9 @@ func echo(ctx context.Context, c *websocket.Conn, l *rate.Limiter) error {
 	return err
 }
 
+// client dials the WebSocket echo server at the given url.
+// It then sends it 5 different messages and echo's the server's
+// response to each.
 func client(url string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

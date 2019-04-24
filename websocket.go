@@ -429,6 +429,8 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 // a WebSocket message of type dataType to the connection.
 // Ensure you close the writer once you have written the entire message.
 // Concurrent calls to Writer are ok.
+// Writer will block if there is another goroutine with an open writer
+// until writer is closed.
 func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, error) {
 	select {
 	case <-c.closed:
