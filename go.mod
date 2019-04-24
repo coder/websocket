@@ -3,6 +3,7 @@ module nhooyr.io/websocket
 go 1.12
 
 require (
+	github.com/golang/protobuf v1.3.1
 	github.com/google/go-cmp v0.2.0
 	github.com/kr/pretty v0.1.0 // indirect
 	go.coder.com/go-tools v0.0.0-20190317003359-0c6a35b74a16

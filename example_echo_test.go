@@ -2,10 +2,8 @@ package websocket_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -15,6 +13,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/wsjson"
 )
 
 // Example_echo starts a WebSocket echo server and
@@ -58,11 +57,11 @@ func Example_echo() {
 	}
 
 	// Output:
-	// {"i":0}
-	// {"i":1}
-	// {"i":2}
-	// {"i":3}
-	// {"i":4}
+	// 0
+	// 1
+	// 2
+	// 3
+	// 4
 }
 
 // echoServer is the WebSocket echo server implementation.
@@ -142,39 +141,20 @@ func client(url string) error {
 	defer c.Close(websocket.StatusInternalError, "")
 
 	for i := 0; i < 5; i++ {
-		w, err := c.Writer(ctx, websocket.MessageText)
-		if err != nil {
-			return err
-		}
-
-		e := json.NewEncoder(w)
-		err = e.Encode(map[string]int{
+		err = wsjson.Write(ctx, c, map[string]int{
 			"i": i,
 		})
 		if err != nil {
 			return err
 		}
 
-		err = w.Close()
+		v := map[string]int{}
+		err = wsjson.Read(ctx, c, &v)
 		if err != nil {
 			return err
 		}
 
-		typ, r, err := c.Reader(ctx)
-		if err != nil {
-			return err
-		}
-
-		if typ != websocket.MessageText {
-			return xerrors.Errorf("expected text message but got %v", typ)
-		}
-
-		msg2, err := ioutil.ReadAll(r)
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("%s", msg2)
+		fmt.Printf("%v\n", v["i"])
 	}
 
 	c.Close(websocket.StatusNormalClosure, "")

@@ -2,7 +2,7 @@
 //
 // See https://tools.ietf.org/html/rfc6455
 //
-// Please see https://nhooyr.io/websocket for thorough overview docs and a
+// Please see https://nhooyr.io/websocket for overview docs and a
 // comparison with existing implementations.
 //
 // Conn, Dial, and Accept are the main entrypoints into this package. Use Dial to dial

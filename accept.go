@@ -34,8 +34,8 @@ type AcceptOptions struct {
 	// The only time you need this is if your javascript is running on a different domain
 	// than your WebSocket server.
 	// Please think carefully about whether you really need this option before you use it.
-	// If you do, remember if you store secure data in cookies, you wil need to verify the
-	// Origin header.
+	// If you do, remember that if you store secure data in cookies, you wil need to verify the
+	// Origin header yourself otherwise you are exposing yourself to a CSRF attack.
 	InsecureSkipVerify bool
 }
 

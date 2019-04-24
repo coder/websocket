@@ -23,6 +23,7 @@ type DialOptions struct {
 	HTTPClient *http.Client
 
 	// Header specifies the HTTP headers included in the handshake request.
+	// TODO rename to HTTPHeader
 	Header http.Header
 
 	// Subprotocols lists the subprotocols to negotiate with the server.

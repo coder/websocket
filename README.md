@@ -23,7 +23,8 @@ go get nhooyr.io/websocket
 - First class context.Context support
 - Thoroughly tested, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 - Concurrent writes
-- Zero dependencies outside of the stdlib
+- Zero dependencies outside of the stdlib for the core library
+- JSON and ProtoBuf helpers in the wsjson and wspb subpackages
 
 ## Roadmap
 

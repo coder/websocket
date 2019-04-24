@@ -12,16 +12,21 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/ptypes"
+	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/wsjson"
+	"nhooyr.io/websocket/wspb"
 )
 
 func TestHandshake(t *testing.T) {
@@ -201,84 +206,139 @@ func TestHandshake(t *testing.T) {
 				return nil
 			},
 		},
-		// {
-		// 	name: "echo",
-		// 	server: func(w http.ResponseWriter, r *http.Request) error {
-		// 		c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
-		// 		if err != nil {
-		// 			return err
-		// 		}
-		// 		defer c.Close(websocket.StatusInternalError, "")
-		//
-		// 		ctx, cancel := context.WithTimeout(r.Context(), time.Second*5)
-		// 		defer cancel()
-		//
-		// 		write := func() error {
-		// 			jc := websocket.JSONConn{
-		// 				C: c,
-		// 			}
-		//
-		// 			v := map[string]interface{}{
-		// 				"anmol": "wowow",
-		// 			}
-		// 			err = jc.Write(ctx, v)
-		// 			if err != nil {
-		// 				return err
-		// 			}
-		// 			return nil
-		// 		}
-		// 		err = write()
-		// 		if err != nil {
-		// 			return err
-		// 		}
-		// 		err = write()
-		// 		if err != nil {
-		// 			return err
-		// 		}
-		//
-		// 		c.Close(websocket.StatusNormalClosure, "")
-		// 		return nil
-		// 	},
-		// 	client: func(ctx context.Context, u string) error {
-		// 		c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{})
-		// 		if err != nil {
-		// 			return err
-		// 		}
-		// 		defer c.Close(websocket.StatusInternalError, "")
-		//
-		// 		jc := websocket.JSONConn{
-		// 			C: c,
-		// 		}
-		//
-		// 		read := func() error {
-		// 			var v interface{}
-		// 			err = jc.Read(ctx, &v)
-		// 			if err != nil {
-		// 				return err
-		// 			}
-		//
-		// 			exp := map[string]interface{}{
-		// 				"anmol": "wowow",
-		// 			}
-		// 			if !reflect.DeepEqual(exp, v) {
-		// 				return xerrors.Errorf("expected %v but got %v", exp, v)
-		// 			}
-		// 			return nil
-		// 		}
-		// 		err = read()
-		// 		if err != nil {
-		// 			return err
-		// 		}
-		// 		// Read twice to ensure the un EOFed previous reader works correctly.
-		// 		err = read()
-		// 		if err != nil {
-		// 			return err
-		// 		}
-		//
-		// 		c.Close(websocket.StatusNormalClosure, "")
-		// 		return nil
-		// 	},
-		// },
+		{
+			name: "jsonEcho",
+			server: func(w http.ResponseWriter, r *http.Request) error {
+				c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+
+				ctx, cancel := context.WithTimeout(r.Context(), time.Second*5)
+				defer cancel()
+
+				write := func() error {
+					v := map[string]interface{}{
+						"anmol": "wowow",
+					}
+					err := wsjson.Write(ctx, c, v)
+					return err
+				}
+				err = write()
+				if err != nil {
+					return err
+				}
+				err = write()
+				if err != nil {
+					return err
+				}
+
+				c.Close(websocket.StatusNormalClosure, "")
+				return nil
+			},
+			client: func(ctx context.Context, u string) error {
+				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{})
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+
+				read := func() error {
+					var v interface{}
+					err := wsjson.Read(ctx, c, &v)
+					if err != nil {
+						return err
+					}
+
+					exp := map[string]interface{}{
+						"anmol": "wowow",
+					}
+					if !reflect.DeepEqual(exp, v) {
+						return xerrors.Errorf("expected %v but got %v", exp, v)
+					}
+					return nil
+				}
+				err = read()
+				if err != nil {
+					return err
+				}
+				// Read twice to ensure the un EOFed previous reader works correctly.
+				err = read()
+				if err != nil {
+					return err
+				}
+
+				c.Close(websocket.StatusNormalClosure, "")
+				return nil
+			},
+		},
+		{
+			name: "protobufEcho",
+			server: func(w http.ResponseWriter, r *http.Request) error {
+				c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+
+				ctx, cancel := context.WithTimeout(r.Context(), time.Second*5)
+				defer cancel()
+
+				write := func() error {
+					err := wspb.Write(ctx, c, ptypes.DurationProto(100))
+					return err
+				}
+				err = write()
+				if err != nil {
+					return err
+				}
+				err = write()
+				if err != nil {
+					return err
+				}
+
+				c.Close(websocket.StatusNormalClosure, "")
+				return nil
+			},
+			client: func(ctx context.Context, u string) error {
+				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{})
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+
+				read := func() error {
+					var v duration.Duration
+					err := wspb.Read(ctx, c, &v)
+					if err != nil {
+						return err
+					}
+
+					d, err := ptypes.Duration(&v)
+					if err != nil {
+						return xerrors.Errorf("failed to convert duration.Duration to time.Duration: %w", err)
+					}
+					const exp = time.Duration(100)
+					if !reflect.DeepEqual(exp, d) {
+						return xerrors.Errorf("expected %v but got %v", exp, d)
+					}
+					return nil
+				}
+				err = read()
+				if err != nil {
+					return err
+				}
+				// Read twice to ensure the un EOFed previous reader works correctly.
+				err = read()
+				if err != nil {
+					return err
+				}
+
+				c.Close(websocket.StatusNormalClosure, "")
+				return nil
+			},
+		},
 		{
 			name: "cookies",
 			server: func(w http.ResponseWriter, r *http.Request) error {

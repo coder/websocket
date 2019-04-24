@@ -489,9 +489,12 @@ func (w messageWriter) Close() error {
 // Reader will wait until there is a WebSocket data message to read from the connection.
 // It returns the type of the message and a reader to read it.
 // The passed context will also bound the reader.
+//
 // Your application must keep reading messages for the Conn to automatically respond to ping
 // and close frames and not become stuck waiting for a data message to be read.
-// Please ensure to read the full message from io.Reader.
+// Please ensure to read the full message from io.Reader. If you do not read till
+// io.EOF, the connection will break unless the next read would have yielded io.EOF.
+//
 // You can only read a single message at a time so do not call this method
 // concurrently.
 func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
