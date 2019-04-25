@@ -85,14 +85,14 @@ func benchConn(b *testing.B, stream bool) {
 			})
 		}
 
-		// runN(32)
-		// runN(128)
-		// runN(512)
-		// runN(1024)
+		runN(32)
+		runN(128)
+		runN(512)
+		runN(1024)
 		runN(4096)
 		runN(16384)
-		// runN(65536)
-		// runN(131072)
+		runN(65536)
+		runN(131072)
 
 		c.Close(websocket.StatusNormalClosure, "")
 	})

@@ -5,9 +5,11 @@ source ci/lib.sh || exit 1
 mkdir -p profs
 
 set +x
+echo
 echo "this step includes benchmarks for race detection and coverage purposes
 but the numbers will be misleading. please see the bench step for more
 accurate numbers"
+echo
 set -x
 
 go test -race -coverprofile=profs/coverage --vet=off -bench=. ./...
