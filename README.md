@@ -31,36 +31,32 @@ go get nhooyr.io/websocket
 - [ ] WebSockets over HTTP/2 [#4](https://github.com/nhooyr/websocket/issues/4)
 - [ ] Deflate extension support [#5](https://github.com/nhooyr/websocket/issues/5)
 
-## Example
+## Examples
 
 For a production quality example that shows off the full API, see the [echo example on the godoc](https://godoc.org/nhooyr.io/websocket#example-package--Echo).
 
 ### Server
 
 ```go
-http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
 	c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
 	if err != nil {
 		// ...
 	}
-	defer c.Close(websocket.StatusInternalError, "")
+	defer c.Close(websocket.StatusInternalError, "the sky is falling")
 
 	ctx, cancel := context.WithTimeout(r.Context(), time.Second*10)
 	defer cancel()
-
-	_, r, err := c.Reader(ctx)
+	
+	var v interface{}
+	err = wsjson.Read(ctx, c, &v)
 	if err != nil {
 		// ...
 	}
 	
-	b, err := ioutil.ReadAll(r)
-	if err != nil {
-		// ...
-	}
+	log.Printf("received: %v", v)
 	
-	fmt.Printf("received %q\n", b)
-	
-	c.Close(websocket.StatusNormalClosure, "")
+	c.Close(websocket.StatusNormalClosure, "success")
 })
 ```
 
@@ -72,26 +68,16 @@ defer cancel()
 
 c, _, err := websocket.Dial(ctx, "ws://localhost:8080", websocket.DialOptions{})
 if err != nil {
-	return err
+	// ...
 }
-defer c.Close(websocket.StatusInternalError, "")
+defer c.Close(websocket.StatusInternalError, "the sky is falling")
 
-ww, err := c.Writer(ctx)
+err = wsjson.Write(ctx, c, "hi")
 if err != nil {
 	// ...
 }
 
-_, err = w.Write([]byte("hi"))
-if err != nil {
-	// ...
-}
-
-err = w.Close()
-if err != nil {
-	// ...
-}
-
-c.Close(websocket.StatusNormalClosure, "")
+c.Close(websocket.StatusNormalClosure, "done")
 ```
 
 ## Design considerations

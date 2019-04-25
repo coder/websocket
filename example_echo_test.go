@@ -50,18 +50,18 @@ func Example_echo() {
 		}
 	}()
 
-	// Now we dial the server and send the messages.
+	// Now we dial the server, send the messages and echo the responses.
 	err = client("ws://" + l.Addr().String())
 	if err != nil {
 		log.Fatalf("client failed: %v", err)
 	}
 
 	// Output:
-	// 0
-	// 1
-	// 2
-	// 3
-	// 4
+	// received: map[i:0]
+	// received: map[i:1]
+	// received: map[i:2]
+	// received: map[i:3]
+	// received: map[i:4]
 }
 
 // echoServer is the WebSocket echo server implementation.
@@ -74,7 +74,7 @@ func echoServer(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	defer c.Close(websocket.StatusInternalError, "")
+	defer c.Close(websocket.StatusInternalError, "the sky is falling")
 
 	if c.Subprotocol() == "" {
 		c.Close(websocket.StatusPolicyViolation, "cannot communicate with the default protocol")
@@ -138,7 +138,7 @@ func client(url string) error {
 	if err != nil {
 		return err
 	}
-	defer c.Close(websocket.StatusInternalError, "")
+	defer c.Close(websocket.StatusInternalError, "the sky is falling")
 
 	for i := 0; i < 5; i++ {
 		err = wsjson.Write(ctx, c, map[string]int{
@@ -154,9 +154,9 @@ func client(url string) error {
 			return err
 		}
 
-		fmt.Printf("%v\n", v["i"])
+		fmt.Printf("received: %v\n", v)
 	}
 
-	c.Close(websocket.StatusNormalClosure, "")
+	c.Close(websocket.StatusNormalClosure, "done")
 	return nil
 }

@@ -42,7 +42,7 @@ const (
 	statusTLSHandshake
 )
 
-// CloseError represents an error from a WebSocket close frame.
+// CloseError represents a WebSocket close frame.
 // It is returned by Conn's methods when the Connection is closed with a WebSocket close frame.
 type CloseError struct {
 	Code   StatusCode

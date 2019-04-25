@@ -9,7 +9,7 @@
 // a WebSocket server, Accept to accept a WebSocket client dial and then Conn to interact
 // with the resulting WebSocket connections.
 //
-// The echo example is the best way to understand how to correctly use the library.
+// The examples are the best way to understand how to correctly use the library.
 //
-// The wsjson and wspb packages contain helpers for JSON and ProtoBuf messages.
+// The wsjson and wspb subpackages contain helpers for JSON and ProtoBuf messages.
 package websocket

@@ -1,9 +1,9 @@
 FROM codercom/playcicache
 
 LABEL "com.github.actions.name"="lint"
-LABEL "com.github.actions.description"="lint"
+LABEL "com.github.actions.description"=""
 LABEL "com.github.actions.icon"="code"
-LABEL "com.github.actions.color"="purple"
+LABEL "com.github.actions.color"="pink"
 
 COPY entrypoint.sh /entrypoint.sh
 
