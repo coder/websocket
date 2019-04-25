@@ -10,4 +10,6 @@
 // with the resulting WebSocket connections.
 //
 // The echo example is the best way to understand how to correctly use the library.
+//
+// The wsjson and wspb packages contain helpers for JSON and ProtoBuf messages.
 package websocket
