@@ -149,7 +149,7 @@ func TestHandshake(t *testing.T) {
 				h := http.Header{}
 				h.Set("Origin", "http://unauthorized.com")
 				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{
-					Header: h,
+					HTTPHeader: h,
 				})
 				if err == nil {
 					c.Close(websocket.StatusInternalError, "")
@@ -172,7 +172,7 @@ func TestHandshake(t *testing.T) {
 				h := http.Header{}
 				h.Set("Origin", u)
 				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{
-					Header: h,
+					HTTPHeader: h,
 				})
 				if err != nil {
 					return err
@@ -197,7 +197,7 @@ func TestHandshake(t *testing.T) {
 				h := http.Header{}
 				h.Set("Origin", "https://example.com")
 				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{
-					Header: h,
+					HTTPHeader: h,
 				})
 				if err != nil {
 					return err
