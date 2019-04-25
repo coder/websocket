@@ -1,4 +1,10 @@
-# Contributing Guidelines
+# Contributing
+
+## Issues
+
+Please be as descriptive as possible with your description.
+
+## Pull requests
 
 Please split up changes into several small descriptive commits.
 

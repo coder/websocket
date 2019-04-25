@@ -231,7 +231,7 @@ func (c *Conn) handleControl(h header) {
 	}
 
 	if h.masked {
-		mask(h.maskKey, 0, b)
+		xor(h.maskKey, 0, b)
 	}
 
 	switch h.opcode {
@@ -325,7 +325,7 @@ func (c *Conn) dataReadLoop(h header) (err error) {
 			left -= int64(len(b))
 
 			if h.masked {
-				maskPos = mask(h.maskKey, maskPos, b)
+				maskPos = xor(h.maskKey, maskPos, b)
 			}
 
 			// Must set this before we signal the read is done.
@@ -429,6 +429,8 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 // a WebSocket message of type dataType to the connection.
 // Ensure you close the writer once you have written the entire message.
 // Concurrent calls to Writer are ok.
+// Writer will block if there is another goroutine with an open writer
+// until writer is closed.
 func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, error) {
 	select {
 	case <-c.closed:
@@ -487,9 +489,12 @@ func (w messageWriter) Close() error {
 // Reader will wait until there is a WebSocket data message to read from the connection.
 // It returns the type of the message and a reader to read it.
 // The passed context will also bound the reader.
+//
 // Your application must keep reading messages for the Conn to automatically respond to ping
 // and close frames and not become stuck waiting for a data message to be read.
-// Please ensure to read the full message from io.Reader.
+// Please ensure to read the full message from io.Reader. If you do not read till
+// io.EOF, the connection will break unless the next read would have yielded io.EOF.
+//
 // You can only read a single message at a time so do not call this method
 // concurrently.
 func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {

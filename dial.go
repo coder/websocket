@@ -22,8 +22,8 @@ type DialOptions struct {
 	// http.Transport does this correctly.
 	HTTPClient *http.Client
 
-	// Header specifies the HTTP headers included in the handshake request.
-	Header http.Header
+	// HTTPHeader specifies the HTTP headers included in the handshake request.
+	HTTPHeader http.Header
 
 	// Subprotocols lists the subprotocols to negotiate with the server.
 	Subprotocols []string
@@ -47,8 +47,11 @@ func dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Res
 	if opts.HTTPClient == nil {
 		opts.HTTPClient = http.DefaultClient
 	}
-	if opts.Header == nil {
-		opts.Header = http.Header{}
+	if opts.HTTPClient.Timeout > 0 {
+		return nil, nil, xerrors.Errorf("please use context for cancellation instead of http.Client.Timeout; see issue nhooyr.io/websocket#67")
+	}
+	if opts.HTTPHeader == nil {
+		opts.HTTPHeader = http.Header{}
 	}
 
 	parsedURL, err := url.Parse(u)
@@ -67,7 +70,7 @@ func dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Res
 
 	req, _ := http.NewRequest("GET", parsedURL.String(), nil)
 	req = req.WithContext(ctx)
-	req.Header = opts.Header
+	req.Header = opts.HTTPHeader
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "websocket")
 	req.Header.Set("Sec-WebSocket-Version", "13")

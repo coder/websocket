@@ -9,7 +9,7 @@ go test --vet=off --run=^$ -bench=. \
 	-memprofile=profs/mem \
 	-blockprofile=profs/block \
 	-mutexprofile=profs/mutex \
-	./...
+	.
 
 set +x
 echo
