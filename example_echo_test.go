@@ -16,7 +16,7 @@ import (
 	"nhooyr.io/websocket/wsjson"
 )
 
-// Example_echo starts a WebSocket echo server and
+// main starts a WebSocket echo server and
 // then dials the server and sends 5 different messages
 // and prints out the server's responses.
 func Example_echo() {
