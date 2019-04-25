@@ -231,7 +231,7 @@ func (c *Conn) handleControl(h header) {
 	}
 
 	if h.masked {
-		mask(h.maskKey, 0, b)
+		xor(h.maskKey, 0, b)
 	}
 
 	switch h.opcode {
@@ -325,7 +325,7 @@ func (c *Conn) dataReadLoop(h header) (err error) {
 			left -= int64(len(b))
 
 			if h.masked {
-				maskPos = mask(h.maskKey, maskPos, b)
+				maskPos = xor(h.maskKey, maskPos, b)
 			}
 
 			// Must set this before we signal the read is done.

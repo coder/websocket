@@ -6,13 +6,13 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func Test_mask(t *testing.T) {
+func Test_xor(t *testing.T) {
 	t.Parallel()
 
 	key := [4]byte{0xa, 0xb, 0xc, 0xff}
 	p := []byte{0xa, 0xb, 0xc, 0xf2, 0xc}
 	pos := 0
-	pos = mask(key, pos, p)
+	pos = xor(key, pos, p)
 
 	if exp := []byte{0, 0, 0, 0x0d, 0x6}; !cmp.Equal(exp, p) {
 		t.Fatalf("unexpected mask: %v", cmp.Diff(exp, p))
