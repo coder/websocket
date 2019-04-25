@@ -107,8 +107,8 @@ https://github.com/gorilla/websocket
 This package is the community standard but it is 6 years old and over time
 has accumulated cruft. There are many ways to do the same thing, usage is not clear
 and there are some rough edges. Just compare the godoc of
-[nhooyr/websocket](godoc.org/github.com/nhooyr/websocket) side by side with
-[gorilla/websocket](godoc.org/github.com/gorilla/websocket).
+[nhooyr/websocket](https://godoc.org/github.com/nhooyr/websocket) side by side with
+[gorilla/websocket](https://godoc.org/github.com/gorilla/websocket).
 
 The API for nhooyr/websocket has been designed such that there is only one way to do things
 which makes it easy to use correctly.
