@@ -23,7 +23,7 @@ type AcceptOptions struct {
 	// behaviour. By default Accept only allows the handshake to
 	// succeed if the javascript that is initiating the handshake
 	// is on the same domain as the server. This is to prevent CSRF
-	// when secure data is stored in a cookie as there is no same
+	// attacks when secure data is stored in a cookie as there is no same
 	// origin policy for WebSockets. In other words, javascript from
 	// any domain can perform a WebSocket dial on an arbitrary server.
 	// This dial will include cookies which means the arbitrary javascript
@@ -53,13 +53,13 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if r.Method != "GET" {
-		err := xerrors.Errorf("websocket protocol violation: handshake request method %q is not GET", r.Method)
+		err := xerrors.Errorf("websocket protocol violation: handshake request method is not GET but %q", r.Method)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
 
 	if r.Header.Get("Sec-WebSocket-Version") != "13" {
-		err := xerrors.Errorf("unsupported websocket protocol version: %q", r.Header.Get("Sec-WebSocket-Version"))
+		err := xerrors.Errorf("unsupported websocket protocol version (only 13 is supported): %q", r.Header.Get("Sec-WebSocket-Version"))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
@@ -75,7 +75,7 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 
 // Accept accepts a WebSocket handshake from a client and upgrades the
 // the connection to WebSocket.
-// Accept will reject the handshake if the Origin is not the same as the Host unless
+// Accept will reject the handshake if the Origin domain is not the same as the Host unless
 // the InsecureSkipVerify option is set.
 func Accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, error) {
 	c, err := accept(w, r, opts)

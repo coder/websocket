@@ -2,9 +2,7 @@ package websocket
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
-	"math/bits"
 
 	"golang.org/x/xerrors"
 )
@@ -50,7 +48,7 @@ type CloseError struct {
 }
 
 func (ce CloseError) Error() string {
-	return fmt.Sprintf("WebSocket closed with status = %v and reason = %q", ce.Code, ce.Reason)
+	return fmt.Sprintf("websocket closed with status = %v and reason = %q", ce.Code, ce.Reason)
 }
 
 func parseClosePayload(p []byte) (CloseError, error) {
@@ -61,7 +59,7 @@ func parseClosePayload(p []byte) (CloseError, error) {
 	}
 
 	if len(p) < 2 {
-		return CloseError{}, fmt.Errorf("close payload too small, cannot even contain the 2 byte status code")
+		return CloseError{}, xerrors.Errorf("close payload too small, cannot even contain the 2 byte status code")
 	}
 
 	ce := CloseError{
@@ -70,7 +68,7 @@ func parseClosePayload(p []byte) (CloseError, error) {
 	}
 
 	if !validWireCloseCode(ce.Code) {
-		return CloseError{}, xerrors.Errorf("invalid code %v", ce.Code)
+		return CloseError{}, xerrors.Errorf("invalid status code %v", ce.Code)
 	}
 
 	return ce, nil
@@ -100,15 +98,12 @@ func (ce CloseError) bytes() ([]byte, error) {
 	if len(ce.Reason) > maxControlFramePayload-2 {
 		return nil, xerrors.Errorf("reason string max is %v but got %q with length %v", maxControlFramePayload-2, ce.Reason, len(ce.Reason))
 	}
-	if bits.Len(uint(ce.Code)) > 16 {
-		return nil, errors.New("status code is larger than 2 bytes")
-	}
 	if !validWireCloseCode(ce.Code) {
-		return nil, fmt.Errorf("status code %v cannot be set", ce.Code)
+		return nil, xerrors.Errorf("status code %v cannot be set", ce.Code)
 	}
 
 	buf := make([]byte, 2+len(ce.Reason))
-	binary.BigEndian.PutUint16(buf[:], uint16(ce.Code))
+	binary.BigEndian.PutUint16(buf, uint16(ce.Code))
 	copy(buf[2:], ce.Reason)
 	return buf, nil
 }

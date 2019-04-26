@@ -56,7 +56,7 @@ http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
 	
 	log.Printf("received: %v", v)
 	
-	c.Close(websocket.StatusNormalClosure, "success")
+	c.Close(websocket.StatusNormalClosure, "")
 })
 ```
 
@@ -77,7 +77,7 @@ if err != nil {
 	// ...
 }
 
-c.Close(websocket.StatusNormalClosure, "done")
+c.Close(websocket.StatusNormalClosure, "")
 ```
 
 ## Design considerations

@@ -10,6 +10,8 @@ import (
 	"nhooyr.io/websocket/wsjson"
 )
 
+// This example accepts a WebSocket connection, reads a single JSON
+// message from the client and then closes the connection.
 func ExampleAccept() {
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
@@ -31,12 +33,14 @@ func ExampleAccept() {
 
 		log.Printf("received: %v", v)
 
-		c.Close(websocket.StatusNormalClosure, "success")
+		c.Close(websocket.StatusNormalClosure, "")
 	})
 
 	http.ListenAndServe("localhost:8080", fn)
 }
 
+// This example dials a server, writes a single JSON message and then
+// closes the connection.
 func ExampleDial() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -54,5 +58,5 @@ func ExampleDial() {
 		return
 	}
 
-	c.Close(websocket.StatusNormalClosure, "done")
+	c.Close(websocket.StatusNormalClosure, "")
 }

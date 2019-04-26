@@ -8,10 +8,9 @@ Please be as descriptive as possible with your description.
 
 Please split up changes into several small descriptive commits.
 
-Please capitalize the first word in the commit message and ensure it is
-descriptive.
+Please capitalize the first word in the commit message title.
 
-The commit message should use the verb tense + phrase that completes the blank in
+The commit message title should use the verb tense + phrase that completes the blank in
 
 > This change modifies websocket to ___________
 

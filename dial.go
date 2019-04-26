@@ -19,7 +19,7 @@ type DialOptions struct {
 	// HTTPClient is the http client used for the handshake.
 	// Its Transport must use HTTP/1.1 and must return writable bodies
 	// for WebSocket handshakes. This was introduced in Go 1.12.
-	// http.Transport does this correctly.
+	// http.Transport does this all correctly.
 	HTTPClient *http.Client
 
 	// HTTPHeader specifies the HTTP headers included in the handshake request.
@@ -35,6 +35,9 @@ type DialOptions struct {
 var secWebSocketKey = base64.StdEncoding.EncodeToString(make([]byte, 16))
 
 // Dial performs a WebSocket handshake on the given url with the given options.
+// The response is the WebSocket handshake response from the server.
+// If an error occurs, the returned response may be non nil. However, you can only
+// read the first 1024 bytes of its body.
 func Dial(ctx context.Context, u string, opts DialOptions) (*Conn, *http.Response, error) {
 	c, r, err := dial(ctx, u, opts)
 	if err != nil {
@@ -48,7 +51,7 @@ func dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Res
 		opts.HTTPClient = http.DefaultClient
 	}
 	if opts.HTTPClient.Timeout > 0 {
-		return nil, nil, xerrors.Errorf("please use context for cancellation instead of http.Client.Timeout; see issue nhooyr.io/websocket#67")
+		return nil, nil, xerrors.Errorf("please use context for cancellation instead of http.Client.Timeout; see https://github.com/nhooyr/websocket/issues/67")
 	}
 	if opts.HTTPHeader == nil {
 		opts.HTTPHeader = http.Header{}
@@ -65,7 +68,7 @@ func dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Res
 	case "wss":
 		parsedURL.Scheme = "https"
 	default:
-		return nil, nil, xerrors.Errorf("unexpected url scheme scheme: %q", parsedURL.Scheme)
+		return nil, nil, xerrors.Errorf("unexpected url scheme: %q", parsedURL.Scheme)
 	}
 
 	req, _ := http.NewRequest("GET", parsedURL.String(), nil)
@@ -84,13 +87,12 @@ func dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Res
 		return nil, nil, xerrors.Errorf("failed to send handshake request: %w", err)
 	}
 	defer func() {
-		respBody := resp.Body
 		if err != nil {
-			// We read a bit of the body for better debugging.
+			// We read a bit of the body for easier debugging.
 			r := io.LimitReader(resp.Body, 1024)
 			b, _ := ioutil.ReadAll(r)
+			resp.Body.Close()
 			resp.Body = ioutil.NopCloser(bytes.NewReader(b))
-			respBody.Close()
 		}
 	}()
 
@@ -104,7 +106,6 @@ func dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Res
 		return nil, resp, xerrors.Errorf("response body is not a read write closer: %T", rwc)
 	}
 
-	// TODO pool bufio
 	c := &Conn{
 		subprotocol: resp.Header.Get("Sec-WebSocket-Protocol"),
 		br:          bufio.NewReader(rwc),
@@ -123,11 +124,11 @@ func verifyServerResponse(resp *http.Response) error {
 	}
 
 	if !headerValuesContainsToken(resp.Header, "Connection", "Upgrade") {
-		return xerrors.Errorf("websocket protocol violation: Connection header does not contain Upgrade: %q", resp.Header.Get("Connection"))
+		return xerrors.Errorf("websocket protocol violation: Connection header %q does not contain Upgrade", resp.Header.Get("Connection"))
 	}
 
 	if !headerValuesContainsToken(resp.Header, "Upgrade", "WebSocket") {
-		return xerrors.Errorf("websocket protocol violation: Upgrade header does not contain websocket: %q", resp.Header.Get("Upgrade"))
+		return xerrors.Errorf("websocket protocol violation: Upgrade header %q does not contain websocket", resp.Header.Get("Upgrade"))
 	}
 
 	// We do not care about Sec-WebSocket-Accept because it does not matter.

@@ -16,7 +16,7 @@ import (
 	"nhooyr.io/websocket/wsjson"
 )
 
-// main starts a WebSocket echo server and
+// This example starts a WebSocket echo server and
 // then dials the server and sends 5 different messages
 // and prints out the server's responses.
 func Example_echo() {
@@ -26,7 +26,6 @@ func Example_echo() {
 	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
-		return
 	}
 	defer l.Close()
 
@@ -55,7 +54,6 @@ func Example_echo() {
 	if err != nil {
 		log.Fatalf("client failed: %v", err)
 	}
-
 	// Output:
 	// received: map[i:0]
 	// received: map[i:1]
@@ -76,16 +74,14 @@ func echoServer(w http.ResponseWriter, r *http.Request) error {
 	}
 	defer c.Close(websocket.StatusInternalError, "the sky is falling")
 
-	if c.Subprotocol() == "" {
-		c.Close(websocket.StatusPolicyViolation, "cannot communicate with the default protocol")
+	if c.Subprotocol() != "echo" {
+		c.Close(websocket.StatusPolicyViolation, "client must speak the echo subprotocol")
 		return xerrors.Errorf("client does not speak echo sub protocol")
 	}
 
-	ctx := r.Context()
 	l := rate.NewLimiter(rate.Every(time.Millisecond*100), 10)
-
 	for {
-		err = echo(ctx, c, l)
+		err = echo(r.Context(), c, l)
 		if err != nil {
 			return xerrors.Errorf("failed to echo: %w", err)
 		}
@@ -94,10 +90,10 @@ func echoServer(w http.ResponseWriter, r *http.Request) error {
 
 // echo reads from the websocket connection and then writes
 // the received message back to it.
-// It only waits 1 minute to read and write the message and
-// limits the received message to 32768 bytes.
+// The entire function has 10s to complete.
+// The received message is limited to 32768 bytes.
 func echo(ctx context.Context, c *websocket.Conn, l *rate.Limiter) error {
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
 
 	err := l.Wait(ctx)
@@ -118,7 +114,7 @@ func echo(ctx context.Context, c *websocket.Conn, l *rate.Limiter) error {
 
 	_, err = io.Copy(w, r)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to io.Copy: %w", err)
 	}
 
 	err = w.Close()
@@ -157,6 +153,6 @@ func client(url string) error {
 		fmt.Printf("received: %v\n", v)
 	}
 
-	c.Close(websocket.StatusNormalClosure, "done")
+	c.Close(websocket.StatusNormalClosure, "")
 	return nil
 }

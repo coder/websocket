@@ -13,7 +13,8 @@ import (
 )
 
 // Read reads a protobuf message from c into v.
-// It will read a message up to 32768 bytes in length.
+// For security reasons, it will not read messages
+// larger than 32768 bytes.
 func Read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 	err := read(ctx, c, v)
 	if err != nil {
