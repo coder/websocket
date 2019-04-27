@@ -448,7 +448,7 @@ func TestAutobahnServer(t *testing.T) {
 			t.Logf("server handshake failed: %+v", err)
 			return
 		}
-		streamEchoLoop(r.Context(), c)
+		echoLoop(r.Context(), c)
 	}))
 	defer s.Close()
 
@@ -495,7 +495,7 @@ func TestAutobahnServer(t *testing.T) {
 	checkWSTestIndex(t, "./wstest_reports/server/index.json")
 }
 
-func streamEchoLoop(ctx context.Context, c *websocket.Conn) {
+func echoLoop(ctx context.Context, c *websocket.Conn) {
 	defer c.Close(websocket.StatusInternalError, "")
 
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
@@ -534,25 +534,24 @@ func streamEchoLoop(ctx context.Context, c *websocket.Conn) {
 	}
 }
 
-func bufferedEchoLoop(ctx context.Context, c *websocket.Conn) {
+func discardLoop(ctx context.Context, c *websocket.Conn) {
 	defer c.Close(websocket.StatusInternalError, "")
 
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	b := make([]byte, 131072+2)
+	b := make([]byte, 32768)
 	echo := func() error {
-		typ, r, err := c.Reader(ctx)
+		_, r, err := c.Reader(ctx)
 		if err != nil {
 			return err
 		}
 
-		n, err := io.ReadFull(r, b)
-		if err != io.ErrUnexpectedEOF {
+		_, err = io.CopyBuffer(ioutil.Discard, r, b)
+		if err != nil {
 			return err
 		}
-
-		return c.Write(ctx, typ, b[:n])
+		return nil
 	}
 
 	for {
@@ -647,7 +646,7 @@ func TestAutobahnClient(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to dial: %v", err)
 			}
-			streamEchoLoop(ctx, c)
+			echoLoop(ctx, c)
 		}()
 	}
 

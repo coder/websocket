@@ -12,7 +12,7 @@ import (
 	"nhooyr.io/websocket"
 )
 
-func benchConn(b *testing.B, stream bool) {
+func benchConn(b *testing.B, echo, stream bool) {
 	name := "buffered"
 	if stream {
 		name = "stream"
@@ -25,12 +25,11 @@ func benchConn(b *testing.B, stream bool) {
 				b.Logf("server handshake failed: %+v", err)
 				return
 			}
-			if stream {
-				streamEchoLoop(r.Context(), c)
+			if echo {
+				echoLoop(r.Context(), c)
 			} else {
-				bufferedEchoLoop(r.Context(), c)
+				discardLoop(r.Context(), c)
 			}
-
 		}))
 		defer closeFn()
 
@@ -50,6 +49,7 @@ func benchConn(b *testing.B, stream bool) {
 			buf := make([]byte, len(msg))
 			b.Run(strconv.Itoa(n), func(b *testing.B) {
 				b.SetBytes(int64(len(msg)))
+				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
 					if stream {
 						w, err := c.Writer(ctx, websocket.MessageText)
@@ -72,14 +72,17 @@ func benchConn(b *testing.B, stream bool) {
 							b.Fatal(err)
 						}
 					}
-					_, r, err := c.Reader(ctx)
-					if err != nil {
-						b.Fatal(err, b.N)
-					}
 
-					_, err = io.ReadFull(r, buf)
-					if err != nil {
-						b.Fatal(err)
+					if echo {
+						_, r, err := c.Reader(ctx)
+						if err != nil {
+							b.Fatal(err)
+						}
+
+						_, err = io.ReadFull(r, buf)
+						if err != nil {
+							b.Fatal(err)
+						}
 					}
 				}
 			})
@@ -99,6 +102,11 @@ func benchConn(b *testing.B, stream bool) {
 }
 
 func BenchmarkConn(b *testing.B) {
-	benchConn(b, false)
-	benchConn(b, true)
+	b.Run("write", func(b *testing.B) {
+		benchConn(b, false, false)
+		benchConn(b, false, true)
+	})
+	b.Run("echo", func(b *testing.B) {
+		benchConn(b, true, true)
+	})
 }

@@ -13,7 +13,7 @@ import (
 	"golang.org/x/xerrors"
 )
 
-type control struct {
+type frame struct {
 	opcode  opcode
 	payload []byte
 }
@@ -42,7 +42,8 @@ type Conn struct {
 	// ping on writeDone.
 	// writeDone will be closed if the data message write errors.
 	write      chan MessageType
-	control    chan control
+	control    chan frame
+	fastWrite  chan frame
 	writeBytes chan []byte
 	writeDone  chan struct{}
 	writeFlush chan struct{}
@@ -86,7 +87,8 @@ func (c *Conn) init() {
 	c.closed = make(chan struct{})
 
 	c.write = make(chan MessageType)
-	c.control = make(chan control)
+	c.control = make(chan frame)
+	c.fastWrite = make(chan frame)
 	c.writeBytes = make(chan []byte)
 	c.writeDone = make(chan struct{})
 	c.writeFlush = make(chan struct{})
@@ -103,6 +105,8 @@ func (c *Conn) init() {
 	go c.readLoop()
 }
 
+// We never mask inside here because our mask key is always 0,0,0,0.
+// See comment on secWebSocketKey.
 func (c *Conn) writeFrame(h header, p []byte) {
 	b2 := marshalHeader(h)
 	_, err := c.bw.Write(b2)
@@ -126,14 +130,14 @@ func (c *Conn) writeFrame(h header, p []byte) {
 	}
 }
 
-func (c *Conn) writeLoopControl(control control) {
+func (c *Conn) writeLoopFastWrite(frame frame) {
 	h := header{
 		fin:           true,
-		opcode:        control.opcode,
-		payloadLength: int64(len(control.payload)),
+		opcode:        frame.opcode,
+		payloadLength: int64(len(frame.payload)),
 		masked:        c.client,
 	}
-	c.writeFrame(h, control.payload)
+	c.writeFrame(h, frame.payload)
 	select {
 	case <-c.closed:
 	case c.writeDone <- struct{}{}:
@@ -150,7 +154,11 @@ messageLoop:
 		case <-c.closed:
 			return
 		case control := <-c.control:
-			c.writeLoopControl(control)
+			c.writeLoopFastWrite(control)
+			continue
+		case frame := <-c.fastWrite:
+			c.writeLoopFastWrite(frame)
+			continue
 		case dataType = <-c.write:
 		}
 
@@ -160,7 +168,7 @@ messageLoop:
 			case <-c.closed:
 				return
 			case control := <-c.control:
-				c.writeLoopControl(control)
+				c.writeLoopFastWrite(control)
 			case b := <-c.writeBytes:
 				h := header{
 					fin:           false,
@@ -341,7 +349,7 @@ func (c *Conn) writePong(p []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	err := c.writeControl(ctx, opPong, p)
+	err := c.writeSingleFrame(ctx, opPong, p)
 	return err
 }
 
@@ -384,7 +392,7 @@ func (c *Conn) writeClose(p []byte, cerr CloseError) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	err := c.writeControl(ctx, opClose, p)
+	err := c.writeSingleFrame(ctx, opClose, p)
 
 	c.close(cerr)
 
@@ -399,11 +407,15 @@ func (c *Conn) writeClose(p []byte, cerr CloseError) error {
 	return nil
 }
 
-func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error {
+func (c *Conn) writeSingleFrame(ctx context.Context, opcode opcode, p []byte) error {
+	ch := c.fastWrite
+	if opcode.controlOp() {
+		ch = c.control
+	}
 	select {
 	case <-c.closed:
 		return c.closeErr
-	case c.control <- control{
+	case ch <- frame{
 		opcode:  opcode,
 		payload: p,
 	}:
