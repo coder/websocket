@@ -702,99 +702,104 @@ func checkWSTestIndex(t *testing.T, path string) {
 	}
 }
 
-func benchConn(b *testing.B, echo, stream bool) {
-	name := "buffered"
-	if stream {
-		name = "stream"
-	}
-
-	b.Run(name, func(b *testing.B) {
-		s, closeFn := testServer(b, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
-			if err != nil {
-				b.Logf("server handshake failed: %+v", err)
-				return
-			}
-			if echo {
-				echoLoop(r.Context(), c)
-			} else {
-				discardLoop(r.Context(), c)
-			}
-		}))
-		defer closeFn()
-
-		wsURL := strings.Replace(s.URL, "http", "ws", 1)
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
-		defer cancel()
-
-		c, _, err := websocket.Dial(ctx, wsURL, websocket.DialOptions{})
+func benchConn(b *testing.B, echo, stream bool, size int) {
+	s, closeFn := testServer(b, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
 		if err != nil {
-			b.Fatalf("failed to dial: %v", err)
+			b.Logf("server handshake failed: %+v", err)
+			return
 		}
-		defer c.Close(websocket.StatusInternalError, "")
-
-		sizes := []int{
-			2,
-			512,
-			4096,
-			16384,
+		if echo {
+			echoLoop(r.Context(), c)
+		} else {
+			discardLoop(r.Context(), c)
 		}
+	}))
+	defer closeFn()
 
-		for _, size := range sizes {
-			msg := []byte(strings.Repeat("2", size))
-			buf := make([]byte, len(msg))
-			b.Run(strconv.Itoa(size), func(b *testing.B) {
-				b.SetBytes(int64(len(msg)))
-				b.ReportAllocs()
-				for i := 0; i < b.N; i++ {
-					if stream {
-						w, err := c.Writer(ctx, websocket.MessageText)
-						if err != nil {
-							b.Fatal(err)
-						}
+	wsURL := strings.Replace(s.URL, "http", "ws", 1)
 
-						_, err = w.Write(msg)
-						if err != nil {
-							b.Fatal(err)
-						}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
+	defer cancel()
 
-						err = w.Close()
-						if err != nil {
-							b.Fatal(err)
-						}
-					} else {
-						err = c.Write(ctx, websocket.MessageText, msg)
-						if err != nil {
-							b.Fatal(err)
-						}
-					}
+	c, _, err := websocket.Dial(ctx, wsURL, websocket.DialOptions{})
+	if err != nil {
+		b.Fatalf("failed to dial: %v", err)
+	}
+	defer c.Close(websocket.StatusInternalError, "")
 
-					if echo {
-						_, r, err := c.Reader(ctx)
-						if err != nil {
-							b.Fatal(err)
-						}
+	msg := []byte(strings.Repeat("2", size))
+	buf := make([]byte, len(msg))
+	b.SetBytes(int64(len(msg)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if stream {
+			w, err := c.Writer(ctx, websocket.MessageText)
+			if err != nil {
+				b.Fatal(err)
+			}
 
-						_, err = io.ReadFull(r, buf)
-						if err != nil {
-							b.Fatal(err)
-						}
-					}
-				}
-			})
+			_, err = w.Write(msg)
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			err = w.Close()
+			if err != nil {
+				b.Fatal(err)
+			}
+		} else {
+			err = c.Write(ctx, websocket.MessageText, msg)
+			if err != nil {
+				b.Fatal(err)
+			}
 		}
 
-		c.Close(websocket.StatusNormalClosure, "")
-	})
+		if echo {
+			_, r, err := c.Reader(ctx)
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			_, err = io.ReadFull(r, buf)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
+	b.StopTimer()
+
+	c.Close(websocket.StatusNormalClosure, "")
 }
 
 func BenchmarkConn(b *testing.B) {
+	sizes := []int{
+		2,
+		32,
+		512,
+		4096,
+		16384,
+	}
+
 	b.Run("write", func(b *testing.B) {
-		benchConn(b, false, false)
-		benchConn(b, false, true)
+		for _, size := range sizes {
+			b.Run(strconv.Itoa(size), func(b *testing.B) {
+				b.Run("stream", func(b *testing.B) {
+					benchConn(b, false, true, size)
+				})
+				b.Run("buffer", func(b *testing.B) {
+					benchConn(b, false, false, size)
+				})
+			})
+		}
 	})
+
 	b.Run("echo", func(b *testing.B) {
-		benchConn(b, true, true)
+		for _, size := range sizes {
+			b.Run(strconv.Itoa(size), func(b *testing.B) {
+				benchConn(b, true, true, size)
+			})
+		}
 	})
 }
