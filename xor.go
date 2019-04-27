@@ -12,7 +12,7 @@ import (
 // The returned value is the position of the next byte
 // to be used for masking in the key. This is so that
 // unmasking can be performed without the entire frame.
-func xor(key [4]byte, keyPos int, b []byte) int {
+func fastXOR(key [4]byte, keyPos int, b []byte) int {
 	// If the payload is greater than 16 bytes, then it's worth
 	// masking 8 bytes at a time.
 	// Optimization from https://github.com/golang/go/issues/31586#issuecomment-485530859
