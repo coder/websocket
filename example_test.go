@@ -36,7 +36,8 @@ func ExampleAccept() {
 		c.Close(websocket.StatusNormalClosure, "")
 	})
 
-	http.ListenAndServe("localhost:8080", fn)
+	err := http.ListenAndServe("localhost:8080", fn)
+	log.Fatal(err)
 }
 
 // This example dials a server, writes a single JSON message and then
@@ -47,15 +48,13 @@ func ExampleDial() {
 
 	c, _, err := websocket.Dial(ctx, "ws://localhost:8080", websocket.DialOptions{})
 	if err != nil {
-		log.Println(err)
-		return
+		log.Fatal(err)
 	}
 	defer c.Close(websocket.StatusInternalError, "the sky is falling")
 
 	err = wsjson.Write(ctx, c, "hi")
 	if err != nil {
-		log.Println(err)
-		return
+		log.Fatal(err)
 	}
 
 	c.Close(websocket.StatusNormalClosure, "")
