@@ -14,7 +14,7 @@ If you have any feedback, please feel free to open an issue.
 ## Install
 
 ```bash
-go get nhooyr.io/websocket@0.2.0
+go get nhooyr.io/websocket@v0.2.0
 ```
 
 ## Features
