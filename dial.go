@@ -38,6 +38,10 @@ var secWebSocketKey = base64.StdEncoding.EncodeToString(make([]byte, 16))
 // The response is the WebSocket handshake response from the server.
 // If an error occurs, the returned response may be non nil. However, you can only
 // read the first 1024 bytes of its body.
+//
+// This function requires at least Go 1.12 to succeed as it uses a new feature
+// in net/http to perform WebSocket handshakes and get a writable body
+// from the transport. See https://github.com/golang/go/issues/26937#issuecomment-415855861
 func Dial(ctx context.Context, u string, opts DialOptions) (*Conn, *http.Response, error) {
 	c, r, err := dial(ctx, u, opts)
 	if err != nil {

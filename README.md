@@ -4,9 +4,6 @@
 
 websocket is a minimal and idiomatic WebSocket library for Go.
 
-Go 1.12 is required as it uses a new [feature](https://github.com/golang/go/issues/26937#issuecomment-415855861) in net/http
-to perform WebSocket handshakes.
-
 This library is not final and the API is subject to change.
 
 If you have any feedback, please feel free to open an issue.
