@@ -460,7 +460,7 @@ type messageWriter struct {
 
 // Write writes the given bytes to the WebSocket connection.
 func (w messageWriter) Write(p []byte) (int, error) {
-	n, err := w.Write(p)
+	n, err := w.write(p)
 	if err != nil {
 		return n, xerrors.Errorf("failed to write: %w", err)
 	}
@@ -522,14 +522,14 @@ func (w messageWriter) close() error {
 // You can only read a single message at a time so do not call this method
 // concurrently.
 func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
-	typ, r, err := c.Reader(ctx)
+	typ, r, err := c.reader(ctx)
 	if err != nil {
 		return 0, nil, xerrors.Errorf("failed to get reader: %w", err)
 	}
 	return typ, r, nil
 }
 
-func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error)  {
+func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
 	for !atomic.CompareAndSwapInt64(&c.activeReader, 0, 1) {
 		select {
 		case <-c.closed:

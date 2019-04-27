@@ -99,6 +99,6 @@ func benchConn(b *testing.B, stream bool) {
 }
 
 func BenchmarkConn(b *testing.B) {
-	benchConn(b, true)
 	benchConn(b, false)
+	benchConn(b, true)
 }
