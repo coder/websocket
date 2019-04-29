@@ -7,8 +7,6 @@ websocket is a minimal and idiomatic WebSocket library for Go.
 
 This library is not final and the API is subject to change.
 
-If you have any feedback, please feel free to open an issue.
-
 ## Install
 
 ```bash
@@ -17,12 +15,14 @@ go get nhooyr.io/websocket@v0.2.0
 
 ## Features
 
-- Minimal yet pragmatic API
+- Minimal and idiomatic API
+- Tiny codebase at 1400 lines which reduces the surface area for bugs
 - First class context.Context support
-- Thoroughly tested, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
-- Concurrent writes
+- Thorough tests, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 - Zero dependencies outside of the stdlib for the core library
 - JSON and ProtoBuf helpers in the wsjson and wspb subpackages
+- High performance
+- Concurrent writes
 
 ## Roadmap
 
@@ -78,9 +78,10 @@ if err != nil {
 c.Close(websocket.StatusNormalClosure, "")
 ```
 
-## Design considerations
+## Design justifications
 
-- Minimal API is easier to maintain and learn
+- A minimal API is easier to maintain due to less docs, tests and bugs
+- A minimal API is also easier to use and learn
 - Context based cancellation is more ergonomic and robust than setting deadlines
 - No ping support because TCP keep alives work fine for HTTP/1.1 and they do not make
   sense with HTTP/2 (see [#1](https://github.com/nhooyr/websocket/issues/1))
@@ -90,12 +91,11 @@ c.Close(websocket.StatusNormalClosure, "")
 
 ## Comparison
 
-While I believe nhooyr/websocket has a better API than existing libraries, 
-both gorilla/websocket and gobwas/ws were extremely useful in implementing the
-WebSocket protocol correctly so *big thanks* to the authors of both. In particular,
-I made sure to go through the issue tracker of gorilla/websocket to make sure
-I implemented details correctly and understood how people were using the package
-in production.
+Before the comparison, I want to point out that both gorilla/websocket and gobwas/ws were
+extremely useful in implementing the WebSocket protocol correctly so *big thanks* to the
+authors of both. In particular, I made sure to go through the issue tracker of gorilla/websocket
+to ensure I implemented details correctly and understood how people were using WebSockets in
+production.
 
 ### gorilla/websocket
 
@@ -108,14 +108,24 @@ and there are some rough edges. Just compare the godoc of
 [gorilla/websocket](https://godoc.org/github.com/gorilla/websocket).
 
 The API for nhooyr/websocket has been designed such that there is only one way to do things
-which makes it easy to use correctly.
+which makes it easy to use correctly. Not only is the API simpler, the implementation is
+only 1400 lines whereas gorilla/websocket is at 3500 lines. That's more code to maintain,
+ more code to test, more code to document and more surface area for bugs.
 
-Furthermore, nhooyr/websocket has support for newer Go idioms such as context.Context and
+The future of gorilla/websocket is also uncertain. See [gorilla/websocket#370](https://github.com/gorilla/websocket/issues/370).
+
+Pure conjecture but I would argue that the sprawling API has made it difficult to maintain.
+
+Moreover, nhooyr/websocket has support for newer Go idioms such as context.Context and
 also uses net/http's Client and ResponseWriter directly for WebSocket handshakes.
 gorilla/websocket writes its handshakes to the underlying net.Conn which means
 it has to reinvent hooks for TLS and proxying and prevents support of HTTP/2.
 
-Another advantage of nhooyr/websocket is that it supports concurrent writers out of the box.
+Some more advantages of nhooyr/websocket are that it supports concurrent writes and makes it
+very easy to close the connection with a status code and reason compared to gorilla/websocket.
+
+In terms of performance, there is no significant difference between the two. Will update 
+with benchmarks soon ([#75](https://github.com/nhooyr/websocket/issues/75)).
 
 ### x/net/websocket
 
@@ -130,7 +140,7 @@ See https://github.com/golang/go/issues/18152
 https://github.com/gobwas/ws
 
 This library has an extremely flexible API but that comes at the cost of usability
-and clarity. 
+and clarity.
 
 This library is fantastic in terms of performance. The author put in significant
 effort to ensure its speed and I have applied as many of its optimizations as
