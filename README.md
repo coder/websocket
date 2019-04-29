@@ -105,8 +105,8 @@ production.
 https://github.com/gorilla/websocket
 
 This package is the community standard but it is 6 years old and over time
-has accumulated cruft. Using is not clear as there are many ways to do things
-and there are some rough edges. Just compare the godoc of
+has accumulated cruft. There are too many ways to do the same thing.
+Just compare the godoc of
 [nhooyr/websocket](https://godoc.org/github.com/nhooyr/websocket) side by side with
 [gorilla/websocket](https://godoc.org/github.com/gorilla/websocket).
 
@@ -122,10 +122,10 @@ Pure conjecture but I would argue that the sprawling API has made it difficult t
 Moreover, nhooyr/websocket has support for newer Go idioms such as context.Context and
 also uses net/http's Client and ResponseWriter directly for WebSocket handshakes.
 gorilla/websocket writes its handshakes to the underlying net.Conn which means
-it has to reinvent hooks for TLS and proxying and prevents support of HTTP/2.
+it has to reinvent hooks for TLS and proxies and prevents support of HTTP/2.
 
 Some more advantages of nhooyr/websocket are that it supports concurrent writes and makes it
-very easy to close the connection with a status code and reason compared to gorilla/websocket.
+very easy to close the connection with a status code and reason.
 
 In terms of performance, there is no significant difference between the two. Will update 
 with benchmarks soon ([#75](https://github.com/nhooyr/websocket/issues/75)).
