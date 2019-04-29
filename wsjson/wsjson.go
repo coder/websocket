@@ -29,6 +29,7 @@ func read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 	}
 
 	if typ != websocket.MessageText {
+		c.Close(websocket.StatusUnsupportedData, "can only accept text messages")
 		return xerrors.Errorf("unexpected frame type for json (expected %v): %v", websocket.MessageText, typ)
 	}
 

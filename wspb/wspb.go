@@ -30,6 +30,7 @@ func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 	}
 
 	if typ != websocket.MessageBinary {
+		c.Close(websocket.StatusUnsupportedData, "can only accept binary messages")
 		return xerrors.Errorf("unexpected frame type for protobuf (expected %v): %v", websocket.MessageBinary, typ)
 	}
 
