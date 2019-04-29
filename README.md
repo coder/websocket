@@ -16,7 +16,7 @@ go get nhooyr.io/websocket@v0.2.0
 ## Features
 
 - Minimal and idiomatic API
-- Tiny codebase at 1400 lines which reduces the surface area for bugs
+- Tiny codebase at 1400 lines
 - First class context.Context support
 - Thorough tests, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 - Zero dependencies outside of the stdlib for the core library
