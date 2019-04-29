@@ -776,6 +776,7 @@ func benchConn(b *testing.B, echo, stream bool, size int) {
 func BenchmarkConn(b *testing.B) {
 	sizes := []int{
 		2,
+		16,
 		32,
 		512,
 		4096,

@@ -36,6 +36,7 @@ func basixXOR(maskKey [4]byte, pos int, b []byte) int {
 func BenchmarkXOR(b *testing.B) {
 	sizes := []int{
 		2,
+		16,
 		32,
 		512,
 		4096,
