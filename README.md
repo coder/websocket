@@ -60,6 +60,9 @@ http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
 
 ### Client
 
+The client side of this library requires at minimum Go 1.12 as it uses a [new feature
+in net/http](https://github.com/golang/go/issues/26937#issuecomment-415855861) to perform WebSocket handshakes.
+
 ```go
 ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 defer cancel()
