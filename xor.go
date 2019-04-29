@@ -25,6 +25,9 @@ func fastXOR(key [4]byte, keyPos int, b []byte) int {
 		}
 		k := binary.LittleEndian.Uint64(alignedKey[:])
 
+		// At some point in the future we can clean these unrolled loops up.
+		// See https://github.com/golang/go/issues/31586#issuecomment-487436401
+
 		// Then we xor until b is less than 128 bytes.
 		for len(b) >= 128 {
 			v := binary.LittleEndian.Uint64(b)
