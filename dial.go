@@ -17,7 +17,7 @@ import (
 // DialOptions represents the options available to pass to Dial.
 type DialOptions struct {
 	// HTTPClient is the http client used for the handshake.
-	// Its Transport must use HTTP/1.1 and must return writable bodies
+	// Its Transport must use HTTP/1.1 and return writable bodies
 	// for WebSocket handshakes. This was introduced in Go 1.12.
 	// http.Transport does this all correctly.
 	HTTPClient *http.Client
