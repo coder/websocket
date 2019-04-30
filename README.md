@@ -117,8 +117,6 @@ only 1400 lines whereas gorilla/websocket is at 3500 lines. That's more code to 
 
 The future of gorilla/websocket is also uncertain. See [gorilla/websocket#370](https://github.com/gorilla/websocket/issues/370).
 
-Pure conjecture but I would argue that the sprawling API has made it difficult to maintain.
-
 Moreover, nhooyr/websocket has support for newer Go idioms such as context.Context and
 also uses net/http's Client and ResponseWriter directly for WebSocket handshakes.
 gorilla/websocket writes its handshakes to the underlying net.Conn which means
