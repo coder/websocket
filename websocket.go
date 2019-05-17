@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -353,6 +354,12 @@ func (c *Conn) writePong(p []byte) error {
 
 // Close closes the WebSocket connection with the given status code and reason.
 // It will write a WebSocket close frame with a timeout of 5 seconds.
+// The connection can only be closed once. Additional calls to Close
+// are no-ops.
+// The maximum length of reason must be 125 bytes otherwise an internal
+// error will be sent to the peer. For this reason, you should avoid
+// sending a dynamic reason.
+// Close will unblock all goroutines interacting with the connection.
 func (c *Conn) Close(code StatusCode, reason string) error {
 	err := c.exportedClose(code, reason)
 	if err != nil {
@@ -372,17 +379,14 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 	// Definitely worth seeing what popular browsers do later.
 	p, err := ce.bytes()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to marshal close frame: %v\n", err)
 		ce = CloseError{
 			Code: StatusInternalError,
 		}
 		p, _ = ce.bytes()
 	}
 
-	cerr := c.writeClose(p, ce)
-	if err != nil {
-		return err
-	}
-	return cerr
+	return c.writeClose(p, ce)
 }
 
 func (c *Conn) writeClose(p []byte, cerr CloseError) error {
