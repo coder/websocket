@@ -75,6 +75,7 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 
 // Accept accepts a WebSocket handshake from a client and upgrades the
 // the connection to WebSocket.
+//
 // Accept will reject the handshake if the Origin domain is not the same as the Host unless
 // the InsecureSkipVerify option is set.
 func Accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, error) {
@@ -132,6 +133,8 @@ func accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, 
 		closer:      netConn,
 	}
 	c.init()
+	// TODO document.
+	c.Context(r.Context())
 
 	return c, nil
 }

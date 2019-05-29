@@ -14,5 +14,5 @@ import (
 // exceeds the buffer size which is 4096 right now as then an extra syscall
 // will be necessary to complete the message.
 func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
-	return c.writeSingleFrame(ctx, opcode(typ), p)
+	return c.writeCompleteMessage(ctx, opcode(typ), p)
 }
