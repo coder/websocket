@@ -86,8 +86,6 @@ c.Close(websocket.StatusNormalClosure, "")
 - A minimal API is easier to maintain due to less docs, tests and bugs
 - A minimal API is also easier to use and learn
 - Context based cancellation is more ergonomic and robust than setting deadlines
-- No ping support because TCP keep alives work fine for HTTP/1.1 and they do not make
-  sense with HTTP/2 (see [#1](https://github.com/nhooyr/websocket/issues/1))
 - net.Conn is never exposed as WebSocket over HTTP/2 will not have a net.Conn.
 - Using net/http's Client for dialing means we do not have to reinvent dialing hooks
   and configurations like other WebSocket libraries
