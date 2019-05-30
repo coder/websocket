@@ -125,8 +125,8 @@ it has to reinvent hooks for TLS and proxies and prevents support of HTTP/2.
 Some more advantages of nhooyr/websocket are that it supports concurrent writes and makes it
 very easy to close the connection with a status code and reason.
 
-In terms of performance, there is no significant difference between the two. Will update 
-with benchmarks soon ([#75](https://github.com/nhooyr/websocket/issues/75)).
+In terms of performance, the only difference is nhooyr/websocket is forced to use one extra
+goroutine to provide native context support. Otherwise, they should perform identically.
 
 ### x/net/websocket
 
