@@ -85,12 +85,12 @@ func (c *Conn) close(err error) {
 		if c.client {
 			go func() {
 				<-c.readLoopDone
-				// TODO this does not work if reader errors out.
-				c.readDataLock <- struct{}{}
-				c.writeFrameLock <- struct{}{}
-
-				returnBufioReader(c.br)
-				returnBufioWriter(c.bw)
+				// TODO this does not work if reader errors out so skip for now.
+				// c.readDataLock <- struct{}{}
+				// c.writeFrameLock <- struct{}{}
+				//
+				// returnBufioReader(c.br)
+				// returnBufioWriter(c.bw)
 			}()
 		}
 	})
@@ -326,12 +326,15 @@ func (c *Conn) writePong(p []byte) error {
 }
 
 // Close closes the WebSocket connection with the given status code and reason.
+//
 // It will write a WebSocket close frame with a timeout of 5 seconds.
 // The connection can only be closed once. Additional calls to Close
 // are no-ops.
+//
 // The maximum length of reason must be 125 bytes otherwise an internal
 // error will be sent to the peer. For this reason, you should avoid
 // sending a dynamic reason.
+//
 // Close will unblock all goroutines interacting with the connection.
 func (c *Conn) Close(code StatusCode, reason string) error {
 	err := c.exportedClose(code, reason)
