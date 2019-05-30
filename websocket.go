@@ -464,6 +464,9 @@ func (c *Conn) writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 // Read is a convenience method to read a single message from the connection.
 //
 // See the Reader method if you want to be able to reuse buffers or want to stream a message.
+//
+// This is an experimental API, please let me know how you feel about it in
+// https://github.com/nhooyr/websocket/issues/62
 func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 	typ, r, err := c.Reader(ctx)
 	if err != nil {
@@ -481,6 +484,9 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 // Write is a convenience method to write a message to the connection.
 //
 // See the Writer method if you want to stream a message.
+//
+// This is an experimental API, please let me know how you feel about it in
+// https://github.com/nhooyr/websocket/issues/62
 func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	return c.writeMessage(ctx, opcode(typ), p)
 }
