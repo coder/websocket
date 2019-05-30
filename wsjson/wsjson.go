@@ -4,8 +4,9 @@ package wsjson
 import (
 	"context"
 	"encoding/json"
-	"golang.org/x/xerrors"
 	"io"
+
+	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
 )
@@ -46,7 +47,7 @@ func read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 	// we support concurrent reading.
 	// So the Reader has to synchronize with Read somehow.
 	// Maybe its best to bring back the old readLoop?
-	_, err = r.Read(nil)
+	_, err = r.Read([]byte{0})
 	if !xerrors.Is(err, io.EOF) {
 		return xerrors.Errorf("more data than needed in reader")
 	}

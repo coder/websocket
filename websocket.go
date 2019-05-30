@@ -85,6 +85,7 @@ func (c *Conn) close(err error) {
 		if c.client {
 			go func() {
 				<-c.readLoopDone
+				// TODO this does not work if reader errors out.
 				c.readDataLock <- struct{}{}
 				c.writeFrameLock <- struct{}{}
 

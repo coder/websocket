@@ -5,13 +5,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"golang.org/x/xerrors"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
+
+	"golang.org/x/xerrors"
 )
 
 // DialOptions represents the options available to pass to Dial.

@@ -758,7 +758,7 @@ func benchConn(b *testing.B, echo, stream bool, size int) {
 				b.Fatal(err)
 			}
 
-			_, err = r.Read(nil)
+			_, err = r.Read([]byte{0})
 			if !xerrors.Is(err, io.EOF) {
 				b.Fatalf("more data in reader than needed")
 			}
