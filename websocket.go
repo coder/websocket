@@ -48,7 +48,8 @@ type Conn struct {
 	setConnContext  chan context.Context
 	getConnContext  chan context.Context
 
-	pingListener map[string]chan<- struct{}
+	pingListenerMu sync.Mutex
+	pingListener   map[string]chan<- struct{}
 }
 
 // Context returns a context derived from parent that will be cancelled
@@ -254,7 +255,9 @@ func (c *Conn) handleControl(h header) {
 	case opPing:
 		c.writePong(b)
 	case opPong:
+		c.pingListenerMu.Lock()
 		listener, ok := c.pingListener[string(b)]
+		c.pingListenerMu.Unlock()
 		if ok {
 			close(listener)
 		}
@@ -717,7 +720,16 @@ func (c *Conn) ping(ctx context.Context) error {
 	p := strconv.FormatUint(id, 10)
 
 	pong := make(chan struct{})
+
+	c.pingListenerMu.Lock()
 	c.pingListener[p] = pong
+	c.pingListenerMu.Unlock()
+
+	defer func() {
+		c.pingListenerMu.Lock()
+		delete(c.pingListener, p)
+		c.pingListenerMu.Unlock()
+	}()
 
 	err := c.writeMessage(ctx, opPing, []byte(p))
 	if err != nil {
