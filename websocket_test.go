@@ -489,7 +489,7 @@ func TestAutobahnServer(t *testing.T) {
 func echoLoop(ctx context.Context, c *websocket.Conn) {
 	defer c.Close(websocket.StatusInternalError, "")
 
-	c.SetReadLimit(1 << 30)
+	c.SetReadLimit(1 << 40)
 
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
