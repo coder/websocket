@@ -4,9 +4,8 @@ package wsjson
 import (
 	"context"
 	"encoding/json"
-	"io"
-
 	"golang.org/x/xerrors"
+	"io"
 
 	"nhooyr.io/websocket"
 )
@@ -39,6 +38,17 @@ func read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 	err = d.Decode(v)
 	if err != nil {
 		return xerrors.Errorf("failed to decode json: %w", err)
+	}
+
+	// Have to ensure we read till EOF.
+	// Unfortunate but necessary evil for now. Can improve later.
+	// The code to do this automatically gets complicated fast because
+	// we support concurrent reading.
+	// So the Reader has to synchronize with Read somehow.
+	// Maybe its best to bring back the old readLoop?
+	_, err = r.Read(nil)
+	if !xerrors.Is(err, io.EOF) {
+		return xerrors.Errorf("more data than needed in reader")
 	}
 
 	return nil

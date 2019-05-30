@@ -22,7 +22,7 @@ go get nhooyr.io/websocket@v0.2.0
 - Zero dependencies outside of the stdlib for the core library
 - JSON and ProtoBuf helpers in the wsjson and wspb subpackages
 - High performance
-- Concurrent writes
+- Concurrent reads and writes out of the box
 
 ## Roadmap
 
@@ -122,8 +122,8 @@ also uses net/http's Client and ResponseWriter directly for WebSocket handshakes
 gorilla/websocket writes its handshakes to the underlying net.Conn which means
 it has to reinvent hooks for TLS and proxies and prevents support of HTTP/2.
 
-Some more advantages of nhooyr/websocket are that it supports concurrent writes and makes it
-very easy to close the connection with a status code and reason.
+Some more advantages of nhooyr/websocket are that it supports concurrent reads,
+writes and makes it very easy to close the connection with a status code and reason.
 
 In terms of performance, there is no significant difference between the two. Will update 
 with benchmarks soon ([#75](https://github.com/nhooyr/websocket/issues/75)).

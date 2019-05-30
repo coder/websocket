@@ -51,6 +51,7 @@ func Example_echo() {
 
 	// Now we dial the server, send the messages and echo the responses.
 	err = client("ws://" + l.Addr().String())
+	time.Sleep(time.Second)
 	if err != nil {
 		log.Fatalf("client failed: %v", err)
 	}
@@ -66,6 +67,8 @@ func Example_echo() {
 // It ensures the client speaks the echo subprotocol and
 // only allows one message every 100ms with a 10 message burst.
 func echoServer(w http.ResponseWriter, r *http.Request) error {
+	log.Printf("serving %v", r.RemoteAddr)
+
 	c, err := websocket.Accept(w, r, websocket.AcceptOptions{
 		Subprotocols: []string{"echo"},
 	})
@@ -83,7 +86,7 @@ func echoServer(w http.ResponseWriter, r *http.Request) error {
 	for {
 		err = echo(r.Context(), c, l)
 		if err != nil {
-			return xerrors.Errorf("failed to echo: %w", err)
+			return xerrors.Errorf("failed to echo with %v: %w", r.RemoteAddr, err)
 		}
 	}
 }

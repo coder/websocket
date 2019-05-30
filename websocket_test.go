@@ -293,10 +293,6 @@ func TestHandshake(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = write()
-				if err != nil {
-					return err
-				}
 
 				c.Close(websocket.StatusNormalClosure, "")
 				return nil
@@ -325,11 +321,6 @@ func TestHandshake(t *testing.T) {
 					}
 					return nil
 				}
-				err = read()
-				if err != nil {
-					return err
-				}
-				// Read twice to ensure the un EOFed previous reader works correctly.
 				err = read()
 				if err != nil {
 					return err
@@ -765,6 +756,11 @@ func benchConn(b *testing.B, echo, stream bool, size int) {
 			_, err = io.ReadFull(r, buf)
 			if err != nil {
 				b.Fatal(err)
+			}
+
+			_, err = r.Read(nil)
+			if !xerrors.Is(err, io.EOF) {
+				b.Fatalf("more data in reader than needed")
 			}
 		}
 	}

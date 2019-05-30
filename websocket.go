@@ -14,7 +14,8 @@ import (
 )
 
 // Conn represents a WebSocket connection.
-// All methods except Reader can be used concurrently.
+// All methods may be called concurrently.
+//
 // Please be sure to call Close on the connection when you
 // are finished with it to release resources.
 type Conn struct {
@@ -31,8 +32,10 @@ type Conn struct {
 	writeDataLock  chan struct{}
 	writeFrameLock chan struct{}
 
-	readData chan header
-	readDone chan struct{}
+	readDataLock chan struct{}
+	readData     chan header
+	readDone     chan struct{}
+	readLoopDone chan struct{}
 
 	setReadTimeout  chan context.Context
 	setWriteTimeout chan context.Context
@@ -44,7 +47,7 @@ type Conn struct {
 // when the connection is closed.
 // If the parent context is cancelled, the connection will be closed.
 //
-// This is an experimental API meaning it may be remove in the future.
+// This is an experimental API that may be remove in the future.
 // Please let me know how you feel about it.
 func (c *Conn) Context(parent context.Context) context.Context {
 	select {
@@ -77,6 +80,18 @@ func (c *Conn) close(err error) {
 		c.closeErr = xerrors.Errorf("websocket closed: %w", cerr)
 
 		close(c.closed)
+
+		// See comment in dial.go
+		if c.client {
+			go func() {
+				<-c.readLoopDone
+				c.readDataLock <- struct{}{}
+				c.writeFrameLock <- struct{}{}
+
+				returnBufioReader(c.br)
+				returnBufioWriter(c.bw)
+			}()
+		}
 	})
 }
 
@@ -94,6 +109,8 @@ func (c *Conn) init() {
 
 	c.readData = make(chan header)
 	c.readDone = make(chan struct{})
+	c.readDataLock = make(chan struct{}, 1)
+	c.readLoopDone = make(chan struct{})
 
 	c.setReadTimeout = make(chan context.Context)
 	c.setWriteTimeout = make(chan context.Context)
@@ -174,8 +191,8 @@ func (c *Conn) timeoutLoop() {
 		select {
 		case <-c.closed:
 			return
-		case readCtx = <-c.setWriteTimeout:
-		case writeCtx = <-c.setReadTimeout:
+		case writeCtx = <-c.setWriteTimeout:
+		case readCtx = <-c.setReadTimeout:
 		case <-readCtx.Done():
 			c.close(xerrors.Errorf("data read timed out: %w", readCtx.Err()))
 		case <-writeCtx.Done():
@@ -276,6 +293,8 @@ func (c *Conn) readTillData() (header, error) {
 }
 
 func (c *Conn) readLoop() {
+	defer close(c.readLoopDone)
+
 	for {
 		h, err := c.readTillData()
 		if err != nil {
@@ -487,8 +506,7 @@ func (w *messageWriter) close() error {
 //
 // Your application must keep reading messages for the Conn to automatically respond to ping
 // and close frames and not become stuck waiting for a data message to be read.
-// Please ensure to read the full message from io.Reader. If you do not read till
-// io.EOF, the connection will break unless the next read would have yielded io.EOF.
+// Please ensure to read the full message from io.Reader.
 //
 // You can only read a single message at a time so do not call this method
 // concurrently.
@@ -500,30 +518,10 @@ func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 	return typ, r, nil
 }
 
-func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
-	// if !atomic.CompareAndSwapInt64(&c.activeReader, 0, 1) {
-	// 	// If the next read yields io.EOF we are good to go.
-	// 	r := messageReader{
-	// 		ctx: ctx,
-	// 		c:   c,
-	// 	}
-	// 	_, err := r.Read(nil)
-	// 	if err == nil {
-	// 		return 0, nil, xerrors.New("previous message not fully read")
-	// 	}
-	// 	if !xerrors.Is(err, io.EOF) {
-	// 		return 0, nil, xerrors.Errorf("failed to check if last message at io.EOF: %w", err)
-	// 	}
-	//
-	// 	atomic.StoreInt64(&c.activeReader, 1)
-	// }
-
-	select {
-	case <-c.closed:
-		return 0, nil, c.closeErr
-	case <-ctx.Done():
-		return 0, nil, ctx.Err()
-	case c.setReadTimeout <- ctx:
+func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err error) {
+	err = c.acquireLock(ctx, c.readDataLock)
+	if err != nil {
+		return 0, nil, err
 	}
 
 	select {
@@ -533,25 +531,24 @@ func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
 		return 0, nil, ctx.Err()
 	case h := <-c.readData:
 		if h.opcode == opContinuation {
-			if h.fin && h.payloadLength == 0 {
-				select {
-				case <-c.closed:
-					return 0, nil, c.closeErr
-				case c.readDone <- struct{}{}:
-					return c.reader(ctx)
-				}
+			ce := CloseError{
+				Code:   StatusProtocolError,
+				Reason: "continuation frame not after data or text frame",
 			}
-			return 0, nil, xerrors.Errorf("previous reader was not read to EOF")
+			c.Close(ce.Code, ce.Reason)
+			return 0, nil, ce
 		}
 		return MessageType(h.opcode), &messageReader{
-			h: &h,
-			c: c,
+			ctx: ctx,
+			h:   &h,
+			c:   c,
 		}, nil
 	}
 }
 
 // messageReader enables reading a data frame from the WebSocket connection.
 type messageReader struct {
+	ctx     context.Context
 	maskPos int
 	h       *header
 	c       *Conn
@@ -598,7 +595,19 @@ func (r *messageReader) read(p []byte) (int, error) {
 		p = p[:r.h.payloadLength]
 	}
 
+	select {
+	case <-r.c.closed:
+		return 0, r.c.closeErr
+	case r.c.setReadTimeout <- r.ctx:
+	}
+
 	n, err := io.ReadFull(r.c.br, p)
+
+	select {
+	case <-r.c.closed:
+		return 0, r.c.closeErr
+	case r.c.setReadTimeout <- context.Background():
+	}
 
 	r.h.payloadLength -= int64(n)
 	if r.h.masked {
@@ -618,12 +627,8 @@ func (r *messageReader) read(p []byte) (int, error) {
 		}
 		if r.h.fin {
 			r.eofed = true
-			select {
-			case <-r.c.closed:
-				return n, r.c.closeErr
-			case r.c.setReadTimeout <- context.Background():
-				return n, io.EOF
-			}
+			r.c.releaseLock(r.c.readDataLock)
+			return n, io.EOF
 		}
 		r.maskPos = 0
 		r.h = nil
