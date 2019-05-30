@@ -1,7 +1,9 @@
 coverage:
   status:
+    # Prevent small changes in coverage from failing CI.
     project:
       default:
-        # Otherwise codecov/patch status keeps failing when there is a tiny
-        # change in code coverage.
+        threshold: 5
+    patch:
+      default:
         threshold: 5
