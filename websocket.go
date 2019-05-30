@@ -5,9 +5,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"math/rand"
 	"os"
 	"runtime"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/xerrors"
@@ -25,6 +29,8 @@ type Conn struct {
 	closer      io.Closer
 	client      bool
 
+	msgReadLimit int64
+
 	closeOnce sync.Once
 	closeErr  error
 	closed    chan struct{}
@@ -41,14 +47,16 @@ type Conn struct {
 	setWriteTimeout chan context.Context
 	setConnContext  chan context.Context
 	getConnContext  chan context.Context
+
+	pingListener map[string]chan<- struct{}
 }
 
 // Context returns a context derived from parent that will be cancelled
-// when the connection is closed.
+// when the connection is closed or broken.
 // If the parent context is cancelled, the connection will be closed.
 //
-// This is an experimental API that may be remove in the future.
-// Please let me know how you feel about it.
+// This is an experimental API that may be removed in the future.
+// Please let me know how you feel about it in https://github.com/nhooyr/websocket/issues/79
 func (c *Conn) Context(parent context.Context) context.Context {
 	select {
 	case <-c.closed:
@@ -105,6 +113,8 @@ func (c *Conn) Subprotocol() string {
 func (c *Conn) init() {
 	c.closed = make(chan struct{})
 
+	c.msgReadLimit = 32768
+
 	c.writeDataLock = make(chan struct{}, 1)
 	c.writeFrameLock = make(chan struct{}, 1)
 
@@ -117,6 +127,8 @@ func (c *Conn) init() {
 	c.setWriteTimeout = make(chan context.Context)
 	c.setConnContext = make(chan context.Context)
 	c.getConnContext = make(chan context.Context)
+
+	c.pingListener = make(map[string]chan<- struct{})
 
 	runtime.SetFinalizer(c, func(c *Conn) {
 		c.close(xerrors.New("connection garbage collected"))
@@ -242,6 +254,10 @@ func (c *Conn) handleControl(h header) {
 	case opPing:
 		c.writePong(b)
 	case opPong:
+		listener, ok := c.pingListener[string(b)]
+		if ok {
+			close(listener)
+		}
 	case opClose:
 		ce, err := parseClosePayload(b)
 		if err != nil {
@@ -321,7 +337,7 @@ func (c *Conn) writePong(p []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	err := c.writeCompleteMessage(ctx, opPong, p)
+	err := c.writeMessage(ctx, opPong, p)
 	return err
 }
 
@@ -369,7 +385,7 @@ func (c *Conn) writeClose(p []byte, cerr CloseError) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	err := c.writeCompleteMessage(ctx, opClose, p)
+	err := c.writeMessage(ctx, opClose, p)
 
 	c.close(cerr)
 
@@ -399,7 +415,7 @@ func (c *Conn) releaseLock(lock chan struct{}) {
 	<-lock
 }
 
-func (c *Conn) writeCompleteMessage(ctx context.Context, opcode opcode, p []byte) error {
+func (c *Conn) writeMessage(ctx context.Context, opcode opcode, p []byte) error {
 	if !opcode.controlOp() {
 		err := c.acquireLock(ctx, c.writeDataLock)
 		if err != nil {
@@ -443,6 +459,30 @@ func (c *Conn) writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 		opcode: opcode(typ),
 		c:      c,
 	}, nil
+}
+
+// Read is a convenience method to read a single message from the connection.
+//
+// See the Reader method if you want to be able to reuse buffers or want to stream a message.
+func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
+	typ, r, err := c.Reader(ctx)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	b, err := ioutil.ReadAll(r)
+	if err != nil {
+		return typ, b, err
+	}
+
+	return typ, b, nil
+}
+
+// Write is a convenience method to write a message to the connection.
+//
+// See the Writer method if you want to stream a message.
+func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
+	return c.writeMessage(ctx, opcode(typ), p)
 }
 
 // messageWriter enables writing to a WebSocket connection.
@@ -519,7 +559,7 @@ func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 	if err != nil {
 		return 0, nil, xerrors.Errorf("failed to get reader: %w", err)
 	}
-	return typ, r, nil
+	return typ, io.LimitReader(r, c.msgReadLimit), nil
 }
 
 func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err error) {
@@ -639,4 +679,49 @@ func (r *messageReader) read(p []byte) (int, error) {
 	}
 
 	return n, nil
+}
+
+// SetReadLimit sets the max number of bytes to read for a single message.
+// It applies to the Reader and Read methods.
+//
+// By default, the connection has a message read limit of 32768 bytes.
+func (c *Conn) SetReadLimit(n int64) {
+	atomic.StoreInt64(&c.msgReadLimit, n)
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
+// Ping sends a ping to the peer and waits for a pong.
+// Use this to measure latency or ensure the peer is responsive.
+//
+// This API is experimental and subject to change.
+// Please provide feedback in https://github.com/nhooyr/websocket/issues/1.
+func (c *Conn) Ping(ctx context.Context) error {
+	err := c.ping(ctx)
+	if err != nil {
+		return xerrors.Errorf("failed to ping: %w", err)
+	}
+	return nil
+}
+
+func (c *Conn) ping(ctx context.Context) error {
+	id := rand.Uint64()
+	p := strconv.FormatUint(id, 10)
+
+	pong := make(chan struct{})
+	c.pingListener[p] = pong
+
+	err := c.writeMessage(ctx, opPing, []byte(p))
+	if err != nil {
+		return err
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-pong:
+		return nil
+	}
 }

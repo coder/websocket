@@ -12,8 +12,6 @@ import (
 )
 
 // Read reads a json message from c into v.
-// For security reasons, it will not read messages
-// larger than 32768 bytes.
 func Read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 	err := read(ctx, c, v)
 	if err != nil {
@@ -32,8 +30,6 @@ func read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 		c.Close(websocket.StatusUnsupportedData, "can only accept text messages")
 		return xerrors.Errorf("unexpected frame type for json (expected %v): %v", websocket.MessageText, typ)
 	}
-
-	r = io.LimitReader(r, 32768)
 
 	d := json.NewDecoder(r)
 	err = d.Decode(v)

@@ -94,7 +94,6 @@ func echoServer(w http.ResponseWriter, r *http.Request) error {
 // echo reads from the websocket connection and then writes
 // the received message back to it.
 // The entire function has 10s to complete.
-// The received message is limited to 32768 bytes.
 func echo(ctx context.Context, c *websocket.Conn, l *rate.Limiter) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
@@ -108,7 +107,6 @@ func echo(ctx context.Context, c *websocket.Conn, l *rate.Limiter) error {
 	if err != nil {
 		return err
 	}
-	r = io.LimitReader(r, 32768)
 
 	w, err := c.Writer(ctx, typ)
 	if err != nil {
