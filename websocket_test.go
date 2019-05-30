@@ -376,6 +376,39 @@ func TestHandshake(t *testing.T) {
 				return nil
 			},
 		},
+		{
+			name: "ping",
+			server: func(w http.ResponseWriter, r *http.Request) error {
+				c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+
+				err = c.Ping(r.Context())
+				if err != nil {
+					return err
+				}
+
+				c.Close(websocket.StatusNormalClosure, "")
+				return nil
+			},
+			client: func(ctx context.Context, u string) error {
+				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{})
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+
+				err = c.Ping(ctx)
+				if err != nil {
+					return err
+				}
+
+				c.Close(websocket.StatusNormalClosure, "")
+				return nil
+			},
+		},
 	}
 
 	for _, tc := range testCases {
