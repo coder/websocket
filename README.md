@@ -126,7 +126,7 @@ Some more advantages of nhooyr/websocket are that it supports concurrent writes 
 very easy to close the connection with a status code and reason.
 
 In terms of performance, the only difference is nhooyr/websocket is forced to use one extra
-goroutine to provide native context support. Otherwise, they should perform identically.
+goroutine for context.Context support. Otherwise, they perform identically.
 
 ### x/net/websocket
 
