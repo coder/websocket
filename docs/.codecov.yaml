@@ -1,0 +1,7 @@
+coverage:
+  status:
+    project:
+      default:
+        # Otherwise codecov/patch status keeps failing when there is a tiny
+        # change in code coverage.
+        threshold: 5
