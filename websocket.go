@@ -201,7 +201,7 @@ func (c *Conn) timeoutLoop() {
 	parentCtx := context.Background()
 	cancelCtx := func() {}
 	defer func() {
-		// We do not defer cancelCtx because its value can change.
+		// We do not defer cancelCtx directly because its value may change.
 		cancelCtx()
 	}()
 
@@ -223,9 +223,6 @@ func (c *Conn) timeoutLoop() {
 			ctx, cancelCtx = context.WithCancel(parentCtx)
 			select {
 			case <-c.closed:
-				return
-			case <-parentCtx.Done():
-				c.close(xerrors.Errorf("parent context cancelled: %w", parentCtx.Err()))
 				return
 			case c.getConnContext <- ctx:
 			}
