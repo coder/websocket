@@ -11,6 +11,7 @@ import (
 )
 
 // Read reads a protobuf message from c into v.
+// It will reuse buffers to avoid allocations.
 func Read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 	err := read(ctx, c, v)
 	if err != nil {
@@ -39,6 +40,7 @@ func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 }
 
 // Write writes the protobuf message v to c.
+// It will reuse buffers to avoid allocations.
 func Write(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 	err := write(ctx, c, v)
 	if err != nil {

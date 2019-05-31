@@ -11,6 +11,8 @@ import (
 )
 
 // Read reads a json message from c into v.
+// If the message is larger than 128 bytes, it will use a buffer
+// from a pool instead of performing an allocation.
 func Read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 	err := read(ctx, c, v)
 	if err != nil {
@@ -39,6 +41,7 @@ func read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 }
 
 // Write writes the json message v to c.
+// It uses json.Encoder which automatically reuses buffers.
 func Write(ctx context.Context, c *websocket.Conn, v interface{}) error {
 	err := write(ctx, c, v)
 	if err != nil {
