@@ -12,6 +12,6 @@ require (
 	golang.org/x/text v0.3.2 // indirect
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	golang.org/x/tools v0.0.0-20190429184909-35c670923e21
-	golang.org/x/xerrors v0.0.0-20190315151331-d61658bd2e18
+	golang.org/x/xerrors v0.0.0-20190513163551-3ee3066db522
 	mvdan.cc/sh v2.6.4+incompatible
 )

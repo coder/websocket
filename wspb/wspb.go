@@ -3,7 +3,6 @@ package wspb
 
 import (
 	"context"
-	"io"
 	"io/ioutil"
 
 	"github.com/golang/protobuf/proto"
@@ -13,8 +12,6 @@ import (
 )
 
 // Read reads a protobuf message from c into v.
-// For security reasons, it will not read messages
-// larger than 32768 bytes.
 func Read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 	err := read(ctx, c, v)
 	if err != nil {
@@ -33,8 +30,6 @@ func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 		c.Close(websocket.StatusUnsupportedData, "can only accept binary messages")
 		return xerrors.Errorf("unexpected frame type for protobuf (expected %v): %v", websocket.MessageBinary, typ)
 	}
-
-	r = io.LimitReader(r, 32768)
 
 	b, err := ioutil.ReadAll(r)
 	if err != nil {
@@ -64,19 +59,5 @@ func write(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 		return xerrors.Errorf("failed to marshal protobuf: %w", err)
 	}
 
-	w, err := c.Writer(ctx, websocket.MessageBinary)
-	if err != nil {
-		return err
-	}
-
-	_, err = w.Write(b)
-	if err != nil {
-		return err
-	}
-
-	err = w.Close()
-	if err != nil {
-		return err
-	}
-	return nil
+	return c.Write(ctx, websocket.MessageBinary, b)
 }

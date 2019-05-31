@@ -22,12 +22,11 @@ go get nhooyr.io/websocket@v0.2.0
 - Zero dependencies outside of the stdlib for the core library
 - JSON and ProtoBuf helpers in the wsjson and wspb subpackages
 - High performance
-- Concurrent writes
+- Concurrent reads and writes out of the box
 
 ## Roadmap
 
 - [ ] WebSockets over HTTP/2 [#4](https://github.com/nhooyr/websocket/issues/4)
-- [ ] Deflate extension support [#5](https://github.com/nhooyr/websocket/issues/5)
 
 ## Examples
 
@@ -86,11 +85,11 @@ c.Close(websocket.StatusNormalClosure, "")
 - A minimal API is easier to maintain due to less docs, tests and bugs
 - A minimal API is also easier to use and learn
 - Context based cancellation is more ergonomic and robust than setting deadlines
-- No ping support because TCP keep alives work fine for HTTP/1.1 and they do not make
-  sense with HTTP/2 (see [#1](https://github.com/nhooyr/websocket/issues/1))
 - net.Conn is never exposed as WebSocket over HTTP/2 will not have a net.Conn.
 - Using net/http's Client for dialing means we do not have to reinvent dialing hooks
   and configurations like other WebSocket libraries
+- We do not support the compression extension because Go's compress/flate library is very memory intensive
+  and browsers do not handle WebSocket compression intelligently. See [#5](https://github.com/nhooyr/websocket/issues/5)
 
 ## Comparison
 
@@ -122,8 +121,8 @@ also uses net/http's Client and ResponseWriter directly for WebSocket handshakes
 gorilla/websocket writes its handshakes to the underlying net.Conn which means
 it has to reinvent hooks for TLS and proxies and prevents support of HTTP/2.
 
-Some more advantages of nhooyr/websocket are that it supports concurrent writes and makes it
-very easy to close the connection with a status code and reason.
+Some more advantages of nhooyr/websocket are that it supports concurrent reads,
+writes and makes it very easy to close the connection with a status code and reason.
 
 In terms of performance, the only difference is nhooyr/websocket is forced to use one extra
 goroutine for context.Context support. Otherwise, they perform identically.

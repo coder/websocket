@@ -49,7 +49,7 @@ type CloseError struct {
 }
 
 func (ce CloseError) Error() string {
-	return fmt.Sprintf("websocket closed with status = %v and reason = %q", ce.Code, ce.Reason)
+	return fmt.Sprintf("status = %v and reason = %q", ce.Code, ce.Reason)
 }
 
 func parseClosePayload(p []byte) (CloseError, error) {

@@ -1,0 +1,9 @@
+coverage:
+  status:
+    # Prevent small changes in coverage from failing CI.
+    project:
+      default:
+        threshold: 5
+    patch:
+      default:
+        threshold: 5

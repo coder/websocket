@@ -293,10 +293,6 @@ func TestHandshake(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = write()
-				if err != nil {
-					return err
-				}
 
 				c.Close(websocket.StatusNormalClosure, "")
 				return nil
@@ -325,11 +321,6 @@ func TestHandshake(t *testing.T) {
 					}
 					return nil
 				}
-				err = read()
-				if err != nil {
-					return err
-				}
-				// Read twice to ensure the un EOFed previous reader works correctly.
 				err = read()
 				if err != nil {
 					return err
@@ -382,6 +373,39 @@ func TestHandshake(t *testing.T) {
 					return err
 				}
 				c.Close(websocket.StatusInternalError, "")
+				return nil
+			},
+		},
+		{
+			name: "ping",
+			server: func(w http.ResponseWriter, r *http.Request) error {
+				c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+
+				err = c.Ping(r.Context())
+				if err != nil {
+					return err
+				}
+
+				c.Close(websocket.StatusNormalClosure, "")
+				return nil
+			},
+			client: func(ctx context.Context, u string) error {
+				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{})
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+
+				err = c.Ping(ctx)
+				if err != nil {
+					return err
+				}
+
+				c.Close(websocket.StatusNormalClosure, "")
 				return nil
 			},
 		},
@@ -497,6 +521,8 @@ func TestAutobahnServer(t *testing.T) {
 
 func echoLoop(ctx context.Context, c *websocket.Conn) {
 	defer c.Close(websocket.StatusInternalError, "")
+
+	c.SetReadLimit(1 << 40)
 
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
@@ -765,6 +791,11 @@ func benchConn(b *testing.B, echo, stream bool, size int) {
 			_, err = io.ReadFull(r, buf)
 			if err != nil {
 				b.Fatal(err)
+			}
+
+			_, err = r.Read([]byte{0})
+			if !xerrors.Is(err, io.EOF) {
+				b.Fatalf("more data in reader than needed")
 			}
 		}
 	}

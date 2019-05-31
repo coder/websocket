@@ -51,6 +51,7 @@ func Example_echo() {
 
 	// Now we dial the server, send the messages and echo the responses.
 	err = client("ws://" + l.Addr().String())
+	time.Sleep(time.Second)
 	if err != nil {
 		log.Fatalf("client failed: %v", err)
 	}
@@ -66,6 +67,8 @@ func Example_echo() {
 // It ensures the client speaks the echo subprotocol and
 // only allows one message every 100ms with a 10 message burst.
 func echoServer(w http.ResponseWriter, r *http.Request) error {
+	log.Printf("serving %v", r.RemoteAddr)
+
 	c, err := websocket.Accept(w, r, websocket.AcceptOptions{
 		Subprotocols: []string{"echo"},
 	})
@@ -83,7 +86,7 @@ func echoServer(w http.ResponseWriter, r *http.Request) error {
 	for {
 		err = echo(r.Context(), c, l)
 		if err != nil {
-			return xerrors.Errorf("failed to echo: %w", err)
+			return xerrors.Errorf("failed to echo with %v: %w", r.RemoteAddr, err)
 		}
 	}
 }
@@ -91,7 +94,6 @@ func echoServer(w http.ResponseWriter, r *http.Request) error {
 // echo reads from the websocket connection and then writes
 // the received message back to it.
 // The entire function has 10s to complete.
-// The received message is limited to 32768 bytes.
 func echo(ctx context.Context, c *websocket.Conn, l *rate.Limiter) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
@@ -105,7 +107,6 @@ func echo(ctx context.Context, c *websocket.Conn, l *rate.Limiter) error {
 	if err != nil {
 		return err
 	}
-	r = io.LimitReader(r, 32768)
 
 	w, err := c.Writer(ctx, typ)
 	if err != nil {

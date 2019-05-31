@@ -1,8 +1,10 @@
 package websocket
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/base64"
+	"io"
 	"net/http"
 	"net/textproto"
 	"net/url"
@@ -75,8 +77,12 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 
 // Accept accepts a WebSocket handshake from a client and upgrades the
 // the connection to WebSocket.
+//
 // Accept will reject the handshake if the Origin domain is not the same as the Host unless
 // the InsecureSkipVerify option is set.
+//
+// The returned connection will be bound by r.Context(). Use c.Context() to change
+// the bounding context.
 func Accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, error) {
 	c, err := accept(w, r, opts)
 	if err != nil {
@@ -125,6 +131,10 @@ func accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, 
 		return nil, err
 	}
 
+	// https://github.com/golang/go/issues/32314
+	b, _ := brw.Reader.Peek(brw.Reader.Buffered())
+	brw.Reader.Reset(io.MultiReader(bytes.NewReader(b), netConn))
+
 	c := &Conn{
 		subprotocol: w.Header().Get("Sec-WebSocket-Protocol"),
 		br:          brw.Reader,
@@ -132,6 +142,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, 
 		closer:      netConn,
 	}
 	c.init()
+	c.Context(r.Context())
 
 	return c, nil
 }

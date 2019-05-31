@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 
 	"golang.org/x/xerrors"
 )
@@ -112,8 +113,8 @@ func dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Res
 
 	c := &Conn{
 		subprotocol: resp.Header.Get("Sec-WebSocket-Protocol"),
-		br:          bufio.NewReader(rwc),
-		bw:          bufio.NewWriter(rwc),
+		br:          getBufioReader(rwc),
+		bw:          getBufioWriter(rwc),
 		closer:      rwc,
 		client:      true,
 	}
@@ -139,4 +140,39 @@ func verifyServerResponse(resp *http.Response) error {
 	// See the secWebSocketKey global variable.
 
 	return nil
+}
+
+// The below pools can only be used by the client because http.Hijacker will always
+// have a bufio.Reader/Writer for us so it doesn't make sense to use a pool on top.
+
+var bufioReaderPool = sync.Pool{
+	New: func() interface{} {
+		return bufio.NewReader(nil)
+	},
+}
+
+func getBufioReader(r io.Reader) *bufio.Reader {
+	br := bufioReaderPool.Get().(*bufio.Reader)
+	br.Reset(r)
+	return br
+}
+
+func returnBufioReader(br *bufio.Reader) {
+	bufioReaderPool.Put(br)
+}
+
+var bufioWriterPool = sync.Pool{
+	New: func() interface{} {
+		return bufio.NewWriter(nil)
+	},
+}
+
+func getBufioWriter(w io.Writer) *bufio.Writer {
+	bw := bufioWriterPool.Get().(*bufio.Writer)
+	bw.Reset(w)
+	return bw
+}
+
+func returnBufioWriter(bw *bufio.Writer) {
+	bufioWriterPool.Put(bw)
 }
