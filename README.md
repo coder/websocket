@@ -27,7 +27,6 @@ go get nhooyr.io/websocket@v0.2.0
 ## Roadmap
 
 - [ ] WebSockets over HTTP/2 [#4](https://github.com/nhooyr/websocket/issues/4)
-- [ ] Deflate extension support [#5](https://github.com/nhooyr/websocket/issues/5)
 
 ## Examples
 
@@ -89,6 +88,8 @@ c.Close(websocket.StatusNormalClosure, "")
 - net.Conn is never exposed as WebSocket over HTTP/2 will not have a net.Conn.
 - Using net/http's Client for dialing means we do not have to reinvent dialing hooks
   and configurations like other WebSocket libraries
+- We do not support the compression extension because Go's compress/flate library is very memory intensive
+  and browsers do not handle WebSocket compression intelligently. See [#5](https://github.com/nhooyr/websocket/issues/5)
 
 ## Comparison
 
