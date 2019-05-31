@@ -1,9 +1,8 @@
-// Package wspb provides helpers for protobuf messages.
+// Package wspb provides websocket helpers for protobuf messages.
 package wspb
 
 import (
 	"context"
-	"io/ioutil"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/xerrors"
@@ -21,7 +20,7 @@ func Read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 }
 
 func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
-	typ, r, err := c.Reader(ctx)
+	typ, b, err := c.Read(ctx)
 	if err != nil {
 		return err
 	}
@@ -29,11 +28,6 @@ func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 	if typ != websocket.MessageBinary {
 		c.Close(websocket.StatusUnsupportedData, "can only accept binary messages")
 		return xerrors.Errorf("unexpected frame type for protobuf (expected %v): %v", websocket.MessageBinary, typ)
-	}
-
-	b, err := ioutil.ReadAll(r)
-	if err != nil {
-		return xerrors.Errorf("failed to read message: %w", err)
 	}
 
 	err = proto.Unmarshal(b, v)

@@ -22,6 +22,12 @@ import (
 //
 // Please be sure to call Close on the connection when you
 // are finished with it to release resources.
+//
+// Control (ping, pong, close) frames will be responded to in a separate goroutine
+// so if you do not expect any data messages, you do not need
+// to read from the connection. However, if the peer
+// sends a data message, further pings, pongs and close frames will not
+// be read if you do not read the message from the connection.
 type Conn struct {
 	subprotocol string
 	br          *bufio.Reader
@@ -35,21 +41,21 @@ type Conn struct {
 	closeErr  error
 	closed    chan struct{}
 
-	writeDataLock  chan struct{}
+	writeMsgLock   chan struct{}
 	writeFrameLock chan struct{}
 
 	readMsgLock   chan struct{}
+	readFrameLock chan struct{}
 	readMsg       chan header
 	readMsgDone   chan struct{}
-	readFrameLock chan struct{}
 
 	setReadTimeout  chan context.Context
 	setWriteTimeout chan context.Context
 	setConnContext  chan context.Context
 	getConnContext  chan context.Context
 
-	pingListenerMu sync.Mutex
-	pingListener   map[string]chan<- struct{}
+	activePingsMu sync.Mutex
+	activePings   map[string]chan<- struct{}
 }
 
 // Context returns a context derived from parent that will be cancelled
@@ -91,7 +97,8 @@ func (c *Conn) close(err error) {
 		close(c.closed)
 
 		// This ensures every goroutine that interacts
-		// with the conn closes before it can interact with the connection
+		// with the conn returns before it can actually do anything and
+		// receives c.closeErr.
 		c.readFrameLock <- struct{}{}
 		c.writeFrameLock <- struct{}{}
 
@@ -114,20 +121,20 @@ func (c *Conn) init() {
 
 	c.msgReadLimit = 32768
 
-	c.writeDataLock = make(chan struct{}, 1)
+	c.writeMsgLock = make(chan struct{}, 1)
 	c.writeFrameLock = make(chan struct{}, 1)
 
-	c.readMsg = make(chan header)
-	c.readMsgDone = make(chan struct{})
 	c.readMsgLock = make(chan struct{}, 1)
 	c.readFrameLock = make(chan struct{}, 1)
+	c.readMsg = make(chan header)
+	c.readMsgDone = make(chan struct{})
 
 	c.setReadTimeout = make(chan context.Context)
 	c.setWriteTimeout = make(chan context.Context)
 	c.setConnContext = make(chan context.Context)
 	c.getConnContext = make(chan context.Context)
 
-	c.pingListener = make(map[string]chan<- struct{})
+	c.activePings = make(map[string]chan<- struct{})
 
 	runtime.SetFinalizer(c, func(c *Conn) {
 		c.close(xerrors.New("connection garbage collected"))
@@ -199,11 +206,6 @@ func (c *Conn) timeoutLoop() {
 	readCtx := context.Background()
 	writeCtx := context.Background()
 	parentCtx := context.Background()
-	cancelCtx := func() {}
-	defer func() {
-		// We do not defer cancelCtx directly because its value may change.
-		cancelCtx()
-	}()
 
 	for {
 		select {
@@ -219,8 +221,9 @@ func (c *Conn) timeoutLoop() {
 			c.close(xerrors.Errorf("parent context cancelled: %w", parentCtx.Err()))
 			return
 		case parentCtx = <-c.setConnContext:
-			var ctx context.Context
-			ctx, cancelCtx = context.WithCancel(parentCtx)
+			ctx, cancelCtx := context.WithCancel(parentCtx)
+			defer cancelCtx()
+
 			select {
 			case <-c.closed:
 				return
@@ -256,11 +259,11 @@ func (c *Conn) handleControl(h header) {
 	case opPing:
 		c.writePong(b)
 	case opPong:
-		c.pingListenerMu.Lock()
-		listener, ok := c.pingListener[string(b)]
-		c.pingListenerMu.Unlock()
+		c.activePingsMu.Lock()
+		pong, ok := c.activePings[string(b)]
+		c.activePingsMu.Unlock()
 		if ok {
-			close(listener)
+			close(pong)
 		}
 	case opClose:
 		ce, err := parseClosePayload(b)
@@ -278,7 +281,7 @@ func (c *Conn) handleControl(h header) {
 	}
 }
 
-func (c *Conn) readTillData() (header, error) {
+func (c *Conn) readTillMsg() (header, error) {
 	for {
 		h, err := c.readHeader()
 		if err != nil {
@@ -330,10 +333,16 @@ func (c *Conn) readHeader() (header, error) {
 
 func (c *Conn) readLoop() {
 	for {
-		h, err := c.readTillData()
+		h, err := c.readTillMsg()
 		if err != nil {
 			c.close(err)
 			return
+		}
+
+		if h.opcode == opContinuation &&
+			h.fin &&
+			h.payloadLength == 0 {
+			c.releaseLock(c.readMsgLock)
 		}
 
 		select {
@@ -438,11 +447,11 @@ func (c *Conn) releaseLock(lock chan struct{}) {
 
 func (c *Conn) writeMessage(ctx context.Context, opcode opcode, p []byte) error {
 	if !opcode.controlOp() {
-		err := c.acquireLock(ctx, c.writeDataLock)
+		err := c.acquireLock(ctx, c.writeMsgLock)
 		if err != nil {
 			return err
 		}
-		defer c.releaseLock(c.writeDataLock)
+		defer c.releaseLock(c.writeMsgLock)
 	}
 
 	err := c.writeFrame(ctx, header{
@@ -450,7 +459,7 @@ func (c *Conn) writeMessage(ctx context.Context, opcode opcode, p []byte) error 
 		opcode: opcode,
 	}, p)
 	if err != nil {
-		return xerrors.Errorf("failed to write frame: %v", err)
+		return xerrors.Errorf("failed to write frame: %w", err)
 	}
 	return nil
 }
@@ -471,7 +480,7 @@ func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 }
 
 func (c *Conn) writer(ctx context.Context, typ MessageType) (io.WriteCloser, error) {
-	err := c.acquireLock(ctx, c.writeDataLock)
+	err := c.acquireLock(ctx, c.writeMsgLock)
 	if err != nil {
 		return nil, err
 	}
@@ -567,7 +576,7 @@ func (w *messageWriter) close() error {
 		return err
 	}
 
-	w.c.releaseLock(w.c.writeDataLock)
+	w.c.releaseLock(w.c.writeMsgLock)
 	return nil
 }
 
@@ -575,18 +584,21 @@ func (w *messageWriter) close() error {
 // It returns the type of the message and a reader to read it.
 // The passed context will also bound the reader.
 //
-// Your application must keep reading messages for the Conn to automatically respond to ping
-// and close frames and not become stuck waiting for a data message to be read.
-// Please ensure to read the full message from io.Reader.
+// If you do not read from the reader till EOF, the connection will hang.
 //
-// You can only read a single message at a time so do not call this method
-// concurrently.
+// You do not need to explicitly read from the connection to reply to control frames.
+// Please see the docs on the Conn type.
 func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 	typ, r, err := c.reader(ctx)
 	if err != nil {
 		return 0, nil, xerrors.Errorf("failed to get reader: %w", err)
 	}
-	return typ, io.LimitReader(r, c.msgReadLimit), nil
+	readLimit := atomic.LoadInt64(&c.msgReadLimit)
+	return typ, &limitedReader{
+		c:    c,
+		r:    r,
+		left: readLimit,
+	}, nil
 }
 
 func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err error) {
@@ -717,6 +729,8 @@ func (r *messageReader) read(p []byte) (int, error) {
 // It applies to the Reader and Read methods.
 //
 // By default, the connection has a message read limit of 32768 bytes.
+//
+// When the limit is hit, the connection will be closed with StatusPolicyViolation.
 func (c *Conn) SetReadLimit(n int64) {
 	atomic.StoreInt64(&c.msgReadLimit, n)
 }
@@ -744,14 +758,14 @@ func (c *Conn) ping(ctx context.Context) error {
 
 	pong := make(chan struct{})
 
-	c.pingListenerMu.Lock()
-	c.pingListener[p] = pong
-	c.pingListenerMu.Unlock()
+	c.activePingsMu.Lock()
+	c.activePings[p] = pong
+	c.activePingsMu.Unlock()
 
 	defer func() {
-		c.pingListenerMu.Lock()
-		delete(c.pingListener, p)
-		c.pingListenerMu.Unlock()
+		c.activePingsMu.Lock()
+		delete(c.activePings, p)
+		c.activePingsMu.Unlock()
 	}()
 
 	err := c.writeMessage(ctx, opPing, []byte(p))
@@ -762,6 +776,8 @@ func (c *Conn) ping(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
+	case <-c.closed:
+		return c.closeErr
 	case <-pong:
 		return nil
 	}

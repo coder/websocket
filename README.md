@@ -5,23 +5,25 @@
 
 websocket is a minimal and idiomatic WebSocket library for Go.
 
-This library is not final and the API is subject to change.
+This library is now production ready but some parts of the API are marked as experimental.
+
+Please feel free to open an issue for feedback.
 
 ## Install
 
 ```bash
-go get nhooyr.io/websocket@v0.2.0
+go get nhooyr.io/websocket
 ```
 
 ## Features
 
 - Minimal and idiomatic API
-- Tiny codebase at 1400 lines
+- Tiny codebase at 1700 lines
 - First class context.Context support
 - Thorough tests, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 - Zero dependencies outside of the stdlib for the core library
 - JSON and ProtoBuf helpers in the wsjson and wspb subpackages
-- High performance
+- High performance, memory reuse wherever possible
 - Concurrent reads and writes out of the box
 
 ## Roadmap
@@ -88,8 +90,9 @@ c.Close(websocket.StatusNormalClosure, "")
 - net.Conn is never exposed as WebSocket over HTTP/2 will not have a net.Conn.
 - Using net/http's Client for dialing means we do not have to reinvent dialing hooks
   and configurations like other WebSocket libraries
-- We do not support the compression extension because Go's compress/flate library is very memory intensive
-  and browsers do not handle WebSocket compression intelligently. See [#5](https://github.com/nhooyr/websocket/issues/5)
+- We do not support the deflate compression extension because Go's compress/flate library
+  is very memory intensive and browsers do not handle WebSocket compression intelligently.
+  See [#5](https://github.com/nhooyr/websocket/issues/5)
 
 ## Comparison
 
@@ -111,7 +114,7 @@ Just compare the godoc of
 
 The API for nhooyr/websocket has been designed such that there is only one way to do things
 which makes it easy to use correctly. Not only is the API simpler, the implementation is
-only 1400 lines whereas gorilla/websocket is at 3500 lines. That's more code to maintain,
+only 1700 lines whereas gorilla/websocket is at 3500 lines. That's more code to maintain,
  more code to test, more code to document and more surface area for bugs.
 
 The future of gorilla/websocket is also uncertain. See [gorilla/websocket#370](https://github.com/gorilla/websocket/issues/370).
@@ -124,8 +127,18 @@ it has to reinvent hooks for TLS and proxies and prevents support of HTTP/2.
 Some more advantages of nhooyr/websocket are that it supports concurrent reads,
 writes and makes it very easy to close the connection with a status code and reason.
 
-In terms of performance, the only difference is nhooyr/websocket is forced to use one extra
-goroutine for context.Context support. Otherwise, they perform identically.
+nhooyr/websocket also responds to pings, pongs and close frames in a separate goroutine so that
+your application doesn't always need to read from the connection unless it expects a data message.
+gorilla/websocket requires you to constantly read from the connection to respond to control frames
+even if you don't expect the peer to send any messages.
+
+In terms of performance, the differences depend on your application code. nhooyr/websocket
+reuses buffers efficiently out of the box whereas gorilla/websocket does not. As mentioned
+above, it also supports concurrent readers and writers out of the box.
+
+The only performance downside to nhooyr/websocket is that uses two extra goroutines. One for
+reading pings, pongs and close frames async to application code and another to support
+context.Context cancellation. This costs 4 KB of memory which is fairly cheap.
 
 ### x/net/websocket
 

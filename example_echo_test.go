@@ -51,7 +51,6 @@ func Example_echo() {
 
 	// Now we dial the server, send the messages and echo the responses.
 	err = client("ws://" + l.Addr().String())
-	time.Sleep(time.Second)
 	if err != nil {
 		log.Fatalf("client failed: %v", err)
 	}

@@ -409,6 +409,43 @@ func TestHandshake(t *testing.T) {
 				return nil
 			},
 		},
+		{
+			name: "readLimit",
+			server: func(w http.ResponseWriter, r *http.Request) error {
+				c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+
+				_, _, err = c.Read(r.Context())
+				if err == nil {
+					return xerrors.Errorf("expected error but got nil")
+				}
+				return nil
+			},
+			client: func(ctx context.Context, u string) error {
+				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{})
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+
+				err = c.Write(ctx, websocket.MessageBinary, []byte(strings.Repeat("x", 32769)))
+				if err != nil {
+					return err
+				}
+
+				err = c.Ping(ctx)
+
+				var ce websocket.CloseError
+				if !xerrors.As(err, &ce) || ce.Code != websocket.StatusPolicyViolation {
+					return xerrors.Errorf("unexpected error: %w", err)
+				}
+
+				return nil
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -477,7 +514,7 @@ func TestAutobahnServer(t *testing.T) {
 	defer s.Close()
 
 	spec := map[string]interface{}{
-		"outdir": "wstest_reports/server",
+		"outdir": "ci/out/wstestServerReports",
 		"servers": []interface{}{
 			map[string]interface{}{
 				"agent": "main",
@@ -487,7 +524,7 @@ func TestAutobahnServer(t *testing.T) {
 		"cases":         []string{"*"},
 		"exclude-cases": []string{"6.*", "7.5.1", "12.*", "13.*"},
 	}
-	specFile, err := ioutil.TempFile("", "websocket_fuzzingclient.json")
+	specFile, err := ioutil.TempFile("", "websocketFuzzingClient.json")
 	if err != nil {
 		t.Fatalf("failed to create temp file for fuzzingclient.json: %v", err)
 	}
@@ -516,7 +553,7 @@ func TestAutobahnServer(t *testing.T) {
 		t.Fatalf("failed to run wstest: %v\nout:\n%s", err, out)
 	}
 
-	checkWSTestIndex(t, "./wstest_reports/server/index.json")
+	checkWSTestIndex(t, "./ci/out/wstestServerReports/index.json")
 }
 
 func echoLoop(ctx context.Context, c *websocket.Conn) {
@@ -594,11 +631,11 @@ func TestAutobahnClient(t *testing.T) {
 
 	spec := map[string]interface{}{
 		"url":           "ws://localhost:9001",
-		"outdir":        "wstest_reports/client",
+		"outdir":        "ci/out/wstestClientReports",
 		"cases":         []string{"*"},
 		"exclude-cases": []string{"6.*", "7.5.1", "12.*", "13.*"},
 	}
-	specFile, err := ioutil.TempFile("", "websocket_fuzzingserver.json")
+	specFile, err := ioutil.TempFile("", "websocketFuzzingServer.json")
 	if err != nil {
 		t.Fatalf("failed to create temp file for fuzzingserver.json: %v", err)
 	}
@@ -682,7 +719,7 @@ func TestAutobahnClient(t *testing.T) {
 	}
 	c.Close(websocket.StatusNormalClosure, "")
 
-	checkWSTestIndex(t, "./wstest_reports/client/index.json")
+	checkWSTestIndex(t, "./ci/out/wstestClientReports/index.json")
 }
 
 func checkWSTestIndex(t *testing.T, path string) {
