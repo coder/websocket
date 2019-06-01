@@ -263,7 +263,6 @@ func TestHandshake(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				// Read twice to ensure the un EOFed previous reader works correctly.
 				err = read()
 				if err != nil {
 					return err
@@ -842,11 +841,6 @@ func benchConn(b *testing.B, echo, stream bool, size int) {
 			_, err = io.ReadFull(r, buf)
 			if err != nil {
 				b.Fatal(err)
-			}
-
-			_, err = r.Read([]byte{0})
-			if !xerrors.Is(err, io.EOF) {
-				b.Fatalf("more data in reader than needed")
 			}
 		}
 	}

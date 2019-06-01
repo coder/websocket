@@ -846,8 +846,9 @@ func (c *Conn) ping(ctx context.Context) error {
 	case <-c.closed:
 		return c.closeErr
 	case <-ctx.Done():
-		c.close(xerrors.Errorf("failed to ping: %w", ctx.Err()))
-		return ctx.Err()
+		err := xerrors.Errorf("failed to wait for pong: %w", ctx.Err())
+		c.close(err)
+		return err
 	case <-pong:
 		return nil
 	}
