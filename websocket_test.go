@@ -485,19 +485,14 @@ func TestHandshake(t *testing.T) {
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
-				pctx := c.Context(ctx)
+				cctx := c.Context(ctx)
 
-				for ctx.Err() == nil {
-					err = c.Ping(ctx)
-					if err != nil {
-						if pctx.Err() == nil {
-							return xerrors.Errorf("context from c.Context not cancelled when connection broken")
-						}
-						return nil
-					}
+				select {
+				case <-ctx.Done():
+					return xerrors.Errorf("child context never cancelled")
+				case <-cctx.Done():
+					return nil
 				}
-
-				return xerrors.Errorf("all pings succeeded")
 			},
 		},
 	}
