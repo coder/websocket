@@ -801,6 +801,7 @@ func init() {
 
 // Ping sends a ping to the peer and waits for a pong.
 // Use this to measure latency or ensure the peer is responsive.
+// TCP Keepalives should suffice for most use cases.
 func (c *Conn) Ping(ctx context.Context) error {
 	err := c.ping(ctx)
 	if err != nil {
