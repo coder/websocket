@@ -455,6 +455,51 @@ func TestHandshake(t *testing.T) {
 				return nil
 			},
 		},
+		{
+			name: "context",
+			server: func(w http.ResponseWriter, r *http.Request) error {
+				c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+
+				ctx, cancel := context.WithTimeout(r.Context(), time.Second)
+				defer cancel()
+
+				c.Context(ctx)
+
+				for r.Context().Err() == nil {
+					err = c.Ping(ctx)
+					if err != nil {
+						return nil
+					}
+				}
+
+				return xerrors.Errorf("all pings succeeded")
+			},
+			client: func(ctx context.Context, u string) error {
+				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{})
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+
+				pctx := c.Context(ctx)
+
+				for ctx.Err() == nil {
+					err = c.Ping(ctx)
+					if err != nil {
+						if pctx.Err() == nil {
+							return xerrors.Errorf("context from c.Context not cancelled when connection broken")
+						}
+						return nil
+					}
+				}
+
+				return xerrors.Errorf("all pings succeeded")
+			},
+		},
 	}
 
 	for _, tc := range testCases {
