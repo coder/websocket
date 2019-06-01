@@ -158,9 +158,6 @@ func (c *Conn) timeoutLoop() {
 // Context returns a context derived from parent that will be cancelled
 // when the connection is closed or broken.
 // If the parent context is cancelled, the connection will be closed.
-//
-// This is an experimental API.
-// Please let me know how you feel about it in https://github.com/nhooyr/websocket/issues/79
 func (c *Conn) Context(parent context.Context) context.Context {
 	select {
 	case <-c.closed:
@@ -542,9 +539,6 @@ func (c *Conn) SetReadLimit(n int64) {
 //
 // See the Reader method if you want to be able to reuse buffers or want to stream a message.
 // The docs on Reader apply to this method as well.
-//
-// This is an experimental API, please let me know how you feel about it in
-// https://github.com/nhooyr/websocket/issues/62
 func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 	typ, r, err := c.Reader(ctx)
 	if err != nil {
@@ -586,9 +580,6 @@ func (c *Conn) writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 //
 // See the Writer method if you want to stream a message. The docs on Writer
 // regarding concurrency also apply to this method.
-//
-// This is an experimental API, please let me know how you feel about it in
-// https://github.com/nhooyr/websocket/issues/62
 func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	err := c.write(ctx, typ, p)
 	if err != nil {
@@ -810,9 +801,6 @@ func init() {
 
 // Ping sends a ping to the peer and waits for a pong.
 // Use this to measure latency or ensure the peer is responsive.
-//
-// This API is experimental.
-// Please provide feedback in https://github.com/nhooyr/websocket/issues/1.
 func (c *Conn) Ping(ctx context.Context) error {
 	err := c.ping(ctx)
 	if err != nil {
