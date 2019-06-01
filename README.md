@@ -8,7 +8,7 @@ websocket is a minimal and idiomatic WebSocket library for Go.
 ## Install
 
 ```bash
-go get nhooyr.io/websocket
+go get nhooyr.io/websocket@v1.0.0
 ```
 
 ## Features
@@ -19,7 +19,7 @@ go get nhooyr.io/websocket
 - Thorough tests, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 - Zero dependencies outside of the stdlib for the core library
 - JSON and ProtoBuf helpers in the wsjson and wspb subpackages
-- High performance, memory reuse by default
+- Highly optimized by default
 - Concurrent writes out of the box
 
 ## Roadmap
@@ -129,8 +129,9 @@ gorilla/websocket requires you to constantly read from the connection to respond
 even if you don't expect the peer to send any messages.
 
 In terms of performance, the differences depend on your application code. nhooyr/websocket
-reuses buffers efficiently out of the box whereas gorilla/websocket does not. As mentioned
-above, it also supports concurrent writers out of the box.
+reuses buffers efficiently out of the box if you use the wsjson and wspb subpackages whereas
+gorilla/websocket does not. As mentioned above, nhooyr/websocket also supports concurrent
+writers out of the box.
 
 The only performance con to nhooyr/websocket is that uses two extra goroutines. One for
 reading pings, pongs and close frames async to application code and another to support
