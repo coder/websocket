@@ -1,9 +1,8 @@
-// Package wspb provides helpers for protobuf messages.
+// Package wspb provides websocket helpers for protobuf messages.
 package wspb
 
 import (
 	"context"
-	"io/ioutil"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/xerrors"
@@ -12,6 +11,7 @@ import (
 )
 
 // Read reads a protobuf message from c into v.
+// It will reuse buffers to avoid allocations.
 func Read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 	err := read(ctx, c, v)
 	if err != nil {
@@ -21,7 +21,7 @@ func Read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 }
 
 func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
-	typ, r, err := c.Reader(ctx)
+	typ, b, err := c.Read(ctx)
 	if err != nil {
 		return err
 	}
@@ -29,11 +29,6 @@ func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 	if typ != websocket.MessageBinary {
 		c.Close(websocket.StatusUnsupportedData, "can only accept binary messages")
 		return xerrors.Errorf("unexpected frame type for protobuf (expected %v): %v", websocket.MessageBinary, typ)
-	}
-
-	b, err := ioutil.ReadAll(r)
-	if err != nil {
-		return xerrors.Errorf("failed to read message: %w", err)
 	}
 
 	err = proto.Unmarshal(b, v)
@@ -45,6 +40,7 @@ func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 }
 
 // Write writes the protobuf message v to c.
+// It will reuse buffers to avoid allocations.
 func Write(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 	err := write(ctx, c, v)
 	if err != nil {

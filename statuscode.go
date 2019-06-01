@@ -60,7 +60,7 @@ func parseClosePayload(p []byte) (CloseError, error) {
 	}
 
 	if len(p) < 2 {
-		return CloseError{}, xerrors.Errorf("close payload too small, cannot even contain the 2 byte status code")
+		return CloseError{}, xerrors.Errorf("close payload %q too small, cannot even contain the 2 byte status code", p)
 	}
 
 	ce := CloseError{
@@ -78,13 +78,13 @@ func parseClosePayload(p []byte) (CloseError, error) {
 // See http://www.iana.org/assignments/websocket/websocket.xhtml#close-code-number
 // and https://tools.ietf.org/html/rfc6455#section-7.4.1
 func validWireCloseCode(code StatusCode) bool {
-	if code >= StatusNormalClosure && code <= statusTLSHandshake {
-		switch code {
-		case 1004, StatusNoStatusRcvd, statusAbnormalClosure, statusTLSHandshake:
-			return false
-		default:
-			return true
-		}
+	switch code {
+	case 1004, StatusNoStatusRcvd, statusAbnormalClosure, statusTLSHandshake:
+		return false
+	}
+
+	if code >= StatusNormalClosure && code <= StatusBadGateway {
+		return true
 	}
 	if code >= 3000 && code <= 4999 {
 		return true

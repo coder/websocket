@@ -2,8 +2,6 @@
 
 source ci/lib.sh || exit 1
 
-mkdir -p profs
-
 set +x
 echo
 echo "this step includes benchmarks for race detection and coverage purposes
@@ -12,15 +10,15 @@ accurate numbers"
 echo
 set -x
 
-go test -race -coverprofile=profs/coverage --vet=off -bench=. ./...
-go tool cover -func=profs/coverage
+go test -race -coverprofile=ci/out/coverage.prof --vet=off -bench=. ./...
+go tool cover -func=ci/out/coverage.prof
 
 if [[ $CI ]]; then
-	bash <(curl -s https://codecov.io/bash) -f profs/coverage
+	bash <(curl -s https://codecov.io/bash) -f ci/out/coverage.prof
 else
-	go tool cover -html=profs/coverage -o=profs/coverage.html
+	go tool cover -html=ci/out/coverage.prof -o=ci/out/coverage.html
 
 	set +x
 	echo
-	echo "please open profs/coverage.html to see detailed test coverage stats"
+	echo "please open ci/out/coverage.html to see detailed test coverage stats"
 fi
