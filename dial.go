@@ -18,9 +18,9 @@ import (
 // DialOptions represents the options available to pass to Dial.
 type DialOptions struct {
 	// HTTPClient is the http client used for the handshake.
-	// Its Transport must use HTTP/1.1 and return writable bodies
-	// for WebSocket handshakes. This was introduced in Go 1.12.
-	// http.Transport does this all correctly.
+	// Its Transport must return writable bodies
+	// for WebSocket handshakes.
+	// http.Transport does this correctly beginning with Go 1.12.
 	HTTPClient *http.Client
 
 	// HTTPHeader specifies the HTTP headers included in the handshake request.
@@ -30,7 +30,7 @@ type DialOptions struct {
 	Subprotocols []string
 }
 
-// We use this key for all client requests as the Sec-WebSocket-Key header is useless.
+// We use this key for all client requests as the Sec-WebSocket-Key header doesn't do anything.
 // See https://stackoverflow.com/a/37074398/4283659.
 // We also use the same mask key for every message as it too does not make a difference.
 var secWebSocketKey = base64.StdEncoding.EncodeToString(make([]byte, 16))
@@ -108,7 +108,7 @@ func dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Res
 
 	rwc, ok := resp.Body.(io.ReadWriteCloser)
 	if !ok {
-		return nil, resp, xerrors.Errorf("response body is not a read write closer: %T", rwc)
+		return nil, resp, xerrors.Errorf("response body is not a io.ReadWriteCloser: %T", rwc)
 	}
 
 	c := &Conn{

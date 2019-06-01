@@ -390,6 +390,11 @@ func TestHandshake(t *testing.T) {
 					return err
 				}
 
+				err = c.Write(r.Context(), websocket.MessageText, []byte("hi"))
+				if err != nil {
+					return err
+				}
+
 				c.Close(websocket.StatusNormalClosure, "")
 				return nil
 			},
@@ -401,6 +406,11 @@ func TestHandshake(t *testing.T) {
 				defer c.Close(websocket.StatusInternalError, "")
 
 				err = c.Ping(ctx)
+				if err != nil {
+					return err
+				}
+
+				_, _, err = c.Read(ctx)
 				if err != nil {
 					return err
 				}
@@ -521,7 +531,10 @@ func TestAutobahnServer(t *testing.T) {
 				"url":   strings.Replace(s.URL, "http", "ws", 1),
 			},
 		},
-		"cases":         []string{"*"},
+		"cases": []string{"*"},
+		// We skip the UTF-8 handling tests as there isn't any reason to reject invalid UTF-8, just
+		// more performance overhead. 7.5.1 is the same.
+		// 12.* and 13.* as we do not support compression.
 		"exclude-cases": []string{"6.*", "7.5.1", "12.*", "13.*"},
 	}
 	specFile, err := ioutil.TempFile("", "websocketFuzzingClient.json")
@@ -630,9 +643,10 @@ func TestAutobahnClient(t *testing.T) {
 	t.Parallel()
 
 	spec := map[string]interface{}{
-		"url":           "ws://localhost:9001",
-		"outdir":        "ci/out/wstestClientReports",
-		"cases":         []string{"*"},
+		"url":    "ws://localhost:9001",
+		"outdir": "ci/out/wstestClientReports",
+		"cases":  []string{"*"},
+		// See TestAutobahnServer for the reasons why we exclude these.
 		"exclude-cases": []string{"6.*", "7.5.1", "12.*", "13.*"},
 	}
 	specFile, err := ioutil.TempFile("", "websocketFuzzingServer.json")

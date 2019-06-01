@@ -13,3 +13,5 @@ const (
 	// MessageBinary is for binary messages like Protobufs.
 	MessageBinary MessageType = MessageType(opBinary)
 )
+
+// Above I've explicitly included the types of the constants for stringer.

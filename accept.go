@@ -76,12 +76,12 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 }
 
 // Accept accepts a WebSocket handshake from a client and upgrades the
-// the connection to WebSocket.
+// the connection to a WebSocket.
 //
 // Accept will reject the handshake if the Origin domain is not the same as the Host unless
 // the InsecureSkipVerify option is set.
 //
-// The returned connection will be bound by r.Context(). Use c.Context() to change
+// The returned connection will be bound by r.Context(). Use conn.Context() to change
 // the bounding context.
 func Accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, error) {
 	c, err := accept(w, r, opts)
@@ -107,7 +107,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, 
 
 	hj, ok := w.(http.Hijacker)
 	if !ok {
-		err = xerrors.New("response writer must implement http.Hijacker")
+		err = xerrors.New("passed ResponseWriter does not implement http.Hijacker")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, 
 	w.Header().Set("Upgrade", "websocket")
 	w.Header().Set("Connection", "Upgrade")
 
-	handleKey(w, r)
+	handleSecWebSocketKey(w, r)
 
 	subproto := selectSubprotocol(r, opts.Subprotocols)
 	if subproto != "" {
@@ -163,7 +163,7 @@ func selectSubprotocol(r *http.Request, subprotocols []string) string {
 
 var keyGUID = []byte("258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
 
-func handleKey(w http.ResponseWriter, r *http.Request) {
+func handleSecWebSocketKey(w http.ResponseWriter, r *http.Request) {
 	key := r.Header.Get("Sec-WebSocket-Key")
 	h := sha1.New()
 	h.Write([]byte(key))
@@ -185,5 +185,5 @@ func authenticateOrigin(r *http.Request) error {
 	if strings.EqualFold(u.Host, r.Host) {
 		return nil
 	}
-	return xerrors.Errorf("request origin %q is not authorized for host %q", origin, r.Host)
+	return xerrors.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host)
 }

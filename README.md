@@ -5,10 +5,6 @@
 
 websocket is a minimal and idiomatic WebSocket library for Go.
 
-This library is now production ready but some parts of the API are marked as experimental.
-
-Please feel free to open an issue for feedback.
-
 ## Install
 
 ```bash
@@ -23,8 +19,8 @@ go get nhooyr.io/websocket
 - Thorough tests, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 - Zero dependencies outside of the stdlib for the core library
 - JSON and ProtoBuf helpers in the wsjson and wspb subpackages
-- High performance, memory reuse wherever possible
-- Concurrent reads and writes out of the box
+- High performance, memory reuse by default
+- Concurrent writes out of the box
 
 ## Roadmap
 
@@ -124,8 +120,8 @@ also uses net/http's Client and ResponseWriter directly for WebSocket handshakes
 gorilla/websocket writes its handshakes to the underlying net.Conn which means
 it has to reinvent hooks for TLS and proxies and prevents support of HTTP/2.
 
-Some more advantages of nhooyr/websocket are that it supports concurrent reads,
-writes and makes it very easy to close the connection with a status code and reason.
+Some more advantages of nhooyr/websocket are that it supports concurrent writes and
+makes it very easy to close the connection with a status code and reason.
 
 nhooyr/websocket also responds to pings, pongs and close frames in a separate goroutine so that
 your application doesn't always need to read from the connection unless it expects a data message.
@@ -134,11 +130,12 @@ even if you don't expect the peer to send any messages.
 
 In terms of performance, the differences depend on your application code. nhooyr/websocket
 reuses buffers efficiently out of the box whereas gorilla/websocket does not. As mentioned
-above, it also supports concurrent readers and writers out of the box.
+above, it also supports concurrent writers out of the box.
 
-The only performance downside to nhooyr/websocket is that uses two extra goroutines. One for
+The only performance con to nhooyr/websocket is that uses two extra goroutines. One for
 reading pings, pongs and close frames async to application code and another to support
-context.Context cancellation. This costs 4 KB of memory which is fairly cheap.
+context.Context cancellation. This costs 4 KB of memory which is cheap compared
+to the benefits.
 
 ### x/net/websocket
 

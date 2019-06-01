@@ -20,7 +20,7 @@ import (
 // dials the server and then sends 5 different messages
 // and prints out the server's responses.
 func Example_echo() {
-	// First we listen on port 0, that means the OS will
+	// First we listen on port 0 which means the OS will
 	// assign us a random free port. This is the listener
 	// the server will serve on and the client will connect to.
 	l, err := net.Listen("tcp", "localhost:0")
