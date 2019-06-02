@@ -2,12 +2,15 @@
 package wspb
 
 import (
+	"bytes"
 	"context"
+	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/internal/bpool"
 )
 
 // Read reads a protobuf message from c into v.
@@ -21,7 +24,7 @@ func Read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 }
 
 func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
-	typ, b, err := c.Read(ctx)
+	typ, r, err := c.Reader(ctx)
 	if err != nil {
 		return err
 	}
@@ -31,7 +34,17 @@ func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 		return xerrors.Errorf("unexpected frame type for protobuf (expected %v): %v", websocket.MessageBinary, typ)
 	}
 
-	err = proto.Unmarshal(b, v)
+	b := bpool.Get()
+	defer func() {
+		bpool.Put(b)
+	}()
+
+	_, err = b.ReadFrom(r)
+	if err != nil {
+		return err
+	}
+
+	err = proto.Unmarshal(b.Bytes(), v)
 	if err != nil {
 		return xerrors.Errorf("failed to unmarshal protobuf: %w", err)
 	}
@@ -49,11 +62,19 @@ func Write(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 	return nil
 }
 
+var writeBufPool sync.Pool
+
 func write(ctx context.Context, c *websocket.Conn, v proto.Message) error {
-	b, err := proto.Marshal(v)
+	b := bpool.Get()
+	pb := proto.NewBuffer(b.Bytes())
+	defer func() {
+		bpool.Put(bytes.NewBuffer(pb.Bytes()))
+	}()
+
+	err := pb.Marshal(v)
 	if err != nil {
 		return xerrors.Errorf("failed to marshal protobuf: %w", err)
 	}
 
-	return c.Write(ctx, websocket.MessageBinary, b)
+	return c.Write(ctx, websocket.MessageBinary, pb.Bytes())
 }
