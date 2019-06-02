@@ -8,6 +8,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/internal/bpool"
 )
 
 // Read reads a json message from c into v.
@@ -22,7 +23,7 @@ func Read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 }
 
 func read(ctx context.Context, c *websocket.Conn, v interface{}) error {
-	typ, b, err := c.Read(ctx)
+	typ, r, err := c.Reader(ctx)
 	if err != nil {
 		return err
 	}
@@ -32,7 +33,17 @@ func read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 		return xerrors.Errorf("unexpected frame type for json (expected %v): %v", websocket.MessageText, typ)
 	}
 
-	err = json.Unmarshal(b, v)
+	b := bpool.Get()
+	defer func() {
+		bpool.Put(b)
+	}()
+
+	_, err = b.ReadFrom(r)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(b.Bytes(), v)
 	if err != nil {
 		return xerrors.Errorf("failed to unmarshal json: %w", err)
 	}
