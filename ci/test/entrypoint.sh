@@ -10,7 +10,7 @@ accurate numbers"
 echo
 set -x
 
-go test -race -coverprofile=ci/out/coverage.prof --vet=off -bench=. ./...
+go test -race -coverprofile=ci/out/coverage.prof --vet=off -bench=. -coverpkg=./... ./...
 go tool cover -func=ci/out/coverage.prof
 
 if [[ $CI ]]; then
