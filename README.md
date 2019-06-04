@@ -129,8 +129,8 @@ gorilla/websocket requires you to constantly read from the connection to respond
 even if you don't expect the peer to send any messages.
 
 The ping API is also much nicer. gorilla/websocket requires registering a pong handler on the Conn
-which results in an awkward control flow. With nhooyr/websocket you use the Ping method on
-the Conn that sends a ping and also waits for the pong.
+which results in awkward control flow. With nhooyr/websocket you use the Ping method on the Conn
+that sends a ping and also waits for the pong.
 
 In terms of performance, the differences depend on your application code. nhooyr/websocket
 reuses buffers efficiently out of the box if you use the wsjson and wspb subpackages whereas
