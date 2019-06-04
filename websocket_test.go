@@ -68,7 +68,6 @@ func TestHandshake(t *testing.T) {
 
 				checkHeader("Connection", "Upgrade")
 				checkHeader("Upgrade", "websocket")
-				checkHeader("Sec-WebSocket-Accept", "ICX+Yqv66kxgM0FcWaLWlFLwTAI=")
 				checkHeader("Sec-WebSocket-Protocol", "myproto")
 
 				c.Close(websocket.StatusNormalClosure, "")

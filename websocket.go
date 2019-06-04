@@ -3,6 +3,7 @@ package websocket
 import (
 	"bufio"
 	"context"
+	cryptorand "crypto/rand"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -26,8 +27,11 @@ type Conn struct {
 	subprotocol string
 	br          *bufio.Reader
 	bw          *bufio.Writer
-	closer      io.Closer
-	client      bool
+	// writeBuf is used for masking, its the buffer in bufio.Writer.
+	// Only used by the client.
+	writeBuf []byte
+	closer   io.Closer
+	client   bool
 
 	// read limit for a message in bytes.
 	msgReadLimit int64
@@ -581,22 +585,22 @@ func (c *Conn) writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 // See the Writer method if you want to stream a message. The docs on Writer
 // regarding concurrency also apply to this method.
 func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
-	err := c.write(ctx, typ, p)
+	_, err := c.write(ctx, typ, p)
 	if err != nil {
 		return xerrors.Errorf("failed to write msg: %w", err)
 	}
 	return nil
 }
 
-func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) error {
+func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) (int, error) {
 	err := c.acquireLock(ctx, c.writeMsgLock)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer c.releaseLock(c.writeMsgLock)
 
-	err = c.writeFrame(ctx, true, opcode(typ), p)
-	return err
+	n, err := c.writeFrame(ctx, true, opcode(typ), p)
+	return n, err
 }
 
 // messageWriter enables writing to a WebSocket connection.
@@ -620,12 +624,12 @@ func (w *messageWriter) write(p []byte) (int, error) {
 	if w.closed {
 		return 0, xerrors.Errorf("cannot use closed writer")
 	}
-	err := w.c.writeFrame(w.ctx, false, w.opcode, p)
+	n, err := w.c.writeFrame(w.ctx, false, w.opcode, p)
 	if err != nil {
-		return 0, xerrors.Errorf("failed to write data frame: %w", err)
+		return n, xerrors.Errorf("failed to write data frame: %w", err)
 	}
 	w.opcode = opContinuation
-	return len(p), nil
+	return n, nil
 }
 
 // Close flushes the frame to the connection.
@@ -644,7 +648,7 @@ func (w *messageWriter) close() error {
 	}
 	w.closed = true
 
-	err := w.c.writeFrame(w.ctx, true, w.opcode, nil)
+	_, err := w.c.writeFrame(w.ctx, true, w.opcode, nil)
 	if err != nil {
 		return xerrors.Errorf("failed to write fin frame: %w", err)
 	}
@@ -654,7 +658,7 @@ func (w *messageWriter) close() error {
 }
 
 func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error {
-	err := c.writeFrame(ctx, true, opcode, p)
+	_, err := c.writeFrame(ctx, true, opcode, p)
 	if err != nil {
 		return xerrors.Errorf("failed to write control frame: %w", err)
 	}
@@ -662,26 +666,32 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 }
 
 // writeFrame handles all writes to the connection.
-// We never mask inside here because our mask key is always 0,0,0,0.
-// See comment on secWebSocketKey for why.
-func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte) error {
+func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte) (int, error) {
 	h := header{
 		fin:           fin,
 		opcode:        opcode,
 		masked:        c.client,
 		payloadLength: int64(len(p)),
 	}
+
+	if c.client {
+		_, err := io.ReadFull(cryptorand.Reader, h.maskKey[:])
+		if err != nil {
+			return 0, xerrors.Errorf("failed to generate masking key: %w", err)
+		}
+	}
+
 	b2 := marshalHeader(h)
 
 	err := c.acquireLock(ctx, c.writeFrameLock)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer c.releaseLock(c.writeFrameLock)
 
 	select {
 	case <-c.closed:
-		return c.closeErr
+		return 0, c.closeErr
 	case c.setWriteTimeout <- ctx:
 	}
 
@@ -705,17 +715,49 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 
 	_, err = c.bw.Write(b2)
 	if err != nil {
-		return writeErr(err)
+		return 0, writeErr(err)
 	}
-	_, err = c.bw.Write(p)
-	if err != nil {
-		return writeErr(err)
+
+	var n int
+	if c.client {
+		var keypos int
+		for len(p) > 0 {
+			if c.bw.Available() == 0 {
+				err = c.bw.Flush()
+				if err != nil {
+					return n, writeErr(err)
+				}
+			}
+
+			// Start of next write in the buffer.
+			i := c.bw.Buffered()
+
+			p2 := p
+			if len(p) > c.bw.Available() {
+				p2 = p[:c.bw.Available()]
+			}
+
+			n2, err := c.bw.Write(p2)
+			if err != nil {
+				return n, writeErr(err)
+			}
+
+			keypos = fastXOR(h.maskKey, keypos, c.writeBuf[i:i+n2])
+
+			p = p[n2:]
+			n += n2
+		}
+	} else {
+		n, err = c.bw.Write(p)
+		if err != nil {
+			return n, writeErr(err)
+		}
 	}
 
 	if fin {
 		err = c.bw.Flush()
 		if err != nil {
-			return writeErr(err)
+			return n, writeErr(err)
 		}
 	}
 
@@ -723,11 +765,11 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 	// the context expires.
 	select {
 	case <-c.closed:
-		return c.closeErr
+		return n, c.closeErr
 	case c.setWriteTimeout <- context.Background():
 	}
 
-	return nil
+	return n, nil
 }
 
 func (c *Conn) writePong(p []byte) error {
@@ -841,4 +883,24 @@ func (c *Conn) ping(ctx context.Context) error {
 	case <-pong:
 		return nil
 	}
+}
+
+type writerFunc func(p []byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) {
+	return f(p)
+}
+
+// extractBufioWriterBuf grabs the []byte backing a *bufio.Writer
+// and stores it in c.writeBuf.
+func (c *Conn) extractBufioWriterBuf(w io.Writer) {
+	c.bw.Reset(writerFunc(func(p2 []byte) (int, error) {
+		c.writeBuf = p2[:cap(p2)]
+		return len(p2), nil
+	}))
+
+	c.bw.WriteByte(0)
+	c.bw.Flush()
+
+	c.bw.Reset(w)
 }
