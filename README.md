@@ -128,6 +128,10 @@ your application doesn't always need to read from the connection unless it expec
 gorilla/websocket requires you to constantly read from the connection to respond to control frames
 even if you don't expect the peer to send any messages.
 
+The ping API is also much nicer. Unlike gorilla/websocket, you don't need to register a
+callback for pongs, there is a single exported Ping method on the Conn you use that sends
+a ping and waits for the pong. 
+
 In terms of performance, the differences depend on your application code. nhooyr/websocket
 reuses buffers efficiently out of the box if you use the wsjson and wspb subpackages whereas
 gorilla/websocket does not. As mentioned above, nhooyr/websocket also supports concurrent
