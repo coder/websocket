@@ -129,8 +129,8 @@ gorilla/websocket requires you to constantly read from the connection to respond
 even if you don't expect the peer to send any messages.
 
 The ping API is also much nicer. Unlike gorilla/websocket, you don't need to register a
-callback for pongs which makes the control flow awkward. There is Ping method on the Conn
-that sends a ping and waits for the pong.
+callback for pongs. There is Ping method on the Conn that sends a ping and waits for the pong.
+Callbacks tend to encourage awkward control flow.
 
 In terms of performance, the differences depend on your application code. nhooyr/websocket
 reuses buffers efficiently out of the box if you use the wsjson and wspb subpackages whereas
