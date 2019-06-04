@@ -39,6 +39,16 @@ func Test_verifyServerHandshake(t *testing.T) {
 			success: false,
 		},
 		{
+			name: "badSecWebSocketAccept",
+			response: func(w http.ResponseWriter) {
+				w.Header().Set("Connection", "Upgrade")
+				w.Header().Set("Upgrade", "websocket")
+				w.Header().Set("Sec-WebSocket-Accept", "xd")
+				w.WriteHeader(http.StatusSwitchingProtocols)
+			},
+			success: false,
+		},
+		{
 			name: "success",
 			response: func(w http.ResponseWriter) {
 				w.Header().Set("Connection", "Upgrade")
@@ -58,7 +68,15 @@ func Test_verifyServerHandshake(t *testing.T) {
 			tc.response(w)
 			resp := w.Result()
 
-			err := verifyServerResponse(resp)
+			r := httptest.NewRequest("GET", "/", nil)
+			key := makeSecWebSocketKey()
+			r.Header.Set("Sec-WebSocket-Key", key)
+
+			if resp.Header.Get("Sec-WebSocket-Accept") == "" {
+				resp.Header.Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
+			}
+
+			err := verifyServerResponse(r, resp)
 			if (err == nil) != tc.success {
 				t.Fatalf("unexpected error: %+v", err)
 			}

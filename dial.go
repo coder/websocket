@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strings"
@@ -29,11 +30,6 @@ type DialOptions struct {
 	// Subprotocols lists the subprotocols to negotiate with the server.
 	Subprotocols []string
 }
-
-// We use this key for all client requests as the Sec-WebSocket-Key header doesn't do anything.
-// See https://stackoverflow.com/a/37074398/4283659.
-// We also use the same mask key for every message as it too does not make a difference.
-var secWebSocketKey = base64.StdEncoding.EncodeToString(make([]byte, 16))
 
 // Dial performs a WebSocket handshake on the given url with the given options.
 // The response is the WebSocket handshake response from the server.
@@ -82,7 +78,7 @@ func dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Res
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "websocket")
 	req.Header.Set("Sec-WebSocket-Version", "13")
-	req.Header.Set("Sec-WebSocket-Key", secWebSocketKey)
+	req.Header.Set("Sec-WebSocket-Key", makeSecWebSocketKey())
 	if len(opts.Subprotocols) > 0 {
 		req.Header.Set("Sec-WebSocket-Protocol", strings.Join(opts.Subprotocols, ","))
 	}
@@ -101,7 +97,7 @@ func dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Res
 		}
 	}()
 
-	err = verifyServerResponse(resp)
+	err = verifyServerResponse(req, resp)
 	if err != nil {
 		return nil, resp, err
 	}
@@ -118,12 +114,13 @@ func dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Res
 		closer:      rwc,
 		client:      true,
 	}
+	c.extractBufioWriterBuf(rwc)
 	c.init()
 
 	return c, resp, nil
 }
 
-func verifyServerResponse(resp *http.Response) error {
+func verifyServerResponse(r *http.Request, resp *http.Response) error {
 	if resp.StatusCode != http.StatusSwitchingProtocols {
 		return xerrors.Errorf("expected handshake response status code %v but got %v", http.StatusSwitchingProtocols, resp.StatusCode)
 	}
@@ -136,8 +133,12 @@ func verifyServerResponse(resp *http.Response) error {
 		return xerrors.Errorf("websocket protocol violation: Upgrade header %q does not contain websocket", resp.Header.Get("Upgrade"))
 	}
 
-	// We do not care about Sec-WebSocket-Accept because it does not matter.
-	// See the secWebSocketKey global variable.
+	if resp.Header.Get("Sec-WebSocket-Accept") != secWebSocketAccept(r.Header.Get("Sec-WebSocket-Key")) {
+		return xerrors.Errorf("websocket protocol violation: invalid Sec-WebSocket-Accept %q, key %q",
+			resp.Header.Get("Sec-WebSocket-Accept"),
+			r.Header.Get("Sec-WebSocket-Key"),
+		)
+	}
 
 	return nil
 }
@@ -175,4 +176,10 @@ func getBufioWriter(w io.Writer) *bufio.Writer {
 
 func returnBufioWriter(bw *bufio.Writer) {
 	bufioWriterPool.Put(bw)
+}
+
+func makeSecWebSocketKey() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	return base64.StdEncoding.EncodeToString(b)
 }

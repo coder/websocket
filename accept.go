@@ -165,12 +165,15 @@ var keyGUID = []byte("258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
 
 func handleSecWebSocketKey(w http.ResponseWriter, r *http.Request) {
 	key := r.Header.Get("Sec-WebSocket-Key")
+	w.Header().Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
+}
+
+func secWebSocketAccept(secWebSocketKey string) string {
 	h := sha1.New()
-	h.Write([]byte(key))
+	h.Write([]byte(secWebSocketKey))
 	h.Write(keyGUID)
 
-	responseKey := base64.StdEncoding.EncodeToString(h.Sum(nil))
-	w.Header().Set("Sec-WebSocket-Accept", responseKey)
+	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
 func authenticateOrigin(r *http.Request) error {
