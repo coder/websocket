@@ -165,3 +165,11 @@ about performant WebSocket servers.
 If you want a library that gives you absolute control over everything, this is the library,
 but for most users, the API provided by nhooyr/websocket will fit better as it is nearly just
 as performant but much easier to use correctly and idiomatic.
+
+## Users
+
+This is a list of companies or projects that use this library.
+
+- [Coder](https://github.com/cdr)
+
+If your company or project is using this library, please feel free to open a PR to amend the list.
