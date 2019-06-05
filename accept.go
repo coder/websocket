@@ -79,7 +79,8 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 // the connection to a WebSocket.
 //
 // Accept will reject the handshake if the Origin domain is not the same as the Host unless
-// the InsecureSkipVerify option is set.
+// the InsecureSkipVerify option is set. In other words, by default it does not allow
+// cross origin requests.
 //
 // The returned connection will be bound by r.Context(). Use conn.Context() to change
 // the bounding context.
