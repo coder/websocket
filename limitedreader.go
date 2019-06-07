@@ -1,7 +1,6 @@
 package websocket
 
 import (
-	"fmt"
 	"io"
 
 	"golang.org/x/xerrors"
@@ -20,9 +19,9 @@ func (lr *limitedReader) Read(p []byte) (int, error) {
 	}
 
 	if lr.left <= 0 {
-		msg := fmt.Sprintf("read limited at %v bytes", lr.limit)
-		lr.c.Close(StatusPolicyViolation, msg)
-		return 0, xerrors.Errorf(msg)
+		err := xerrors.Errorf("read limited at %v bytes", lr.limit)
+		lr.c.Close(StatusMessageTooBig, err.Error())
+		return 0, err
 	}
 
 	if int64(len(p)) > lr.left {

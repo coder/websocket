@@ -28,7 +28,7 @@ type Conn struct {
 	br          *bufio.Reader
 	bw          *bufio.Writer
 	// writeBuf is used for masking, its the buffer in bufio.Writer.
-	// Only used by the client.
+	// Only used by the client for masking the bytes in the buffer.
 	writeBuf []byte
 	closer   io.Closer
 	client   bool
@@ -51,17 +51,9 @@ type Conn struct {
 	previousReader *messageReader
 	// readFrameLock is acquired to read from bw.
 	readFrameLock chan struct{}
-	// readMsg is used by messageReader to receive frames from
-	// readLoop.
-	readMsg chan header
-	// readMsgDone is used to tell the readLoop to continue after
-	// messageReader has read a frame.
-	readMsgDone chan struct{}
 
 	setReadTimeout  chan context.Context
 	setWriteTimeout chan context.Context
-	setConnContext  chan context.Context
-	getConnContext  chan context.Context
 
 	activePingsMu sync.Mutex
 	activePings   map[string]chan<- struct{}
@@ -76,13 +68,9 @@ func (c *Conn) init() {
 	c.writeFrameLock = make(chan struct{}, 1)
 
 	c.readFrameLock = make(chan struct{}, 1)
-	c.readMsg = make(chan header)
-	c.readMsgDone = make(chan struct{})
 
 	c.setReadTimeout = make(chan context.Context)
 	c.setWriteTimeout = make(chan context.Context)
-	c.setConnContext = make(chan context.Context)
-	c.getConnContext = make(chan context.Context)
 
 	c.activePings = make(map[string]chan<- struct{})
 
@@ -91,7 +79,6 @@ func (c *Conn) init() {
 	})
 
 	go c.timeoutLoop()
-	go c.readLoop()
 }
 
 // Subprotocol returns the negotiated subprotocol.
@@ -131,53 +118,20 @@ func (c *Conn) close(err error) {
 func (c *Conn) timeoutLoop() {
 	readCtx := context.Background()
 	writeCtx := context.Background()
-	parentCtx := context.Background()
 
 	for {
 		select {
 		case <-c.closed:
 			return
+
 		case writeCtx = <-c.setWriteTimeout:
 		case readCtx = <-c.setReadTimeout:
+
 		case <-readCtx.Done():
 			c.close(xerrors.Errorf("data read timed out: %w", readCtx.Err()))
 		case <-writeCtx.Done():
 			c.close(xerrors.Errorf("data write timed out: %w", writeCtx.Err()))
-		case <-parentCtx.Done():
-			c.close(xerrors.Errorf("parent context cancelled: %w", parentCtx.Err()))
-			return
-		case parentCtx = <-c.setConnContext:
-			ctx, cancelCtx := context.WithCancel(parentCtx)
-			defer cancelCtx()
-
-			select {
-			case <-c.closed:
-				return
-			case c.getConnContext <- ctx:
-			}
 		}
-	}
-}
-
-// Context returns a context derived from parent that will be cancelled
-// when the connection is closed or broken.
-// If the parent context is cancelled, the connection will be closed.
-func (c *Conn) Context(parent context.Context) context.Context {
-	select {
-	case <-c.closed:
-		ctx, cancel := context.WithCancel(parent)
-		cancel()
-		return ctx
-	case c.setConnContext <- parent:
-	}
-
-	select {
-	case <-c.closed:
-		ctx, cancel := context.WithCancel(parent)
-		cancel()
-		return ctx
-	case ctx := <-c.getConnContext:
-		return ctx
 	}
 }
 
@@ -210,30 +164,9 @@ func (c *Conn) releaseLock(lock chan struct{}) {
 	}
 }
 
-func (c *Conn) readLoop() {
+func (c *Conn) readTillMsg(ctx context.Context) (header, error) {
 	for {
-		h, err := c.readTillMsg()
-		if err != nil {
-			return
-		}
-
-		select {
-		case <-c.closed:
-			return
-		case c.readMsg <- h:
-		}
-
-		select {
-		case <-c.closed:
-			return
-		case <-c.readMsgDone:
-		}
-	}
-}
-
-func (c *Conn) readTillMsg() (header, error) {
-	for {
-		h, err := c.readFrameHeader()
+		h, err := c.readFrameHeader(ctx)
 		if err != nil {
 			return header{}, err
 		}
@@ -245,7 +178,10 @@ func (c *Conn) readTillMsg() (header, error) {
 		}
 
 		if h.opcode.controlOp() {
-			c.handleControl(h)
+			err = c.handleControl(ctx, h)
+			if err != nil {
+				return header{}, err
+			}
 			continue
 		}
 
@@ -260,43 +196,64 @@ func (c *Conn) readTillMsg() (header, error) {
 	}
 }
 
-func (c *Conn) readFrameHeader() (header, error) {
+func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 	err := c.acquireLock(context.Background(), c.readFrameLock)
 	if err != nil {
 		return header{}, err
 	}
 	defer c.releaseLock(c.readFrameLock)
 
+	select {
+	case <-c.closed:
+		return header{}, c.closeErr
+	case c.setReadTimeout <- ctx:
+	}
+
 	h, err := readHeader(c.br)
 	if err != nil {
+		select {
+		case <-c.closed:
+			return header{}, c.closeErr
+		case <-ctx.Done():
+			err = ctx.Err()
+		default:
+		}
 		err := xerrors.Errorf("failed to read header: %w", err)
 		c.releaseLock(c.readFrameLock)
 		c.close(err)
 		return header{}, err
 	}
 
+	select {
+	case <-c.closed:
+		return header{}, c.closeErr
+	case c.setReadTimeout <- context.Background():
+	}
+
 	return h, nil
 }
 
-func (c *Conn) handleControl(h header) {
+func (c *Conn) handleControl(ctx context.Context, h header) error {
 	if h.payloadLength > maxControlFramePayload {
-		c.Close(StatusProtocolError, "control frame too large")
-		return
+		err := xerrors.Errorf("control frame too large at %v bytes", h.payloadLength)
+		c.Close(StatusProtocolError, err.Error())
+		return err
 	}
 
 	if !h.fin {
-		c.Close(StatusProtocolError, "control frame cannot be fragmented")
-		return
+		err := xerrors.Errorf("received fragmented control frame")
+		c.Close(StatusProtocolError, err.Error())
+		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
 	defer cancel()
 
 	b := make([]byte, h.payloadLength)
 
 	_, err := c.readFramePayload(ctx, b)
 	if err != nil {
-		return
+		return err
 	}
 
 	if h.masked {
@@ -305,7 +262,7 @@ func (c *Conn) handleControl(h header) {
 
 	switch h.opcode {
 	case opPing:
-		c.writePong(b)
+		return c.writePong(b)
 	case opPong:
 		c.activePingsMu.Lock()
 		pong, ok := c.activePings[string(b)]
@@ -313,17 +270,20 @@ func (c *Conn) handleControl(h header) {
 		if ok {
 			close(pong)
 		}
+		return nil
 	case opClose:
 		ce, err := parseClosePayload(b)
 		if err != nil {
-			c.close(xerrors.Errorf("received invalid close payload: %w", err))
-			return
+			err = xerrors.Errorf("received invalid close payload: %w", err)
+			c.close(err)
+			return err
 		}
 		if ce.Code == StatusNoStatusRcvd {
 			c.writeClose(nil, ce)
 		} else {
 			c.Close(ce.Code, ce.Reason)
 		}
+		return c.closeErr
 	default:
 		panic(fmt.Sprintf("websocket: unexpected control opcode: %#v", h))
 	}
@@ -335,11 +295,10 @@ func (c *Conn) handleControl(h header) {
 // The passed context will also bound the reader.
 // Ensure you read to EOF otherwise the connection will hang.
 //
-// Control (ping, pong, close) frames will be handled automatically
-// in a separate goroutine so if you do not expect any data messages,
-// you do not need  to read from the connection. However, if the peer
-// sends a data message, further pings, pongs and close frames will not
-// be read if you do not read the message from the connection.
+// You must read from the connection for close frames to be read.
+// If you do not expect any data messages from the peer, just call
+// Reader in a separate goroutine and close the connection with StatusPolicyViolation
+// when it returns. Example at // TODO
 //
 // Only one Reader may be open at a time.
 //
@@ -368,47 +327,39 @@ func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
 		return 0, nil, xerrors.Errorf("previous message not read to completion")
 	}
 
-	select {
-	case <-c.closed:
-		return 0, nil, c.closeErr
-	case <-ctx.Done():
-		return 0, nil, ctx.Err()
-	case h := <-c.readMsg:
-		if c.previousReader != nil && !c.previousReader.done {
-			if h.opcode != opContinuation {
-				err := xerrors.Errorf("received new data message without finishing the previous message")
-				c.Close(StatusProtocolError, err.Error())
-				return 0, nil, err
-			}
+	h, err := c.readTillMsg(ctx)
+	if err != nil {
+		return 0, nil, err
+	}
 
-			if !h.fin || h.payloadLength > 0 {
-				return 0, nil, xerrors.Errorf("previous message not read to completion")
-			}
-
-			c.previousReader.done = true
-
-			select {
-			case <-c.closed:
-				return 0, nil, c.closeErr
-			case c.readMsgDone <- struct{}{}:
-			}
-
-			return c.reader(ctx)
-		} else if h.opcode == opContinuation {
-			err := xerrors.Errorf("received continuation frame not after data or text frame")
+	if c.previousReader != nil && !c.previousReader.done {
+		if h.opcode != opContinuation {
+			err := xerrors.Errorf("received new data message without finishing the previous message")
 			c.Close(StatusProtocolError, err.Error())
 			return 0, nil, err
 		}
 
-		r := &messageReader{
-			ctx: ctx,
-			c:   c,
-
-			h: &h,
+		if !h.fin || h.payloadLength > 0 {
+			return 0, nil, xerrors.Errorf("previous message not read to completion")
 		}
-		c.previousReader = r
-		return MessageType(h.opcode), r, nil
+
+		c.previousReader.done = true
+
+		return c.reader(ctx)
+	} else if h.opcode == opContinuation {
+		err := xerrors.Errorf("received continuation frame not after data or text frame")
+		c.Close(StatusProtocolError, err.Error())
+		return 0, nil, err
 	}
+
+	r := &messageReader{
+		ctx: ctx,
+		c:   c,
+
+		h: &h,
+	}
+	c.previousReader = r
+	return MessageType(h.opcode), r, nil
 }
 
 // messageReader enables reading a data frame from the WebSocket connection.
@@ -441,20 +392,17 @@ func (r *messageReader) read(p []byte) (int, error) {
 	}
 
 	if r.h == nil {
-		select {
-		case <-r.c.closed:
-			return 0, r.c.closeErr
-		case <-r.ctx.Done():
-			r.c.close(xerrors.Errorf("failed to read: %w", r.ctx.Err()))
-			return 0, r.ctx.Err()
-		case h := <-r.c.readMsg:
-			if h.opcode != opContinuation {
-				err := xerrors.Errorf("received new data frame without finishing the previous frame")
-				r.c.Close(StatusProtocolError, err.Error())
-				return 0, err
-			}
-			r.h = &h
+		h, err := r.c.readTillMsg(r.ctx)
+		if err != nil {
+			return 0, err
 		}
+
+		if h.opcode != opContinuation {
+			err := xerrors.Errorf("received new data frame without finishing the previous frame")
+			r.c.Close(StatusProtocolError, err.Error())
+			return 0, err
+		}
+		r.h = &h
 	}
 
 	if int64(len(p)) > r.h.payloadLength {
@@ -473,12 +421,6 @@ func (r *messageReader) read(p []byte) (int, error) {
 	}
 
 	if r.h.payloadLength == 0 {
-		select {
-		case <-r.c.closed:
-			return n, r.c.closeErr
-		case r.c.readMsgDone <- struct{}{}:
-		}
-
 		fin := r.h.fin
 
 		// Need to nil this as Reader uses it to check
@@ -539,7 +481,7 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
 //
 // By default, the connection has a message read limit of 32768 bytes.
 //
-// When the limit is hit, the connection will be closed with StatusPolicyViolation.
+// When the limit is hit, the connection will be closed with StatusMessageTooBig.
 func (c *Conn) SetReadLimit(n int64) {
 	c.msgReadLimit = n
 }

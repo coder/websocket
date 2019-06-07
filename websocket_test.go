@@ -383,6 +383,8 @@ func TestHandshake(t *testing.T) {
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
+				go c.Reader(r.Context())
+
 				err = c.Ping(r.Context())
 				if err != nil {
 					return err
@@ -403,10 +405,10 @@ func TestHandshake(t *testing.T) {
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
-				err = c.Ping(ctx)
-				if err != nil {
-					return err
-				}
+				errc := make(chan error, 1)
+				go func() {
+					errc <- c.Ping(ctx)
+				}()
 
 				_, _, err = c.Read(ctx)
 				if err != nil {
@@ -414,7 +416,7 @@ func TestHandshake(t *testing.T) {
 				}
 
 				c.Close(websocket.StatusNormalClosure, "")
-				return nil
+				return <-errc
 			},
 		},
 		{
@@ -439,6 +441,8 @@ func TestHandshake(t *testing.T) {
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
+				go c.Reader(ctx)
+
 				err = c.Write(ctx, websocket.MessageBinary, []byte(strings.Repeat("x", 32769)))
 				if err != nil {
 					return err
@@ -452,46 +456,6 @@ func TestHandshake(t *testing.T) {
 				}
 
 				return nil
-			},
-		},
-		{
-			name: "context",
-			server: func(w http.ResponseWriter, r *http.Request) error {
-				c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
-				if err != nil {
-					return err
-				}
-				defer c.Close(websocket.StatusInternalError, "")
-
-				ctx, cancel := context.WithTimeout(r.Context(), time.Second)
-				defer cancel()
-
-				c.Context(ctx)
-
-				for r.Context().Err() == nil {
-					err = c.Ping(ctx)
-					if err != nil {
-						return nil
-					}
-				}
-
-				return xerrors.Errorf("all pings succeeded")
-			},
-			client: func(ctx context.Context, u string) error {
-				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{})
-				if err != nil {
-					return err
-				}
-				defer c.Close(websocket.StatusInternalError, "")
-
-				cctx := c.Context(ctx)
-
-				select {
-				case <-ctx.Done():
-					return xerrors.Errorf("child context never cancelled")
-				case <-cctx.Done():
-					return nil
-				}
 			},
 		},
 	}
