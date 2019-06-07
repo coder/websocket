@@ -632,8 +632,6 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 		}
 	}
 
-	headerBytes := writeHeader(c.writeHeaderBuf, h)
-
 	err := c.acquireLock(ctx, c.writeFrameLock)
 	if err != nil {
 		return 0, err
@@ -664,6 +662,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 		return err
 	}
 
+	headerBytes := writeHeader(c.writeHeaderBuf, h)
 	_, err = c.bw.Write(headerBytes)
 	if err != nil {
 		return 0, writeErr(err)
