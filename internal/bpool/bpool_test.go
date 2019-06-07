@@ -32,7 +32,6 @@ func BenchmarkSyncPool(b *testing.B) {
 
 				p := sync.Pool{}
 
-				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
 					buf := p.Get()
 					if buf == nil {

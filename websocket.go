@@ -180,7 +180,7 @@ func (c *Conn) readTillMsg(ctx context.Context) (header, error) {
 		if h.opcode.controlOp() {
 			err = c.handleControl(ctx, h)
 			if err != nil {
-				return header{}, err
+				return header{}, xerrors.Errorf("failed to handle control frame: %w", err)
 			}
 			continue
 		}
@@ -274,15 +274,10 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 	case opClose:
 		ce, err := parseClosePayload(b)
 		if err != nil {
-			err = xerrors.Errorf("received invalid close payload: %w", err)
-			c.close(err)
-			return err
+			c.Close(StatusProtocolError, "received invalid close payload")
+			return xerrors.Errorf("received invalid close payload: %w", err)
 		}
-		if ce.Code == StatusNoStatusRcvd {
-			c.writeClose(nil, ce)
-		} else {
-			c.Close(ce.Code, ce.Reason)
-		}
+		c.writeClose(b, ce, false)
 		return c.closeErr
 	default:
 		panic(fmt.Sprintf("websocket: unexpected control opcode: %#v", h))
@@ -398,7 +393,7 @@ func (r *messageReader) read(p []byte) (int, error) {
 		}
 
 		if h.opcode != opContinuation {
-			err := xerrors.Errorf("received new data frame without finishing the previous frame")
+			err := xerrors.Errorf("received new data message without finishing the previous message")
 			r.c.Close(StatusProtocolError, err.Error())
 			return 0, err
 		}
@@ -461,7 +456,7 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
 			err = ctx.Err()
 		default:
 		}
-		err = xerrors.Errorf("failed to read from connection: %w", err)
+		err = xerrors.Errorf("failed to read frame payload: %w", err)
 		c.releaseLock(c.readFrameLock)
 		c.close(err)
 		return n, err
@@ -651,7 +646,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 		default:
 		}
 
-		err = xerrors.Errorf("failed to write to connection: %w", err)
+		err = xerrors.Errorf("failed to write frame: %w", err)
 		// We need to release the lock first before closing the connection to ensure
 		// the lock can be acquired inside close to ensure no one can access c.bw.
 		c.releaseLock(c.writeFrameLock)
@@ -764,20 +759,27 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 		p, _ = ce.bytes()
 	}
 
-	return c.writeClose(p, ce)
+	return c.writeClose(p, ce, true)
 }
 
-func (c *Conn) writeClose(p []byte, cerr CloseError) error {
+func (c *Conn) writeClose(p []byte, err error, us bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	err := c.writeControl(ctx, opClose, p)
+	// If this fails, the connection had to have died.
+	err = c.writeControl(ctx, opClose, p)
 	if err != nil {
 		return err
 	}
 
-	c.close(cerr)
-	if !xerrors.Is(c.closeErr, cerr) {
+	if us {
+		err = xerrors.Errorf("sent close frame: %w", err)
+	} else {
+		err = xerrors.Errorf("received close frame: %w", err)
+	}
+
+	c.close(err)
+	if !xerrors.Is(c.closeErr, err) {
 		return c.closeErr
 	}
 
