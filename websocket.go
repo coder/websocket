@@ -57,6 +57,9 @@ type Conn struct {
 
 	activePingsMu sync.Mutex
 	activePings   map[string]chan<- struct{}
+
+	headerBuf         []byte
+	controlPayloadBuf []byte
 }
 
 func (c *Conn) init() {
@@ -73,6 +76,9 @@ func (c *Conn) init() {
 	c.setWriteTimeout = make(chan context.Context)
 
 	c.activePings = make(map[string]chan<- struct{})
+
+	c.headerBuf = makeHeaderBuf()
+	c.controlPayloadBuf = make([]byte, maxControlFramePayload)
 
 	runtime.SetFinalizer(c, func(c *Conn) {
 		c.close(xerrors.New("connection garbage collected"))
@@ -209,7 +215,7 @@ func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 	case c.setReadTimeout <- ctx:
 	}
 
-	h, err := readHeader(c.br)
+	h, err := readHeader(c.headerBuf, c.br)
 	if err != nil {
 		select {
 		case <-c.closed:
@@ -249,8 +255,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
 	defer cancel()
 
-	b := make([]byte, h.payloadLength)
-
+	b := c.controlPayloadBuf[:h.payloadLength]
 	_, err := c.readFramePayload(ctx, b)
 	if err != nil {
 		return err

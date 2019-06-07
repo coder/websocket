@@ -75,12 +75,19 @@ func marshalHeader(h header) []byte {
 	return b
 }
 
+func makeHeaderBuf() []byte {
+	return make([]byte, maxHeaderSize-2)
+}
+
 // readHeader reads a header from the reader.
 // See https://tools.ietf.org/html/rfc6455#section-5.2
-func readHeader(r io.Reader) (header, error) {
-	// We read the first two bytes directly so that we know
+func readHeader(b []byte, r io.Reader) (header, error) {
+	if b == nil {
+		b = makeHeaderBuf()
+	}
+	// We read the first two bytes first so that we know
 	// exactly how long the header is.
-	b := make([]byte, 2, maxHeaderSize-2)
+	b = b[:2]
 	_, err := io.ReadFull(r, b)
 	if err != nil {
 		return header{}, err
