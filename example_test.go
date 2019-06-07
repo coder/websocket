@@ -59,3 +59,45 @@ func ExampleDial() {
 
 	c.Close(websocket.StatusNormalClosure, "")
 }
+
+func ExampleWriteOnly() {
+	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		defer c.Close(websocket.StatusInternalError, "the sky is falling")
+
+		ctx, cancel := context.WithTimeout(r.Context(), time.Minute*10)
+		defer cancel()
+
+		go func() {
+			defer cancel()
+			_, _, err := c.Reader(ctx)
+			if err == nil {
+				c.Close(websocket.StatusPolicyViolation, "server doesn't accept data messages")
+			}
+		}()
+
+		t := time.NewTicker(time.Second * 30)
+		defer t.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				c.Close(websocket.StatusNormalClosure, "")
+				return
+			case <-t.C:
+				err = wsjson.Write(ctx, c, "hi")
+				if err != nil {
+					log.Println(err)
+					return
+				}
+			}
+		}
+	})
+
+	err := http.ListenAndServe("localhost:8080", fn)
+	log.Fatal(err)
+}

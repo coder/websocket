@@ -21,6 +21,9 @@ import (
 // All methods may be called concurrently except for Reader, Read
 // and SetReadLimit.
 //
+// You must always read from the connection. Otherwise control
+// frames will not be handled. See the docs on Reader.
+//
 // Please be sure to call Close on the connection when you
 // are finished with it to release the associated resources.
 type Conn struct {
@@ -299,7 +302,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 // You must read from the connection for close frames to be read.
 // If you do not expect any data messages from the peer, just call
 // Reader in a separate goroutine and close the connection with StatusPolicyViolation
-// when it returns. Example at // TODO
+// when it returns. See the WriteOnly example.
 //
 // Only one Reader may be open at a time.
 //
