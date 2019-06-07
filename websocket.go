@@ -45,21 +45,21 @@ type Conn struct {
 	// writeFrameLock is acquired to write a single frame.
 	// Effectively meaning whoever holds it gets to write to bw.
 	writeFrameLock chan struct{}
+	writeHeaderBuf []byte
 
 	// Used to ensure the previous reader is read till EOF before allowing
 	// a new one.
 	previousReader *messageReader
 	// readFrameLock is acquired to read from bw.
-	readFrameLock chan struct{}
+	readFrameLock     chan struct{}
+	readHeaderBuf     []byte
+	controlPayloadBuf []byte
 
 	setReadTimeout  chan context.Context
 	setWriteTimeout chan context.Context
 
 	activePingsMu sync.Mutex
 	activePings   map[string]chan<- struct{}
-
-	headerBuf         []byte
-	controlPayloadBuf []byte
 }
 
 func (c *Conn) init() {
@@ -77,7 +77,8 @@ func (c *Conn) init() {
 
 	c.activePings = make(map[string]chan<- struct{})
 
-	c.headerBuf = makeHeaderBuf()
+	c.writeHeaderBuf = makeWriteHeaderBuf()
+	c.readHeaderBuf = makeReadHeaderBuf()
 	c.controlPayloadBuf = make([]byte, maxControlFramePayload)
 
 	runtime.SetFinalizer(c, func(c *Conn) {
@@ -215,7 +216,7 @@ func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 	case c.setReadTimeout <- ctx:
 	}
 
-	h, err := readHeader(c.headerBuf, c.br)
+	h, err := readHeader(c.readHeaderBuf, c.br)
 	if err != nil {
 		select {
 		case <-c.closed:
@@ -628,7 +629,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 		}
 	}
 
-	b2 := marshalHeader(h)
+	headerBytes := writeHeader(c.writeHeaderBuf, h)
 
 	err := c.acquireLock(ctx, c.writeFrameLock)
 	if err != nil {
@@ -651,7 +652,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 		default:
 		}
 
-		err = xerrors.Errorf("failed to write frame: %w", err)
+		err = xerrors.Errorf("failed to write %v frame: %w", h.opcode, err)
 		// We need to release the lock first before closing the connection to ensure
 		// the lock can be acquired inside close to ensure no one can access c.bw.
 		c.releaseLock(c.writeFrameLock)
@@ -660,7 +661,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 		return err
 	}
 
-	_, err = c.bw.Write(b2)
+	_, err = c.bw.Write(headerBytes)
 	if err != nil {
 		return 0, writeErr(err)
 	}

@@ -31,10 +31,19 @@ type header struct {
 	maskKey [4]byte
 }
 
+func makeWriteHeaderBuf() []byte {
+	return make([]byte, maxHeaderSize)
+}
+
 // bytes returns the bytes of the header.
 // See https://tools.ietf.org/html/rfc6455#section-5.2
-func marshalHeader(h header) []byte {
-	b := make([]byte, 2, maxHeaderSize)
+func writeHeader(b []byte, h header) []byte {
+	if b == nil {
+		b = makeWriteHeaderBuf()
+	}
+
+	b = b[:2]
+	b[0] = 0
 
 	if h.fin {
 		b[0] |= 1 << 7
@@ -75,7 +84,7 @@ func marshalHeader(h header) []byte {
 	return b
 }
 
-func makeHeaderBuf() []byte {
+func makeReadHeaderBuf() []byte {
 	return make([]byte, maxHeaderSize-2)
 }
 
@@ -83,8 +92,9 @@ func makeHeaderBuf() []byte {
 // See https://tools.ietf.org/html/rfc6455#section-5.2
 func readHeader(b []byte, r io.Reader) (header, error) {
 	if b == nil {
-		b = makeHeaderBuf()
+		b = makeReadHeaderBuf()
 	}
+
 	// We read the first two bytes first so that we know
 	// exactly how long the header is.
 	b = b[:2]
