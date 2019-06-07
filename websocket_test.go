@@ -451,7 +451,7 @@ func TestHandshake(t *testing.T) {
 				err = c.Ping(ctx)
 
 				var ce websocket.CloseError
-				if !xerrors.As(err, &ce) || ce.Code != websocket.StatusPolicyViolation {
+				if !xerrors.As(err, &ce) || ce.Code != websocket.StatusMessageTooBig {
 					return xerrors.Errorf("unexpected error: %w", err)
 				}
 

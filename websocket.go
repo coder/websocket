@@ -762,24 +762,24 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 	return c.writeClose(p, ce, true)
 }
 
-func (c *Conn) writeClose(p []byte, err error, us bool) error {
+func (c *Conn) writeClose(p []byte, cerr error, us bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
 	// If this fails, the connection had to have died.
-	err = c.writeControl(ctx, opClose, p)
+	err := c.writeControl(ctx, opClose, p)
 	if err != nil {
 		return err
 	}
 
 	if us {
-		err = xerrors.Errorf("sent close frame: %w", err)
+		cerr = xerrors.Errorf("sent close frame: %w", cerr)
 	} else {
-		err = xerrors.Errorf("received close frame: %w", err)
+		cerr = xerrors.Errorf("received close frame: %w", cerr)
 	}
 
-	c.close(err)
-	if !xerrors.Is(c.closeErr, err) {
+	c.close(cerr)
+	if !xerrors.Is(c.closeErr, cerr) {
 		return c.closeErr
 	}
 
