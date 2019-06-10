@@ -127,10 +127,9 @@ The ping API is also much nicer. gorilla/websocket requires registering a pong h
 which results in awkward control flow. With nhooyr/websocket you use the Ping method on the Conn
 that sends a ping and also waits for the pong.
 
-In terms of performance, the differences depend on your application code. nhooyr/websocket
-reuses buffers efficiently out of the box if you use the wsjson and wspb subpackages whereas
-gorilla/websocket does not at all. As mentioned above, nhooyr/websocket also supports concurrent
-writers out of the box.
+In terms of performance, the differences mostly depend on your application code. nhooyr/websocket
+reuses message buffers out of the box if you use the wsjson and wspb subpackages.
+As mentioned above, nhooyr/websocket also supports concurrent writers.
 
 The only performance con to nhooyr/websocket is that uses one extra goroutine to support
 cancellation with context.Context and the net/http client side body upgrade.
