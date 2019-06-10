@@ -809,7 +809,7 @@ func benchConn(b *testing.B, echo, stream bool, size int) {
 	defer c.Close(websocket.StatusInternalError, "")
 
 	msg := []byte(strings.Repeat("2", size))
-	buf := make([]byte, len(msg))
+	readBuf := make([]byte, len(msg))
 	b.SetBytes(int64(len(msg)))
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -842,7 +842,7 @@ func benchConn(b *testing.B, echo, stream bool, size int) {
 				b.Fatal(err)
 			}
 
-			_, err = io.ReadFull(r, buf)
+			_, err = io.ReadFull(r, readBuf)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -879,7 +879,7 @@ func BenchmarkConn(b *testing.B) {
 	b.Run("echo", func(b *testing.B) {
 		for _, size := range sizes {
 			b.Run(strconv.Itoa(size), func(b *testing.B) {
-				benchConn(b, true, false, size)
+				benchConn(b, false, false, size)
 			})
 		}
 	})

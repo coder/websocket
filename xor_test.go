@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"strconv"
 	"testing"
-	"unsafe"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -80,9 +79,4 @@ func BenchmarkXOR(b *testing.B) {
 			}
 		})
 	}
-}
-
-func TestFoo(t *testing.T) {
-	t.Log(unsafe.Sizeof(messageWriter{}))
-	t.Log(unsafe.Sizeof(messageReader{}))
 }
