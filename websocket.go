@@ -49,6 +49,11 @@ type Conn struct {
 	// Effectively meaning whoever holds it gets to write to bw.
 	writeFrameLock chan struct{}
 	writeHeaderBuf []byte
+	writeHeader    *header
+
+	// messageWriter state.
+	writeMsgOpcode opcode
+	writeMsgCtx    context.Context
 
 	// Used to ensure the previous reader is read till EOF before allowing
 	// a new one.
@@ -57,6 +62,12 @@ type Conn struct {
 	readFrameLock     chan struct{}
 	readHeaderBuf     []byte
 	controlPayloadBuf []byte
+
+	// messageReader state
+	readMsgCtx    context.Context
+	readMsgHeader header
+	readFrameEOF  bool
+	readMaskPos   int
 
 	setReadTimeout  chan context.Context
 	setWriteTimeout chan context.Context
@@ -81,6 +92,7 @@ func (c *Conn) init() {
 	c.activePings = make(map[string]chan<- struct{})
 
 	c.writeHeaderBuf = makeWriteHeaderBuf()
+	c.writeHeader = &header{}
 	c.readHeaderBuf = makeReadHeaderBuf()
 	c.controlPayloadBuf = make([]byte, maxControlFramePayload)
 
@@ -315,15 +327,11 @@ func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 	if err != nil {
 		return 0, nil, xerrors.Errorf("failed to get reader: %w", err)
 	}
-	return typ, &limitedReader{
-		c:    c,
-		r:    r,
-		left: c.msgReadLimit,
-	}, nil
+	return typ, r, nil
 }
 
 func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
-	if c.previousReader != nil && c.previousReader.h != nil {
+	if c.previousReader != nil && !c.readFrameEOF {
 		// The only way we know for sure the previous reader is not yet complete is
 		// if there is an active frame not yet fully read.
 		// Otherwise, a user may have read the last byte but not the EOF if the EOF
@@ -336,7 +344,7 @@ func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
 		return 0, nil, err
 	}
 
-	if c.previousReader != nil && !c.previousReader.done {
+	if c.previousReader != nil && !c.previousReader.eof {
 		if h.opcode != opContinuation {
 			err := xerrors.Errorf("received new data message without finishing the previous message")
 			c.Close(StatusProtocolError, err.Error())
@@ -347,20 +355,26 @@ func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
 			return 0, nil, xerrors.Errorf("previous message not read to completion")
 		}
 
-		c.previousReader.done = true
+		c.previousReader.eof = true
 
-		return c.reader(ctx)
+		h, err = c.readTillMsg(ctx)
+		if err != nil {
+			return 0, nil, err
+		}
 	} else if h.opcode == opContinuation {
 		err := xerrors.Errorf("received continuation frame not after data or text frame")
 		c.Close(StatusProtocolError, err.Error())
 		return 0, nil, err
 	}
 
-	r := &messageReader{
-		ctx: ctx,
-		c:   c,
+	c.readMsgCtx = ctx
+	c.readMsgHeader = h
+	c.readFrameEOF = false
+	c.readMaskPos = 0
 
-		h: &h,
+	r := &messageReader{
+		c:    c,
+		left: c.msgReadLimit,
 	}
 	c.previousReader = r
 	return MessageType(h.opcode), r, nil
@@ -368,12 +382,9 @@ func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
 
 // messageReader enables reading a data frame from the WebSocket connection.
 type messageReader struct {
-	ctx context.Context
-	c   *Conn
-
-	h       *header
-	maskPos int
-	done    bool
+	c    *Conn
+	left int64
+	eof  bool
 }
 
 // Read reads as many bytes as possible into p.
@@ -391,12 +402,22 @@ func (r *messageReader) Read(p []byte) (int, error) {
 }
 
 func (r *messageReader) read(p []byte) (int, error) {
-	if r.done {
+	if r.eof {
 		return 0, xerrors.Errorf("cannot use EOFed reader")
 	}
 
-	if r.h == nil {
-		h, err := r.c.readTillMsg(r.ctx)
+	if r.left <= 0 {
+		err := xerrors.Errorf("read limited at %v bytes", r.c.msgReadLimit)
+		r.c.Close(StatusMessageTooBig, err.Error())
+		return 0, err
+	}
+
+	if int64(len(p)) > r.left {
+		p = p[:r.left]
+	}
+
+	if r.c.readFrameEOF {
+		h, err := r.c.readTillMsg(r.c.readMsgCtx)
 		if err != nil {
 			return 0, err
 		}
@@ -406,38 +427,37 @@ func (r *messageReader) read(p []byte) (int, error) {
 			r.c.Close(StatusProtocolError, err.Error())
 			return 0, err
 		}
-		r.h = &h
+
+		r.c.readMsgHeader = h
+		r.c.readFrameEOF = false
+		r.c.readMaskPos = 0
 	}
 
-	if int64(len(p)) > r.h.payloadLength {
-		p = p[:r.h.payloadLength]
+	h := r.c.readMsgHeader
+	if int64(len(p)) > h.payloadLength {
+		p = p[:h.payloadLength]
 	}
 
-	n, err := r.c.readFramePayload(r.ctx, p)
+	n, err := r.c.readFramePayload(r.c.readMsgCtx, p)
 
-	r.h.payloadLength -= int64(n)
-	if r.h.masked {
-		r.maskPos = fastXOR(r.h.maskKey, r.maskPos, p)
+	h.payloadLength -= int64(n)
+	r.left -= int64(n)
+	if h.masked {
+		r.c.readMaskPos = fastXOR(h.maskKey, r.c.readMaskPos, p)
 	}
+	r.c.readMsgHeader = h
 
 	if err != nil {
 		return n, err
 	}
 
-	if r.h.payloadLength == 0 {
-		fin := r.h.fin
+	if h.payloadLength == 0 {
+		r.c.readFrameEOF = true
 
-		// Need to nil this as Reader uses it to check
-		// whether there is active data on the previous reader and
-		// now there isn't.
-		r.h = nil
-
-		if fin {
-			r.done = true
+		if h.fin {
+			r.eof = true
 			return n, io.EOF
 		}
-
-		r.maskPos = 0
 	}
 
 	return n, nil
@@ -524,10 +544,10 @@ func (c *Conn) writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 	if err != nil {
 		return nil, err
 	}
+	c.writeMsgCtx = ctx
+	c.writeMsgOpcode = opcode(typ)
 	return &messageWriter{
-		ctx:    ctx,
-		opcode: opcode(typ),
-		c:      c,
+		c: c,
 	}, nil
 }
 
@@ -556,8 +576,6 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) (int, error
 
 // messageWriter enables writing to a WebSocket connection.
 type messageWriter struct {
-	ctx    context.Context
-	opcode opcode
 	c      *Conn
 	closed bool
 }
@@ -575,11 +593,11 @@ func (w *messageWriter) write(p []byte) (int, error) {
 	if w.closed {
 		return 0, xerrors.Errorf("cannot use closed writer")
 	}
-	n, err := w.c.writeFrame(w.ctx, false, w.opcode, p)
+	n, err := w.c.writeFrame(w.c.writeMsgCtx, false, w.c.writeMsgOpcode, p)
 	if err != nil {
 		return n, xerrors.Errorf("failed to write data frame: %w", err)
 	}
-	w.opcode = opContinuation
+	w.c.writeMsgOpcode = opContinuation
 	return n, nil
 }
 
@@ -599,7 +617,7 @@ func (w *messageWriter) close() error {
 	}
 	w.closed = true
 
-	_, err := w.c.writeFrame(w.ctx, true, w.opcode, nil)
+	_, err := w.c.writeFrame(w.c.writeMsgCtx, true, w.c.writeMsgOpcode, nil)
 	if err != nil {
 		return xerrors.Errorf("failed to write fin frame: %w", err)
 	}
@@ -618,20 +636,6 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 
 // writeFrame handles all writes to the connection.
 func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte) (int, error) {
-	h := header{
-		fin:           fin,
-		opcode:        opcode,
-		masked:        c.client,
-		payloadLength: int64(len(p)),
-	}
-
-	if c.client {
-		_, err := io.ReadFull(cryptorand.Reader, h.maskKey[:])
-		if err != nil {
-			return 0, xerrors.Errorf("failed to generate masking key: %w", err)
-		}
-	}
-
 	err := c.acquireLock(ctx, c.writeFrameLock)
 	if err != nil {
 		return 0, err
@@ -644,7 +648,19 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 	case c.setWriteTimeout <- ctx:
 	}
 
-	n, err := c.realWriteFrame(ctx, h, p)
+	c.writeHeader.fin = fin
+	c.writeHeader.opcode = opcode
+	c.writeHeader.masked = c.client
+	c.writeHeader.payloadLength = int64(len(p))
+
+	if c.client {
+		_, err := io.ReadFull(cryptorand.Reader, c.writeHeader.maskKey[:])
+		if err != nil {
+			return 0, xerrors.Errorf("failed to generate masking key: %w", err)
+		}
+	}
+
+	n, err := c.realWriteFrame(ctx, *c.writeHeader, p)
 	if err != nil {
 		return n, err
 	}
