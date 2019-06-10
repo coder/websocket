@@ -302,7 +302,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 // You must read from the connection for close frames to be read.
 // If you do not expect any data messages from the peer, just call
 // Reader in a separate goroutine and close the connection with StatusPolicyViolation
-// when it returns. See the WriteOnly example.
+// when it returns. See the writeOnly example.
 //
 // Only one Reader may be open at a time.
 //

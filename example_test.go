@@ -60,7 +60,9 @@ func ExampleDial() {
 	c.Close(websocket.StatusNormalClosure, "")
 }
 
-func ExampleWriteOnly() {
+// This example shows how to correctly handle a WebSocket connection
+// on which you will only write and do not expect to read data messages.
+func Example_writeOnly() {
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
 		if err != nil {
