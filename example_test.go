@@ -76,10 +76,8 @@ func Example_writeOnly() {
 
 		go func() {
 			defer cancel()
-			_, _, err := c.Reader(ctx)
-			if err == nil {
-				c.Close(websocket.StatusPolicyViolation, "server doesn't accept data messages")
-			}
+			c.Reader(ctx)
+			c.Close(websocket.StatusPolicyViolation, "server doesn't accept data messages")
 		}()
 
 		t := time.NewTicker(time.Second * 30)
