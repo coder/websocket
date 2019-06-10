@@ -383,6 +383,8 @@ func TestHandshake(t *testing.T) {
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
+				go c.Reader(r.Context())
+
 				err = c.Ping(r.Context())
 				if err != nil {
 					return err
@@ -403,18 +405,19 @@ func TestHandshake(t *testing.T) {
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
-				err = c.Ping(ctx)
-				if err != nil {
-					return err
-				}
+				errc := make(chan error, 1)
+				go func() {
+					errc <- c.Ping(ctx)
+				}()
 
 				_, _, err = c.Read(ctx)
 				if err != nil {
 					return err
 				}
 
+				err = <-errc
 				c.Close(websocket.StatusNormalClosure, "")
-				return nil
+				return err
 			},
 		},
 		{
@@ -439,6 +442,8 @@ func TestHandshake(t *testing.T) {
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
+				go c.Reader(ctx)
+
 				err = c.Write(ctx, websocket.MessageBinary, []byte(strings.Repeat("x", 32769)))
 				if err != nil {
 					return err
@@ -447,51 +452,11 @@ func TestHandshake(t *testing.T) {
 				err = c.Ping(ctx)
 
 				var ce websocket.CloseError
-				if !xerrors.As(err, &ce) || ce.Code != websocket.StatusPolicyViolation {
+				if !xerrors.As(err, &ce) || ce.Code != websocket.StatusMessageTooBig {
 					return xerrors.Errorf("unexpected error: %w", err)
 				}
 
 				return nil
-			},
-		},
-		{
-			name: "context",
-			server: func(w http.ResponseWriter, r *http.Request) error {
-				c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
-				if err != nil {
-					return err
-				}
-				defer c.Close(websocket.StatusInternalError, "")
-
-				ctx, cancel := context.WithTimeout(r.Context(), time.Second)
-				defer cancel()
-
-				c.Context(ctx)
-
-				for r.Context().Err() == nil {
-					err = c.Ping(ctx)
-					if err != nil {
-						return nil
-					}
-				}
-
-				return xerrors.Errorf("all pings succeeded")
-			},
-			client: func(ctx context.Context, u string) error {
-				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{})
-				if err != nil {
-					return err
-				}
-				defer c.Close(websocket.StatusInternalError, "")
-
-				cctx := c.Context(ctx)
-
-				select {
-				case <-ctx.Done():
-					return xerrors.Errorf("child context never cancelled")
-				case <-cctx.Done():
-					return nil
-				}
 			},
 		},
 	}
@@ -844,7 +809,7 @@ func benchConn(b *testing.B, echo, stream bool, size int) {
 	defer c.Close(websocket.StatusInternalError, "")
 
 	msg := []byte(strings.Repeat("2", size))
-	buf := make([]byte, len(msg))
+	readBuf := make([]byte, len(msg))
 	b.SetBytes(int64(len(msg)))
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -877,7 +842,7 @@ func benchConn(b *testing.B, echo, stream bool, size int) {
 				b.Fatal(err)
 			}
 
-			_, err = io.ReadFull(r, buf)
+			_, err = io.ReadFull(r, readBuf)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -914,7 +879,7 @@ func BenchmarkConn(b *testing.B) {
 	b.Run("echo", func(b *testing.B) {
 		for _, size := range sizes {
 			b.Run(strconv.Itoa(size), func(b *testing.B) {
-				benchConn(b, true, true, size)
+				benchConn(b, false, false, size)
 			})
 		}
 	})

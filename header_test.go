@@ -24,7 +24,7 @@ func TestHeader(t *testing.T) {
 	t.Run("readNegativeLength", func(t *testing.T) {
 		t.Parallel()
 
-		b := marshalHeader(header{
+		b := writeHeader(nil, header{
 			payloadLength: 1<<16 + 1,
 		})
 
@@ -32,7 +32,7 @@ func TestHeader(t *testing.T) {
 		b[2] |= 1 << 7
 
 		r := bytes.NewReader(b)
-		_, err := readHeader(r)
+		_, err := readHeader(nil, r)
 		if err == nil {
 			t.Fatalf("unexpected error value: %+v", err)
 		}
@@ -90,9 +90,9 @@ func TestHeader(t *testing.T) {
 }
 
 func testHeader(t *testing.T, h header) {
-	b := marshalHeader(h)
+	b := writeHeader(nil, h)
 	r := bytes.NewReader(b)
-	h2, err := readHeader(r)
+	h2, err := readHeader(nil, r)
 	if err != nil {
 		t.Logf("header: %#v", h)
 		t.Logf("bytes: %b", b)

@@ -123,24 +123,17 @@ it has to reinvent hooks for TLS and proxies and prevents support of HTTP/2.
 Some more advantages of nhooyr/websocket are that it supports concurrent writes and
 makes it very easy to close the connection with a status code and reason.
 
-nhooyr/websocket also responds to pings, pongs and close frames in a separate goroutine so that
-your application doesn't always need to read from the connection unless it expects a data message.
-gorilla/websocket requires you to constantly read from the connection to respond to control frames
-even if you don't expect the peer to send any messages.
-
 The ping API is also much nicer. gorilla/websocket requires registering a pong handler on the Conn
 which results in awkward control flow. With nhooyr/websocket you use the Ping method on the Conn
 that sends a ping and also waits for the pong.
 
-In terms of performance, the differences depend on your application code. nhooyr/websocket
-reuses buffers efficiently out of the box if you use the wsjson and wspb subpackages whereas
-gorilla/websocket does not. As mentioned above, nhooyr/websocket also supports concurrent
-writers out of the box.
+In terms of performance, the differences mostly depend on your application code. nhooyr/websocket
+reuses message buffers out of the box if you use the wsjson and wspb subpackages.
+As mentioned above, nhooyr/websocket also supports concurrent writers.
 
-The only performance con to nhooyr/websocket is that uses two extra goroutines. One for
-reading pings, pongs and close frames async to application code and another to support
-context.Context cancellation. This costs 4 KB of memory which is cheap compared
-to the benefits.
+The only performance con to nhooyr/websocket is that uses one extra goroutine to support
+cancellation with context.Context and the net/http client side body upgrade.
+This costs 2 KB of memory which is cheap compared to simplicity benefits.
 
 ### x/net/websocket
 

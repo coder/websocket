@@ -44,6 +44,7 @@ func read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 
 	err = json.Unmarshal(b.Bytes(), v)
 	if err != nil {
+		c.Close(websocket.StatusInvalidFramePayloadData, "failed to unmarshal JSON")
 		return xerrors.Errorf("failed to unmarshal json: %w", err)
 	}
 

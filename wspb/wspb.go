@@ -46,6 +46,7 @@ func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 
 	err = proto.Unmarshal(b.Bytes(), v)
 	if err != nil {
+		c.Close(websocket.StatusInvalidFramePayloadData, "failed to unmarshal protobuf")
 		return xerrors.Errorf("failed to unmarshal protobuf: %w", err)
 	}
 
