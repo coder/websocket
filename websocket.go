@@ -286,7 +286,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 			c.Close(StatusProtocolError, "received invalid close payload")
 			return xerrors.Errorf("received invalid close payload: %w", err)
 		}
-		c.writeClose(b, ce, false)
+		c.writeClose(b, xerrors.Errorf("received close frame: %w", ce))
 		return c.closeErr
 	default:
 		panic(fmt.Sprintf("websocket: unexpected control opcode: %#v", h))
@@ -644,38 +644,54 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 	case c.setWriteTimeout <- ctx:
 	}
 
-	writeErr := func(err error) error {
-		select {
-		case <-c.closed:
-			return c.closeErr
-		case <-ctx.Done():
-			err = ctx.Err()
-		default:
-		}
-
-		err = xerrors.Errorf("failed to write %v frame: %w", h.opcode, err)
-		// We need to release the lock first before closing the connection to ensure
-		// the lock can be acquired inside close to ensure no one can access c.bw.
-		c.releaseLock(c.writeFrameLock)
-		c.close(err)
-
-		return err
+	n, err := c.realWriteFrame(ctx, h, p)
+	if err != nil {
+		return n, err
 	}
+
+	// We already finished writing, no need to potentially brick the connection if
+	// the context expires.
+	select {
+	case <-c.closed:
+		return n, c.closeErr
+	case c.setWriteTimeout <- context.Background():
+	}
+
+	return n, nil
+}
+
+func (c *Conn) realWriteFrame(ctx context.Context, h header, p []byte) (n int, err error){
+	defer func() {
+		if err != nil {
+			select {
+			case <-c.closed:
+				err = c.closeErr
+			case <-ctx.Done():
+				err = ctx.Err()
+			default:
+			}
+
+			err = xerrors.Errorf("failed to write %v frame: %w", h.opcode, err)
+			// We need to release the lock first before closing the connection to ensure
+			// the lock can be acquired inside close to ensure no one can access c.bw.
+			c.releaseLock(c.writeFrameLock)
+			c.close(err)
+		}
+	}()
 
 	headerBytes := writeHeader(c.writeHeaderBuf, h)
 	_, err = c.bw.Write(headerBytes)
 	if err != nil {
-		return 0, writeErr(err)
+		return 0, err
 	}
 
-	var n int
 	if c.client {
 		var keypos int
 		for len(p) > 0 {
 			if c.bw.Available() == 0 {
 				err = c.bw.Flush()
 				if err != nil {
-					return n, writeErr(err)
+					return n, err
 				}
 			}
 
@@ -689,7 +705,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 
 			n2, err := c.bw.Write(p2)
 			if err != nil {
-				return n, writeErr(err)
+				return n, err
 			}
 
 			keypos = fastXOR(h.maskKey, keypos, c.writeBuf[i:i+n2])
@@ -700,23 +716,15 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 	} else {
 		n, err = c.bw.Write(p)
 		if err != nil {
-			return n, writeErr(err)
+			return n, err
 		}
 	}
 
-	if fin {
+	if h.fin {
 		err = c.bw.Flush()
 		if err != nil {
-			return n, writeErr(err)
+			return n, err
 		}
-	}
-
-	// We already finished writing, no need to potentially brick the connection if
-	// the context expires.
-	select {
-	case <-c.closed:
-		return n, c.closeErr
-	case c.setWriteTimeout <- context.Background():
 	}
 
 	return n, nil
@@ -767,10 +775,19 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 		p, _ = ce.bytes()
 	}
 
-	return c.writeClose(p, ce, true)
+	err = c.writeClose(p, xerrors.Errorf("sent close frame: %w", ce))
+	if err != nil {
+		return err
+	}
+
+	if !xerrors.Is(c.closeErr, ce) {
+		return c.closeErr
+	}
+
+	return nil
 }
 
-func (c *Conn) writeClose(p []byte, cerr error, us bool) error {
+func (c *Conn) writeClose(p []byte, cerr error) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
@@ -780,16 +797,7 @@ func (c *Conn) writeClose(p []byte, cerr error, us bool) error {
 		return err
 	}
 
-	if us {
-		cerr = xerrors.Errorf("sent close frame: %w", cerr)
-	} else {
-		cerr = xerrors.Errorf("received close frame: %w", cerr)
-	}
-
 	c.close(cerr)
-	if !xerrors.Is(c.closeErr, cerr) {
-		return c.closeErr
-	}
 
 	return nil
 }
