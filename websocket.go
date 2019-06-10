@@ -660,7 +660,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 	return n, nil
 }
 
-func (c *Conn) realWriteFrame(ctx context.Context, h header, p []byte) (n int, err error){
+func (c *Conn) realWriteFrame(ctx context.Context, h header, p []byte) (n int, err error) {
 	defer func() {
 		if err != nil {
 			select {

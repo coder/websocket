@@ -415,8 +415,9 @@ func TestHandshake(t *testing.T) {
 					return err
 				}
 
+				err = <-errc
 				c.Close(websocket.StatusNormalClosure, "")
-				return <-errc
+				return err
 			},
 		},
 		{
