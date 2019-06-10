@@ -106,7 +106,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, 
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		err = xerrors.New("passed ResponseWriter does not implement http.Hijacker")
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 		return nil, err
 	}
 
