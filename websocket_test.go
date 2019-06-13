@@ -383,7 +383,11 @@ func TestHandshake(t *testing.T) {
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
-				go c.Reader(r.Context())
+				errc := make(chan error, 1)
+				go func() {
+					_, _, err2 := c.Read(r.Context())
+					errc <- err2
+				}()
 
 				err = c.Ping(r.Context())
 				if err != nil {
@@ -395,8 +399,12 @@ func TestHandshake(t *testing.T) {
 					return err
 				}
 
-				c.Close(websocket.StatusNormalClosure, "")
-				return nil
+				err = <-errc
+				var ce websocket.CloseError
+				if xerrors.As(err, &ce) && ce.Code == websocket.StatusNormalClosure {
+					return nil
+				}
+				return xerrors.Errorf("unexpected error: %w", err)
 			},
 			client: func(ctx context.Context, u string) error {
 				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{})
@@ -405,19 +413,30 @@ func TestHandshake(t *testing.T) {
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
-				errc := make(chan error, 1)
+				// We read a message from the connection and then keep reading until
+				// the Ping completes.
+				done := make(chan struct{})
 				go func() {
-					errc <- c.Ping(ctx)
+					_, _, err := c.Read(ctx)
+					if err != nil {
+						c.Close(websocket.StatusInternalError, err.Error())
+						return
+					}
+
+					close(done)
+
+					c.Read(ctx)
 				}()
 
-				_, _, err = c.Read(ctx)
+				err = c.Ping(ctx)
 				if err != nil {
 					return err
 				}
 
-				err = <-errc
+				<-done
+
 				c.Close(websocket.StatusNormalClosure, "")
-				return err
+				return nil
 			},
 		},
 		{

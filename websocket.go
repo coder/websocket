@@ -823,6 +823,10 @@ func init() {
 
 // Ping sends a ping to the peer and waits for a pong.
 // Use this to measure latency or ensure the peer is responsive.
+// Ping must be called concurrently with Reader as otherwise it does
+// not read from the connection and relies on Reader to unblock
+// when the pong arrives.
+//
 // TCP Keepalives should suffice for most use cases.
 func (c *Conn) Ping(ctx context.Context) error {
 	err := c.ping(ctx)
