@@ -12,7 +12,3 @@ export CI=${GITHUB_ACTION-}
 if [[ $CI ]]; then
 	export GOFLAGS=-mod=readonly
 fi
-
-unstaged_files() {
-	git ls-files --other --modified --exclude-standard
-}

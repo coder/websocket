@@ -2,6 +2,10 @@
 
 source ci/lib.sh || exit 1
 
+unstaged_files() {
+	git ls-files --other --modified --exclude-standard
+}
+
 gen() {
 	# Unfortunately, this is the only way to ensure go.mod and go.sum are correct.
 	# See https://github.com/golang/go/issues/27005
@@ -25,7 +29,7 @@ if [[ $CI && $(unstaged_files) != "" ]]; then
 	echo
 	echo "files either need generation or are formatted incorrectly"
 	echo "please run:"
-	echo "./test.sh"
+	echo "./ci/run.sh"
 	echo
 	git status
 	exit 1
