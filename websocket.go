@@ -26,6 +26,10 @@ import (
 //
 // Please be sure to call Close on the connection when you
 // are finished with it to release the associated resources.
+//
+// Every error from Read or Reader will cause the connection
+// to be closed so you do not need to write your own error message.
+// This applies to the Read methods in the wsjson/wspb subpackages as well.
 type Conn struct {
 	subprotocol string
 	br          *bufio.Reader
@@ -310,6 +314,10 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 // It returns the type of the message and a reader to read it.
 // The passed context will also bound the reader.
 // Ensure you read to EOF otherwise the connection will hang.
+//
+// All returned errors will cause the connection
+// to be closed so you do not need to write your own error message.
+// This applies to the Read methods in the wsjson/wspb subpackages as well.
 //
 // You must read from the connection for close frames to be read.
 // If you do not expect any data messages from the peer, just call
