@@ -81,6 +81,9 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 // Accept will reject the handshake if the Origin domain is not the same as the Host unless
 // the InsecureSkipVerify option is set. In other words, by default it does not allow
 // cross origin requests.
+//
+// If an error occurs, Accept will always write an appropriate response so you do not
+// have to.
 func Accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, error) {
 	c, err := accept(w, r, opts)
 	if err != nil {
