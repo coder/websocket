@@ -386,11 +386,14 @@ func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
 	return MessageType(h.opcode), r, nil
 }
 
-// CloseRead will close the connection if any data message is received from the peer.
-// Call this when you are done reading data messages from the connection but will still write
-// to it. Since CloseRead is still reading from the connection, it will respond to ping, pong
-// and close frames automatically. It will only close the connection on a data frame. The returned
-// context will be cancelled when the connection is closed.
+// CloseRead will start a goroutine to read from the connection until it is closed or a data message
+// is received. If a data message is received, the connection will be closed with StatusPolicyViolation.
+// Since CloseRead reads from the connection, it will respond to ping, pong and close frames.
+// After calling this method, you cannot read any data messages from the connection.
+// The returned context will be cancelled when the connection is closed.
+//
+// Use this when you do not want to read data messages from the connection anymore but will
+// want to write messages to it.
 func (c *Conn) CloseRead(ctx context.Context) context.Context {
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
