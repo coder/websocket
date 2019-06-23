@@ -388,6 +388,16 @@ func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
 	return MessageType(h.opcode), r, nil
 }
 
+func (c *Conn) CloseRead(ctx context.Context) context.Context {
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		defer cancel()
+		c.Reader(ctx)
+		c.Close(StatusPolicyViolation, "unexpected data message")
+	}()
+	return ctx
+}
+
 // messageReader enables reading a data frame from the WebSocket connection.
 type messageReader struct {
 	c   *Conn
