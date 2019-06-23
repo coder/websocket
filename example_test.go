@@ -74,11 +74,7 @@ func Example_writeOnly() {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Minute*10)
 		defer cancel()
 
-		go func() {
-			defer cancel()
-			c.Reader(ctx)
-			c.Close(websocket.StatusPolicyViolation, "server doesn't accept data messages")
-		}()
+		ctx = c.CloseRead(ctx)
 
 		t := time.NewTicker(time.Second * 30)
 		defer t.Stop()

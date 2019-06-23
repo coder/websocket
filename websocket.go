@@ -22,7 +22,7 @@ import (
 // and SetReadLimit.
 //
 // You must always read from the connection. Otherwise control
-// frames will not be handled. See the docs on Reader.
+// frames will not be handled. See the docs on Reader and CloseRead.
 //
 // Please be sure to call Close on the connection when you
 // are finished with it to release the associated resources.
@@ -319,10 +319,8 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 // to be closed so you do not need to write your own error message.
 // This applies to the Read methods in the wsjson/wspb subpackages as well.
 //
-// You must read from the connection for close frames to be read.
-// If you do not expect any data messages from the peer, just call
-// Reader in a separate goroutine and close the connection with StatusPolicyViolation
-// when it returns. See the writeOnly example.
+// You must read from the connection for control frames to be handled.
+// If you do not expect any data messages from the peer, call CloseRead.
 //
 // Only one Reader may be open at a time.
 //
@@ -386,6 +384,21 @@ func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
 	}
 	c.previousReader = r
 	return MessageType(h.opcode), r, nil
+}
+
+// CloseRead will close the connection if any data message is received from the peer.
+// Call this when you are done reading data messages from the connection but will still write
+// to it. Since CloseRead is still reading from the connection, it will respond to ping, pong
+// and close frames automatically. It will only close the connection on a data frame. The returned
+// context will be cancelled when the connection is closed.
+func (c *Conn) CloseRead(ctx context.Context) context.Context {
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		defer cancel()
+		c.Reader(ctx)
+		c.Close(StatusPolicyViolation, "unexpected data message")
+	}()
+	return ctx
 }
 
 // messageReader enables reading a data frame from the WebSocket connection.
