@@ -113,8 +113,6 @@ which makes it easy to use correctly. Not only is the API simpler, the implement
 only 1700 lines whereas gorilla/websocket is at 3500 lines. That's more code to maintain,
  more code to test, more code to document and more surface area for bugs.
 
-The future of gorilla/websocket is also uncertain. See [gorilla/websocket#370](https://github.com/gorilla/websocket/issues/370).
-
 Moreover, nhooyr/websocket has support for newer Go idioms such as context.Context and
 also uses net/http's Client and ResponseWriter directly for WebSocket handshakes.
 gorilla/websocket writes its handshakes to the underlying net.Conn which means
@@ -123,7 +121,7 @@ it has to reinvent hooks for TLS and proxies and prevents support of HTTP/2.
 Some more advantages of nhooyr/websocket are that it supports concurrent writes and
 makes it very easy to close the connection with a status code and reason.
 
-The ping API is also much nicer. gorilla/websocket requires registering a pong handler on the Conn
+The ping API is also nicer. gorilla/websocket requires registering a pong handler on the Conn
 which results in awkward control flow. With nhooyr/websocket you use the Ping method on the Conn
 that sends a ping and also waits for the pong.
 
@@ -132,8 +130,8 @@ reuses message buffers out of the box if you use the wsjson and wspb subpackages
 As mentioned above, nhooyr/websocket also supports concurrent writers.
 
 The only performance con to nhooyr/websocket is that uses one extra goroutine to support
-cancellation with context.Context and the net/http client side body upgrade.
-This costs 2 KB of memory which is cheap compared to simplicity benefits.
+cancellation with context.Context. This costs 2 KB of memory which is cheap compared to
+simplicity benefits.
 
 ### x/net/websocket
 
