@@ -11,12 +11,16 @@ import (
 )
 
 // NetConn converts a *websocket.Conn into a net.Conn.
+//
 // Every Write to the net.Conn will correspond to a binary message
 // write on *webscoket.Conn.
+//
 // Close will close the *websocket.Conn with StatusNormalClosure.
+//
 // When a deadline is hit, the connection will be closed. This is
 // different from most net.Conn implementations where only the
 // reading/writing goroutines are interrupted but the connection is kept alive.
+//
 // The Addr methods will return a mock net.Addr.
 func NetConn(c *Conn) net.Conn {
 	nc := &netConn{
