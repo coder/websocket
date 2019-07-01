@@ -119,6 +119,54 @@ func TestHandshake(t *testing.T) {
 			},
 		},
 		{
+			name: "netConn",
+			server: func(w http.ResponseWriter, r *http.Request) error {
+				c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+
+				nc := websocket.NetConn(c)
+				defer nc.Close()
+
+				nc.SetWriteDeadline(time.Now().Add(time.Second * 10))
+
+				_, err = nc.Write([]byte("hello"))
+				if err != nil {
+					return err
+				}
+
+				return nil
+			},
+			client: func(ctx context.Context, u string) error {
+				c, _, err := websocket.Dial(ctx, u, websocket.DialOptions{
+					Subprotocols: []string{"meow"},
+				})
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+
+				nc := websocket.NetConn(c)
+				defer nc.Close()
+
+				nc.SetReadDeadline(time.Now().Add(time.Second * 10))
+
+				p := make([]byte, len("hello"))
+				_, err = io.ReadFull(nc, p)
+				if err != nil {
+					return err
+				}
+
+				if string(p) != "hello" {
+					return xerrors.Errorf("unexpected payload %q received", string(p))
+				}
+
+				return nil
+			},
+		},
+		{
 			name: "defaultSubprotocol",
 			server: func(w http.ResponseWriter, r *http.Request) error {
 				c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
