@@ -2,11 +2,12 @@ package websocket
 
 import (
 	"context"
-	"golang.org/x/xerrors"
 	"io"
 	"math"
 	"net"
 	"time"
+
+	"golang.org/x/xerrors"
 )
 
 // NetConn converts a *websocket.Conn into a net.Conn.
