@@ -17,7 +17,7 @@ import (
 // When a deadline is hit, the connection will be closed. This is
 // different from most net.Conn implementations where only the
 // reading/writing goroutines are interrupted but the connection is kept alive.
-// The Addr methods will return zero value net.TCPAddr.
+// The Addr methods will return a mock net.Addr.
 func NetConn(c *Conn) net.Conn {
 	nc := &netConn{
 		c: c,
