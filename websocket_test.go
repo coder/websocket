@@ -130,11 +130,13 @@ func TestHandshake(t *testing.T) {
 				nc := websocket.NetConn(c)
 				defer nc.Close()
 
-				nc.SetWriteDeadline(time.Now().Add(time.Second * 10))
+				nc.SetWriteDeadline(time.Now().Add(time.Second * 15))
 
-				_, err = nc.Write([]byte("hello"))
-				if err != nil {
-					return err
+				for i := 0; i < 3; i++ {
+					_, err = nc.Write([]byte("hello"))
+					if err != nil {
+						return err
+					}
 				}
 
 				return nil
@@ -151,16 +153,39 @@ func TestHandshake(t *testing.T) {
 				nc := websocket.NetConn(c)
 				defer nc.Close()
 
-				nc.SetReadDeadline(time.Now().Add(time.Second * 10))
+				nc.SetReadDeadline(time.Now().Add(time.Second * 15))
 
-				p := make([]byte, len("hello"))
-				_, err = io.ReadFull(nc, p)
-				if err != nil {
+				read := func() error {
+					p := make([]byte, len("hello"))
+					// We do not use io.ReadFull here as it masks EOFs.
+					// See https://github.com/nhooyr/websocket/issues/100#issuecomment-508148024
+					_, err = nc.Read(p)
+					if err != nil {
+						return err
+					}
+
+					if string(p) != "hello" {
+						return xerrors.Errorf("unexpected payload %q received", string(p))
+					}
+					return nil
+				}
+
+				for i := 0; i < 3; i++ {
+					err = read()
+					if err != nil {
+						return err
+					}
+				}
+
+				// Ensure the close frame is converted to an EOF and multiple read's after all return EOF.
+				err = read()
+				if err != io.EOF {
 					return err
 				}
 
-				if string(p) != "hello" {
-					return xerrors.Errorf("unexpected payload %q received", string(p))
+				err = read()
+				if err != io.EOF {
+					return err
 				}
 
 				return nil

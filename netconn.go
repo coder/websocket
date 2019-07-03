@@ -22,6 +22,8 @@ import (
 // reading/writing goroutines are interrupted but the connection is kept alive.
 //
 // The Addr methods will return a mock net.Addr.
+//
+// A received StatusNormalClosure close frame will be translated to EOF when reading.
 func NetConn(c *Conn) net.Conn {
 	nc := &netConn{
 		c: c,
@@ -47,6 +49,7 @@ type netConn struct {
 
 	readTimer   *time.Timer
 	readContext context.Context
+	eofed       bool
 
 	reader io.Reader
 }
@@ -66,9 +69,18 @@ func (c *netConn) Write(p []byte) (int, error) {
 }
 
 func (c *netConn) Read(p []byte) (int, error) {
+	if c.eofed {
+		return 0, io.EOF
+	}
+
 	if c.reader == nil {
 		typ, r, err := c.c.Reader(c.readContext)
 		if err != nil {
+			var ce CloseError
+			if xerrors.As(err, &ce) && (ce.Code == StatusNormalClosure) {
+				c.eofed = true
+				return 0, io.EOF
+			}
 			return 0, err
 		}
 		if typ != MessageBinary {
@@ -81,6 +93,7 @@ func (c *netConn) Read(p []byte) (int, error) {
 	n, err := c.reader.Read(p)
 	if err == io.EOF {
 		c.reader = nil
+		err = nil
 	}
 	return n, err
 }
