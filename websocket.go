@@ -304,7 +304,8 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 			c.Close(StatusProtocolError, "received invalid close payload")
 			return xerrors.Errorf("received invalid close payload: %w", err)
 		}
-		c.writeClose(b, xerrors.Errorf("received close frame: %w", ce))
+		c.writeClose(b)
+		c.close(xerrors.Errorf("received close frame: %w", ce))
 		return c.closeErr
 	default:
 		panic(fmt.Sprintf("websocket: unexpected control opcode: %#v", h))
@@ -786,9 +787,19 @@ func (c *Conn) writePong(p []byte) error {
 	return err
 }
 
-// Close closes the WebSocket connection with the given status code and reason.
+// Close performs the WebSocket close handshake on the connection with the given
+// status code and reason. See https://tools.ietf.org/html/rfc6455#section-7.1.2
 //
-// It will write a WebSocket close frame with a timeout of 5 seconds.
+// First, it will write a WebSocket close frame with a timeout of 5 seconds.
+// Next, it will wait a maximum of 10 seconds for a Close frame from the peer.
+// You must be reading from the connection in another goroutine for the Close
+// frame to be read.
+// If the peer does not send a Close frame in the next 10 seconds, the connection
+// will be forcefully closed.
+//
+// The returned error will be a CloseError if a close frame was received.
+// Remember to use the golang.org/x/xerrors to access it.
+//
 // The connection can only be closed once. Additional calls to Close
 // are no-ops.
 //
@@ -823,31 +834,32 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 		p, _ = ce.bytes()
 	}
 
-	err = c.writeClose(p, xerrors.Errorf("sent close frame: %w", ce))
+	err = c.writeClose(p)
 	if err != nil {
 		return err
 	}
 
-	if !xerrors.Is(c.closeErr, ce) {
-		return c.closeErr
-	}
+	const to = time.Second * 10
 
-	return nil
+	t := time.NewTimer(to)
+	defer t.Stop()
+
+	// Wait for the close frame to be read.
+	select {
+	case <-c.closed:
+	case <-t.C:
+		c.close(xerrors.Errorf("sent close frame (%v) but did not receive close frame from peer in %v", ce, to))
+	}
+	return c.closeErr
 }
 
-func (c *Conn) writeClose(p []byte, cerr error) error {
+func (c *Conn) writeClose(p []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
 	// If this fails, the connection had to have died.
 	err := c.writeControl(ctx, opClose, p)
-	if err != nil {
-		return err
-	}
-
-	c.close(cerr)
-
-	return nil
+	return err
 }
 
 func init() {
