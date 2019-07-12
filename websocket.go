@@ -792,6 +792,9 @@ func (c *Conn) writePong(p []byte) error {
 // The connection can only be closed once. Additional calls to Close
 // are no-ops.
 //
+// This does not perform a WebSocket close handshake.
+// See https://github.com/nhooyr/websocket/issues/103 for details on why.
+//
 // The maximum length of reason must be 125 bytes otherwise an internal
 // error will be sent to the peer. For this reason, you should avoid
 // sending a dynamic reason.
@@ -823,7 +826,9 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 		p, _ = ce.bytes()
 	}
 
-	err = c.writeClose(p, xerrors.Errorf("sent close frame: %w", ce))
+	// CloseErrors sent are made opaque to prevent applications from thinking
+	// they received a given status.
+	err = c.writeClose(p, xerrors.Errorf("sent close frame: %v", ce))
 	if err != nil {
 		return err
 	}
