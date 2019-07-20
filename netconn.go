@@ -26,7 +26,8 @@ import (
 // different from most net.Conn implementations where only the
 // reading/writing goroutines are interrupted but the connection is kept alive.
 //
-// The Addr methods will return a mock net.Addr.
+// The Addr methods will return a mock net.Addr that returns "websocket" for Network
+// and "websocket/unknown-addr" for String.
 //
 // A received StatusNormalClosure close frame will be translated to EOF when reading.
 func NetConn(c *Conn) net.Conn {
@@ -37,11 +38,15 @@ func NetConn(c *Conn) net.Conn {
 	var cancel context.CancelFunc
 	nc.writeContext, cancel = context.WithCancel(context.Background())
 	nc.writeTimer = time.AfterFunc(math.MaxInt64, cancel)
-	nc.writeTimer.Stop()
+	if !nc.writeTimer.Stop() {
+		<-nc.writeTimer.C
+	}
 
 	nc.readContext, cancel = context.WithCancel(context.Background())
 	nc.readTimer = time.AfterFunc(math.MaxInt64, cancel)
-	nc.readTimer.Stop()
+	if !nc.readTimer.Stop() {
+		<-nc.readTimer.C
+	}
 
 	return nc
 }
@@ -103,23 +108,23 @@ func (c *netConn) Read(p []byte) (int, error) {
 	return n, err
 }
 
-type unknownAddr struct {
+type websocketAddr struct {
 }
 
-func (a unknownAddr) Network() string {
-	return "unknown"
+func (a websocketAddr) Network() string {
+	return "websocket"
 }
 
-func (a unknownAddr) String() string {
-	return "unknown"
+func (a websocketAddr) String() string {
+	return "websocket/unknown-addr"
 }
 
 func (c *netConn) RemoteAddr() net.Addr {
-	return unknownAddr{}
+	return websocketAddr{}
 }
 
 func (c *netConn) LocalAddr() net.Addr {
-	return unknownAddr{}
+	return websocketAddr{}
 }
 
 func (c *netConn) SetDeadline(t time.Time) error {
