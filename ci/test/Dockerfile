@@ -6,7 +6,7 @@ LABEL "com.github.actions.icon"="code"
 LABEL "com.github.actions.color"="green"
 
 RUN apt update && \
-	apt install -y shellcheck python-pip && \
+	apt install -y python-pip && \
 	pip install autobahntestsuite
 
 COPY entrypoint.sh /entrypoint.sh
