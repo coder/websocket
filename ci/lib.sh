@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 
-set -euxo pipefail || exit 1
+set -euo pipefail
 
-export GO111MODULE=on
-export PAGER=cat
-
-# shellcheck disable=SC2034
-# CI is used by the scripts that source this file.
-export CI=${GITHUB_ACTION-}
-
+# Ensures $CI can be used if it's set or not.
+export CI=${CI:-}
 if [[ $CI ]]; then
-	export GOFLAGS=-mod=readonly
+  export GOFLAGS=-mod=readonly
+  export DEBIAN_FRONTEND=noninteractive
 fi
+
+cd "$(git rev-parse --show-toplevel)"

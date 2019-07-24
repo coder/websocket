@@ -1,3 +1,4 @@
+comment: off
 coverage:
   status:
     # Prevent small changes in coverage from failing CI.
