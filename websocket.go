@@ -41,9 +41,10 @@ type Conn struct {
 	closer   io.Closer
 	client   bool
 
-	closeOnce sync.Once
-	closeErr  error
-	closed    chan struct{}
+	closeOnce    sync.Once
+	closeErrOnce sync.Once
+	closeErr     error
+	closed       chan struct{}
 
 	// writeMsgLock is acquired to write a data message.
 	writeMsgLock chan struct{}
@@ -115,11 +116,17 @@ func (c *Conn) Subprotocol() string {
 	return c.subprotocol
 }
 
+func (c *Conn) setCloseErr(err error) {
+	c.closeErrOnce.Do(func() {
+		c.closeErr = xerrors.Errorf("websocket closed: %w", err)
+	})
+}
+
 func (c *Conn) close(err error) {
 	c.closeOnce.Do(func() {
 		runtime.SetFinalizer(c, nil)
 
-		c.closeErr = xerrors.Errorf("websocket closed: %w", err)
+		c.setCloseErr(err)
 		close(c.closed)
 
 		// Have to close after c.closed is closed to ensure any goroutine that wakes up
@@ -304,7 +311,11 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 			c.Close(StatusProtocolError, "received invalid close payload")
 			return xerrors.Errorf("received invalid close payload: %w", err)
 		}
-		c.writeClose(b, xerrors.Errorf("received close frame: %w", ce))
+		// This ensures the closeErr of the Conn is always the received CloseError
+		// in case the echo close frame write fails.
+		// See https://github.com/nhooyr/websocket/issues/109
+		c.setCloseErr(xerrors.Errorf("received close frame: %w", ce))
+		c.writeClose(b, nil)
 		return c.closeErr
 	default:
 		panic(fmt.Sprintf("websocket: unexpected control opcode: %#v", h))
