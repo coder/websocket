@@ -17,7 +17,7 @@ if [[ $CI ]]; then
   pip install -qqq autobahntestsuite
 fi
 
-go test -race -coverprofile=ci/out/coverage.prof --vet=off -bench=. -coverpkg=./... ./...
+go test -race -coverprofile=ci/out/coverage.prof --vet=off -bench=. -coverpkg=./... "$@" ./...
 go tool cover -func=ci/out/coverage.prof
 
 if [[ $CI ]]; then
