@@ -1,0 +1,64 @@
+version: 2
+jobs:
+  fmt:
+    docker:
+      - image: golang:1
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - go-{{ checksum "go.sum" }}
+            # Fallback to using the latest cache if no exact match is found.
+            - go-
+      - run: ./ci/fmt.sh
+      - save_cache:
+          paths:
+            - /go
+            - /root/.cache/go-build
+          key: go-{{ checksum "go.sum" }}
+
+  lint:
+    docker:
+      - image: golang:1
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - go-{{ checksum "go.sum" }}
+            # Fallback to using the latest cache if no exact match is found.
+            - go-
+      - run: ./ci/lint.sh
+      - save_cache:
+          paths:
+            - /go
+            - /root/.cache/go-build
+          key: go-{{ checksum "go.sum" }}
+
+  test:
+    docker:
+      - image: golang:1
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - go-{{ checksum "go.sum" }}
+            # Fallback to using the latest cache if no exact match is found.
+            - go-
+      - run: ./ci/test.sh
+      - save_cache:
+          paths:
+            - /go
+            - /root/.cache/go-build
+          key: go-{{ checksum "go.sum" }}
+
+workflows:
+  version: 2
+  fmt:
+    jobs:
+      - fmt
+  lint:
+    jobs:
+      - lint
+  test:
+    jobs:
+      - test
