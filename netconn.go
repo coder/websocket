@@ -134,11 +134,19 @@ func (c *netConn) SetDeadline(t time.Time) error {
 }
 
 func (c *netConn) SetWriteDeadline(t time.Time) error {
-	c.writeTimer.Reset(t.Sub(time.Now()))
+	if t.IsZero() {
+		c.writeTimer.Stop()
+	} else {
+		c.writeTimer.Reset(t.Sub(time.Now()))
+	}
 	return nil
 }
 
 func (c *netConn) SetReadDeadline(t time.Time) error {
-	c.readTimer.Reset(t.Sub(time.Now()))
+	if t.IsZero() {
+		c.readTimer.Stop()
+	} else {
+		c.readTimer.Reset(t.Sub(time.Now()))
+	}
 	return nil
 }

@@ -130,6 +130,8 @@ func TestHandshake(t *testing.T) {
 				nc := websocket.NetConn(c)
 				defer nc.Close()
 
+				nc.SetWriteDeadline(time.Time{})
+				time.Sleep(1)
 				nc.SetWriteDeadline(time.Now().Add(time.Second * 15))
 
 				for i := 0; i < 3; i++ {
@@ -153,6 +155,8 @@ func TestHandshake(t *testing.T) {
 				nc := websocket.NetConn(c)
 				defer nc.Close()
 
+				nc.SetReadDeadline(time.Time{})
+				time.Sleep(1)
 				nc.SetReadDeadline(time.Now().Add(time.Second * 15))
 
 				read := func() error {
