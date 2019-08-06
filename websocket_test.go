@@ -130,7 +130,9 @@ func TestHandshake(t *testing.T) {
 				nc := websocket.NetConn(c)
 				defer nc.Close()
 
-				nc.SetWriteDeadline(time.Now().Add(time.Second * 15))
+				nc.SetWriteDeadline(time.Time{})
+				time.Sleep(1)
+				nc.SetWriteDeadline(time.Now().Add(time.Second * 14))
 
 				for i := 0; i < 3; i++ {
 					_, err = nc.Write([]byte("hello"))
@@ -153,7 +155,9 @@ func TestHandshake(t *testing.T) {
 				nc := websocket.NetConn(c)
 				defer nc.Close()
 
-				nc.SetReadDeadline(time.Now().Add(time.Second * 15))
+				nc.SetReadDeadline(time.Time{})
+				time.Sleep(1)
+				nc.SetReadDeadline(time.Now().Add(time.Second * 14))
 
 				read := func() error {
 					p := make([]byte, len("hello"))
