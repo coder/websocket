@@ -123,7 +123,8 @@ makes it very easy to close the connection with a status code and reason.
 
 The ping API is also nicer. gorilla/websocket requires registering a pong handler on the Conn
 which results in awkward control flow. With nhooyr/websocket you use the Ping method on the Conn
-that sends a ping and also waits for the pong.
+that sends a ping and also waits for the pong, though you must be reading from the connection
+for the pong to be read.
 
 In terms of performance, the differences mostly depend on your application code. nhooyr/websocket
 reuses message buffers out of the box if you use the wsjson and wspb subpackages.
