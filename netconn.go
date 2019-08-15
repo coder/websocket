@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"math"
 	"net"
@@ -17,8 +18,11 @@ import (
 // correctly and so provided in the library.
 // See https://github.com/nhooyr/websocket/issues/100.
 //
-// Every Write to the net.Conn will correspond to a binary message
-// write on *webscoket.Conn.
+// Every Write to the net.Conn will correspond to a message write of
+// the given type on *websocket.Conn.
+//
+// If a message is read that is not of the correct type, an error
+// will be thrown.
 //
 // Close will close the *websocket.Conn with StatusNormalClosure.
 //
@@ -30,9 +34,10 @@ import (
 // and "websocket/unknown-addr" for String.
 //
 // A received StatusNormalClosure close frame will be translated to EOF when reading.
-func NetConn(c *Conn) net.Conn {
+func NetConn(c *Conn, msgType MessageType) net.Conn {
 	nc := &netConn{
-		c: c,
+		c:       c,
+		msgType: msgType,
 	}
 
 	var cancel context.CancelFunc
@@ -52,7 +57,8 @@ func NetConn(c *Conn) net.Conn {
 }
 
 type netConn struct {
-	c *Conn
+	c       *Conn
+	msgType MessageType
 
 	writeTimer   *time.Timer
 	writeContext context.Context
@@ -71,7 +77,7 @@ func (c *netConn) Close() error {
 }
 
 func (c *netConn) Write(p []byte) (int, error) {
-	err := c.c.Write(c.writeContext, MessageBinary, p)
+	err := c.c.Write(c.writeContext, c.msgType, p)
 	if err != nil {
 		return 0, err
 	}
@@ -93,9 +99,9 @@ func (c *netConn) Read(p []byte) (int, error) {
 			}
 			return 0, err
 		}
-		if typ != MessageBinary {
-			c.c.Close(StatusUnsupportedData, "can only accept binary messages")
-			return 0, xerrors.Errorf("unexpected frame type read for net conn adapter (expected %v): %v", MessageBinary, typ)
+		if typ != c.msgType {
+			c.c.Close(StatusUnsupportedData, fmt.Sprintf("can only accept %v messages", c.msgType))
+			return 0, xerrors.Errorf("unexpected frame type read for net conn adapter (expected %v): %v", c.msgType, typ)
 		}
 		c.reader = r
 	}
