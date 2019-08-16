@@ -333,6 +333,10 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 // This applies to the Read methods in the wsjson/wspb subpackages as well.
 //
 // You must read from the connection for control frames to be handled.
+// Thus if you expect messages to take a long time to be responded to,
+// you should handle such messages async to reading from the connection
+// to ensure control frames are promptly handled.
+//
 // If you do not expect any data messages from the peer, call CloseRead.
 //
 // Only one Reader may be open at a time.

@@ -127,7 +127,7 @@ func TestHandshake(t *testing.T) {
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
-				nc := websocket.NetConn(c)
+				nc := websocket.NetConn(c, websocket.MessageBinary)
 				defer nc.Close()
 
 				nc.SetWriteDeadline(time.Time{})
@@ -152,7 +152,7 @@ func TestHandshake(t *testing.T) {
 				}
 				defer c.Close(websocket.StatusInternalError, "")
 
-				nc := websocket.NetConn(c)
+				nc := websocket.NetConn(c, websocket.MessageBinary)
 				defer nc.Close()
 
 				nc.SetReadDeadline(time.Time{})
