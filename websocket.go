@@ -600,8 +600,7 @@ func (c *Conn) writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 
 // Write is a convenience method to write a message to the connection.
 //
-// See the Writer method if you want to stream a message. The docs on Writer
-// regarding concurrency also apply to this method.
+// See the Writer method if you want to stream a message.
 func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	_, err := c.write(ctx, typ, p)
 	if err != nil {
@@ -876,9 +875,9 @@ func init() {
 
 // Ping sends a ping to the peer and waits for a pong.
 // Use this to measure latency or ensure the peer is responsive.
-// Ping must be called concurrently with Reader as otherwise it does
-// not read from the connection and relies on Reader to unblock
-// when the pong arrives.
+// Ping must be called concurrently with Reader as it does
+// not read from the connection but instead waits for a Reader call
+// to read the pong.
 //
 // TCP Keepalives should suffice for most use cases.
 func (c *Conn) Ping(ctx context.Context) error {
