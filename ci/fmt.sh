@@ -2,7 +2,7 @@
 
 set -euo pipefail
 cd "$(dirname "${0}")"
-source ./lib.sh
+cd "$(git rev-parse --show-toplevel)"
 
 gen() {
   # Unfortunately, this is the only way to ensure go.mod and go.sum are correct.

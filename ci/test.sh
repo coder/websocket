@@ -2,8 +2,9 @@
 
 set -euo pipefail
 cd "$(dirname "${0}")"
-source ./lib.sh
+cd "$(git rev-parse --show-toplevel)"
 
+mkdir -p ci/out
 # If you'd like to modify the args to go test, just run go test directly, this script is meant
 # for running tests at the end to get coverage and test under the race detector.
 go test -race -vet=off -coverprofile=ci/out/coverage.prof -coverpkg=./... ./...

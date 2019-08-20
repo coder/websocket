@@ -2,8 +2,9 @@
 
 set -euo pipefail
 cd "$(dirname "${0}")"
-source ./lib.sh
+cd "$(git rev-parse --show-toplevel)"
 
+mkdir -p ci/out
 go test -vet=off -run=^$ -bench=. -o=ci/out/websocket.test \
   -cpuprofile=ci/out/cpu.prof \
   -memprofile=ci/out/mem.prof \

@@ -4,7 +4,7 @@
 
 set -euo pipefail
 cd "$(dirname "${0}")"
-source ./lib.sh
+cd "$(git rev-parse --show-toplevel)"
 
 ./ci/fmt.sh
 ./ci/lint.sh

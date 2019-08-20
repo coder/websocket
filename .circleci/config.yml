@@ -83,3 +83,6 @@ workflows:
   test:
     jobs:
       - test
+  bench:
+    jobs:
+      - bench

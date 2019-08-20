@@ -2,7 +2,7 @@
 
 set -euo pipefail
 cd "$(dirname "${0}")"
-source ./lib.sh
+cd "$(git rev-parse --show-toplevel)"
 
 # shellcheck disable=SC2046
 shellcheck -e SC1091 -x $(git ls-files "*.sh")
