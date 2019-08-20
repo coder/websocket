@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "${0}")"
 source ./lib.sh
 
-go test --vet=off --run=^$ -bench=. -o=ci/out/websocket.test \
+go test -vet=off -run=^$ -bench=. -o=ci/out/websocket.test \
   -cpuprofile=ci/out/cpu.prof \
   -memprofile=ci/out/mem.prof \
   -blockprofile=ci/out/block.prof \

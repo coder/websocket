@@ -2,7 +2,7 @@ version: 2
 jobs:
   fmt:
     docker:
-      - image: golang:1
+      - image: nhooyr/websocket-ci
     steps:
       - checkout
       - restore_cache:
@@ -19,7 +19,7 @@ jobs:
 
   lint:
     docker:
-      - image: golang:1
+      - image: nhooyr/websocket-ci
     steps:
       - checkout
       - restore_cache:
@@ -36,7 +36,7 @@ jobs:
 
   test:
     docker:
-      - image: golang:1
+      - image: nhooyr/websocket-ci
     steps:
       - checkout
       - restore_cache:
@@ -46,7 +46,26 @@ jobs:
             - go-
       - run: ./ci/test.sh
       - store_artifacts:
-          path: out
+          path: ci/out
+      - save_cache:
+          paths:
+            - /go
+            - /root/.cache/go-build
+          key: go-{{ checksum "go.sum" }}
+
+  bench:
+    docker:
+      - image: nhooyr/websocket-ci
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - go-{{ checksum "go.sum" }}
+            # Fallback to using the latest cache if no exact match is found.
+            - go-
+      - run: ./ci/bench.sh
+      - store_artifacts:
+          path: ci/out
       - save_cache:
           paths:
             - /go
