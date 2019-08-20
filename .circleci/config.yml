@@ -45,6 +45,8 @@ jobs:
             # Fallback to using the latest cache if no exact match is found.
             - go-
       - run: ./ci/test.sh
+      - store_artifacts:
+          path: out
       - save_cache:
           paths:
             - /go

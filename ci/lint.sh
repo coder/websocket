@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "${0}")"
 source ./lib.sh
 
-if [[ $CI ]]; then
+if [[ ${CI:-} ]]; then
   apt-get update -qq
   apt-get install -qq shellcheck > /dev/null
 fi

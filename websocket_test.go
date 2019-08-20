@@ -933,9 +933,7 @@ func checkWSTestIndex(t *testing.T, path string) {
 	if failed {
 		path = strings.Replace(path, ".json", ".html", 1)
 		if os.Getenv("CI") == "" {
-			t.Errorf("wstest found failure, please see %q", path)
-		} else {
-			t.Errorf("wstest found failure, please run test.sh locally to see %q", path)
+			t.Errorf("wstest found failure, please see %q (output as an artifact in CI)", path)
 		}
 	}
 }
