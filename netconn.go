@@ -33,7 +33,8 @@ import (
 // The Addr methods will return a mock net.Addr that returns "websocket" for Network
 // and "websocket/unknown-addr" for String.
 //
-// A received StatusNormalClosure close frame will be translated to EOF when reading.
+// A received StatusNormalClosure or StatusGoingAway close frame will be translated to
+// io.EOF when reading.
 func NetConn(c *Conn, msgType MessageType) net.Conn {
 	nc := &netConn{
 		c:       c,
@@ -93,7 +94,7 @@ func (c *netConn) Read(p []byte) (int, error) {
 		typ, r, err := c.c.Reader(c.readContext)
 		if err != nil {
 			var ce CloseError
-			if xerrors.As(err, &ce) && (ce.Code == StatusNormalClosure) {
+			if xerrors.As(err, &ce) && (ce.Code == StatusNormalClosure) || (ce.Code == StatusGoingAway) {
 				c.eofed = true
 				return 0, io.EOF
 			}
