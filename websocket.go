@@ -46,6 +46,7 @@ type Conn struct {
 	closeErr     error
 	closed       chan struct{}
 
+	// messageWriter state.
 	// writeMsgLock is acquired to write a data message.
 	writeMsgLock chan struct{}
 	// writeFrameLock is acquired to write a single frame.
@@ -72,11 +73,11 @@ type Conn struct {
 	readHeaderBuf     []byte
 	controlPayloadBuf []byte
 
-	// messageReader state
-	readMsgCtx    context.Context
-	readMsgHeader header
-	readFrameEOF  bool
-	readMaskPos   int
+	// messageReader state.
+	readerMsgCtx    context.Context
+	readerMsgHeader header
+	readerFrameEOF  bool
+	readerMaskPos   int
 
 	setReadTimeout  chan context.Context
 	setWriteTimeout chan context.Context
@@ -360,7 +361,7 @@ func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 }
 
 func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
-	if c.activeReader != nil && !c.readFrameEOF {
+	if c.activeReader != nil && !c.readerFrameEOF {
 		// The only way we know for sure the previous reader is not yet complete is
 		// if there is an active frame not yet fully read.
 		// Otherwise, a user may have read the last byte but not the EOF if the EOF
@@ -396,10 +397,10 @@ func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
 		return 0, nil, err
 	}
 
-	c.readMsgCtx = ctx
-	c.readMsgHeader = h
-	c.readFrameEOF = false
-	c.readMaskPos = 0
+	c.readerMsgCtx = ctx
+	c.readerMsgHeader = h
+	c.readerFrameEOF = false
+	c.readerMaskPos = 0
 	c.readMsgLeft = c.msgReadLimit
 
 	r := &messageReader{
@@ -468,8 +469,8 @@ func (r *messageReader) read(p []byte) (int, error) {
 		p = p[:r.c.readMsgLeft]
 	}
 
-	if r.c.readFrameEOF {
-		h, err := r.c.readTillMsg(r.c.readMsgCtx)
+	if r.c.readerFrameEOF {
+		h, err := r.c.readTillMsg(r.c.readerMsgCtx)
 		if err != nil {
 			return 0, err
 		}
@@ -480,31 +481,31 @@ func (r *messageReader) read(p []byte) (int, error) {
 			return 0, err
 		}
 
-		r.c.readMsgHeader = h
-		r.c.readFrameEOF = false
-		r.c.readMaskPos = 0
+		r.c.readerMsgHeader = h
+		r.c.readerFrameEOF = false
+		r.c.readerMaskPos = 0
 	}
 
-	h := r.c.readMsgHeader
+	h := r.c.readerMsgHeader
 	if int64(len(p)) > h.payloadLength {
 		p = p[:h.payloadLength]
 	}
 
-	n, err := r.c.readFramePayload(r.c.readMsgCtx, p)
+	n, err := r.c.readFramePayload(r.c.readerMsgCtx, p)
 
 	h.payloadLength -= int64(n)
 	r.c.readMsgLeft -= int64(n)
 	if h.masked {
-		r.c.readMaskPos = fastXOR(h.maskKey, r.c.readMaskPos, p)
+		r.c.readerMaskPos = fastXOR(h.maskKey, r.c.readerMaskPos, p)
 	}
-	r.c.readMsgHeader = h
+	r.c.readerMsgHeader = h
 
 	if err != nil {
 		return n, err
 	}
 
 	if h.payloadLength == 0 {
-		r.c.readFrameEOF = true
+		r.c.readerFrameEOF = true
 
 		if h.fin {
 			r.c.activeReader = nil
