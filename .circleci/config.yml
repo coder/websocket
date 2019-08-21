@@ -7,15 +7,15 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - go-{{ checksum "go.sum" }}
+            - go-v1-{{ checksum "go.sum" }}
             # Fallback to using the latest cache if no exact match is found.
-            - go-
+            - go-v1-
       - run: ./ci/fmt.sh
       - save_cache:
           paths:
-            - /go
+            - /root/go
             - /root/.cache/go-build
-          key: go-{{ checksum "go.sum" }}
+          key: go-v1-{{ checksum "go.sum" }}
 
   lint:
     docker:
@@ -24,15 +24,15 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - go-{{ checksum "go.sum" }}
+            - go-v1-{{ checksum "go.sum" }}
             # Fallback to using the latest cache if no exact match is found.
-            - go-
+            - go-v1-
       - run: ./ci/lint.sh
       - save_cache:
           paths:
-            - /go
+            - /root/go
             - /root/.cache/go-build
-          key: go-{{ checksum "go.sum" }}
+          key: go-v1-{{ checksum "go.sum" }}
 
   test:
     docker:
@@ -41,17 +41,20 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - go-{{ checksum "go.sum" }}
+            - go-v1-{{ checksum "go.sum" }}
             # Fallback to using the latest cache if no exact match is found.
-            - go-
+            - go-v1-
       - run: ./ci/test.sh
       - store_artifacts:
           path: ci/out
+          destination: out
       - save_cache:
           paths:
-            - /go
+            - /root/go
             - /root/.cache/go-build
-          key: go-{{ checksum "go.sum" }}
+          key: go-v1-{{ checksum "go.sum" }}
+      - store_test_results:
+          path: ci/out
 
   bench:
     docker:
@@ -60,17 +63,18 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - go-{{ checksum "go.sum" }}
+            - go-v1-{{ checksum "go.sum" }}
             # Fallback to using the latest cache if no exact match is found.
-            - go-
+            - go-v1-
       - run: ./ci/bench.sh
       - store_artifacts:
           path: ci/out
+          destination: out
       - save_cache:
           paths:
-            - /go
+            - /root/go
             - /root/.cache/go-build
-          key: go-{{ checksum "go.sum" }}
+          key: go-v1-{{ checksum "go.sum" }}
 
 workflows:
   version: 2

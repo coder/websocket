@@ -1,16 +1,13 @@
-FROM golang:1-alpine
+FROM archlinux/base
 
-RUN apk add --update bash git
+RUN pacman -Syu --noconfirm
 
-# Autobahn Test suite.
-RUN apk add py2-pip python2-dev gcc libffi-dev libc-dev openssl-dev && \
-  pip install autobahntestsuite
+RUN pacman -S --noconfirm go git shellcheck tar openssh gzip ca-certificates
 
-# prettier.
-RUN apk add npm && npm install -g prettier
+RUN pacman -S --noconfirm gcc python2-pip && \
+  pip2 install autobahntestsuite
 
-# shellcheck
-RUN apk add xz curl && \
-  curl -o /tmp/shellcheck.tar.xz -L https://storage.googleapis.com/shellcheck/shellcheck-stable.linux.x86_64.tar.xz && \
-  tar -xf /tmp/shellcheck.tar.xz && \
-  ln -s "${PWD}/shellcheck-stable/shellcheck" /usr/local/bin/shellcheck
+RUN pacman -S --noconfirm npm && \
+  npm install -g prettier
+
+ENV GOFLAGS -mod=readonly
