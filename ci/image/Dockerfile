@@ -1,13 +1,11 @@
-FROM archlinux/base
+FROM golang:1
 
-RUN pacman -Syu --noconfirm
+ENV DEBIAN_FRONTEND=noninteractive
+ENV GOPATH /root/gopath
+ENV GOFLAGS -mod=readonly
 
-RUN pacman -S --noconfirm go git shellcheck tar openssh gzip ca-certificates
-
-RUN pacman -S --noconfirm gcc python2-pip && \
-  pip2 install autobahntestsuite
-
-RUN pacman -S --noconfirm npm && \
+RUN apt-get update && \
+  apt-get install -y shellcheck python-pip npm && \
+  pip2 install autobahntestsuite && \
   npm install -g prettier
 
-ENV GOFLAGS -mod=readonly
