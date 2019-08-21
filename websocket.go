@@ -672,14 +672,13 @@ func (w *messageWriter) close() error {
 	if w.closed() {
 		return xerrors.Errorf("cannot use closed writer")
 	}
-	w.closed()
+	w.c.activeWriter = nil
 
 	_, err := w.c.writeFrame(w.c.writeMsgCtx, true, w.c.writeMsgOpcode, nil)
 	if err != nil {
 		return xerrors.Errorf("failed to write fin frame: %w", err)
 	}
 
-	w.c.activeWriter = nil
 	w.c.releaseLock(w.c.writeMsgLock)
 	return nil
 }

@@ -5,14 +5,18 @@ cd "$(dirname "${0}")"
 cd "$(git rev-parse --show-toplevel)"
 
 mkdir -p ci/out/websocket
-testFlags=(-race "-vet=off" "-bench=." "-coverprofile=ci/out/coverage.prof" "-coverpkg=./...")
-if [[ ${CI-} ]]; then
-  # https://circleci.com/docs/2.0/collect-test-data/
-  go test "${testFlags[@]}" -v ./... 2>&1 | tee /dev/stderr |
-    go run github.com/jstemmer/go-junit-report > ci/out/websocket/testReport.xml
-else
-  go test "${testFlags[@]}" ./...
-fi
+testFlags=(
+  -race
+  "-vet=off"
+  "-bench=."
+  "-coverprofile=ci/out/coverage.prof"
+  "-coverpkg=./..."
+)
+# https://circleci.com/docs/2.0/collect-test-data/
+go run gotest.tools/gotestsum \
+  --junitfile ci/out/websocket/testReport.xml \
+  --format=short-verbose \
+  -- "${testFlags[@]}"
 
 go tool cover -html=ci/out/coverage.prof -o=ci/out/coverage.html
 if [[ ${CI:-} ]]; then

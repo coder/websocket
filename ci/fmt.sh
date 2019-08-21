@@ -34,11 +34,12 @@ unstaged_files() {
 check() {
   if [[ ${CI:-} && $(unstaged_files) != "" ]]; then
     echo
-    echo "Files either need generation or are formatted incorrectly."
+    echo "Files need generation or are formatted incorrectly."
     echo "Please run:"
     echo "./ci/fmt.sh"
     echo
     git status
+    git diff
     exit 1
   fi
 }

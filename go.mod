@@ -5,7 +5,6 @@ go 1.12
 require (
 	github.com/golang/protobuf v1.3.1
 	github.com/google/go-cmp v0.2.0
-	github.com/jstemmer/go-junit-report v0.0.0-20190106144839-af01ea7f8024
 	github.com/kr/pretty v0.1.0 // indirect
 	go.coder.com/go-tools v0.0.0-20190317003359-0c6a35b74a16
 	golang.org/x/lint v0.0.0-20190409202823-959b441ac422
@@ -14,5 +13,8 @@ require (
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	golang.org/x/tools v0.0.0-20190429184909-35c670923e21
 	golang.org/x/xerrors v0.0.0-20190513163551-3ee3066db522
+	gotest.tools/gotestsum v0.3.5
 	mvdan.cc/sh v2.6.4+incompatible
 )
+
+replace gotest.tools/gotestsum => github.com/nhooyr/gotestsum v0.3.6-0.20190821172136-aaabbb33254b
