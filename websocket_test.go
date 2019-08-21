@@ -1035,7 +1035,7 @@ func BenchmarkConn(b *testing.B) {
 	b.Run("echo", func(b *testing.B) {
 		for _, size := range sizes {
 			b.Run(strconv.Itoa(size), func(b *testing.B) {
-				benchConn(b, false, false, size)
+				benchConn(b, true, true, size)
 			})
 		}
 	})

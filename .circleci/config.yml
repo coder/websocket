@@ -56,28 +56,6 @@ jobs:
       - store_test_results:
           path: ci/out
 
-  bench:
-    docker:
-      - image: nhooyr/websocket-ci
-    steps:
-      - checkout
-      - restore_cache:
-          keys:
-            - go-v3-{{ checksum "go.sum" }}
-            # Fallback to using the latest cache if no exact match is found.
-            - go-v3-
-      - run: ./ci/bench.sh
-      - store_artifacts:
-          path: ci/out
-          destination: out
-      - save_cache:
-          paths:
-            - /root/gopath
-            - /root/.cache/go-build
-          key: go-v3-{{ checksum "go.sum" }}
-      - store_test_results:
-          path: ci/out
-
 workflows:
   version: 2
   fmt:
@@ -89,6 +67,3 @@ workflows:
   test:
     jobs:
       - test
-  bench:
-    jobs:
-      - bench
