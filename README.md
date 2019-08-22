@@ -158,6 +158,10 @@ If you want a library that gives you absolute control over everything, this is t
 but for most users, the API provided by nhooyr/websocket will fit better as it is nearly just
 as performant but much easier to use correctly and idiomatic.
 
+## Contributing
+
+Please see [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
+
 ## Users
 
 This is a list of companies or projects that use this library.
