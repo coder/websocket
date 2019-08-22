@@ -2,9 +2,9 @@
 
 ## Issues
 
-Please be as descriptive as possible with your description.
+Please be as descriptive as possible.
 
-Reproducible examples are key to fixing bugs and strongly encouraged.
+Reproducible examples are key to finding and fixing bugs.
 
 ## Pull requests
 
@@ -19,24 +19,31 @@ The commit message title should use the verb tense + phrase that completes the b
 
 > This change modifies websocket to \_\_\_\_\_\_\_\_\_
 
-Be sure to link to an existing issue if one exists. In general, create an issue
-before a PR to get some discussion going and to make sure you do not spend time
-on a PR that may be rejected.
+Be sure to [correctly link](https://help.github.com/en/articles/closing-issues-using-keywords)
+to an existing issue if one exists. In general, create an issue before a PR to get some
+discussion going and to make sure you do not spend time on a PR that may be rejected.
 
-You can run tests normally with `go test`.
-You'll need the [Autobahn Test suite pip package](https://github.com/crossbario/autobahn-testsuite).
-In the future this dependency will be removed. See [#117](https://github.com/nhooyr/websocket/issues/117).
+CI must pass on your changes for them to be merged.
 
-Please ensure CI passes for your changes. If necessary, you may run CI locally.
-The various steps are located in `ci/*.sh`.
+### CI
 
-- `ci/fmt.sh` requires node (specifically prettier).
-- `ci/lint.sh` requires [shellcheck](https://github.com/koalaman/shellcheck#installing).
-- `ci/test.sh` requires the [Autobahn Test suite pip package](https://github.com/crossbario/autobahn-testsuite).
-- `ci/run.sh` runs everything in the above order and requires all of their dependencies.
+CI will ensure your code is formatted correctly, passes linting and tests.
+It will collect coverage and report it to [codecov](https://codecov.io/gh/nhooyr/websocket)
+and also upload a `out/coverage.html` artifact that you can click on to interactively
+browse coverage.
 
-See [../ci/image/Dockerfile](../ci/image/Dockerfile) for the installation of the CI dependencies on Ubuntu.
+You can run CI locally. The various steps are located in `ci/*.sh`.
 
-For CI coverage, you can use either [codecov](https://codecov.io/gh/nhooyr/websocket) or click the
-`coverage.html` artifact on the test step in CI.
-For coverage details locally, please see `ci/out/coverage.html` after running `ci/run.sh` or `ci/test.sh`.
+1. `ci/fmt.sh` requires node (specifically prettier).
+1. `ci/lint.sh` requires [shellcheck](https://github.com/koalaman/shellcheck#installing).
+1. `ci/test.sh` requires the [Autobahn Test suite pip package](https://github.com/crossbario/autobahn-testsuite).
+1. `ci/run.sh` runs the above scripts in order.
+
+For coverage details locally, please see `ci/out/coverage.html` after running `ci/test.sh`.
+
+See [ci/image/Dockerfile](ci/image/Dockerfile) for the installation of the CI dependencies on Ubuntu.
+
+You can also run tests normally with `go test` once you have the
+[Autobahn Test suite pip package](https://github.com/crossbario/autobahn-testsuite)
+installed. `ci/test.sh` just passes a default set of flags to `go test` to collect coverage,
+enable the race detector, run benchmarks and also prettifies the output.

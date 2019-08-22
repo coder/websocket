@@ -1,2 +1,2 @@
-<!-- Please read the contributing guidelines. -->
-<!-- https://github.com/nhooyr/websocket/blob/master/docs/CONTRIBUTING.md#issues -->
+<!-- Please be as descriptive as possible. -->
+<!-- Reproducible examples are key to finding and fixing bugs. -->
