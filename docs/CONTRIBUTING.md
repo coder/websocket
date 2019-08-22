@@ -4,18 +4,23 @@
 
 Please be as descriptive as possible with your description.
 
+Reproducible examples are key to fixing bugs and strongly encouraged.
+
 ## Pull requests
 
-Please split up changes into several small descriptive commits.
+Good issues for first time contributors are marked as such. Please feel free to
+reach out for clarification on what needs to be done.
 
-Please capitalize the first word in the commit message title.
+Split up large changes into several small descriptive commits.
+
+Capitalize the first word in the commit message title.
 
 The commit message title should use the verb tense + phrase that completes the blank in
 
 > This change modifies websocket to \_\_\_\_\_\_\_\_\_
 
-Be sure to link to an existing issue if one exists. In general, try creating an issue
-before making a PR to get some discussion going and to make sure you do not spend time
+Be sure to link to an existing issue if one exists. In general, create an issue
+before a PR to get some discussion going and to make sure you do not spend time
 on a PR that may be rejected.
 
 You can run tests normally with `go test`.
@@ -25,10 +30,10 @@ In the future this dependency will be removed. See [#117](https://github.com/nho
 Please ensure CI passes for your changes. If necessary, you may run CI locally.
 The various steps are located in `ci/*.sh`.
 
-`ci/fmt.sh` requires node (specifically prettier).
-`ci/lint.sh` requires [shellcheck](https://github.com/koalaman/shellcheck#installing).
-`ci/test.sh` requires the [Autobahn Test suite pip package](https://github.com/crossbario/autobahn-testsuite).
-`ci/run.sh` runs everything in the above order and requires all of their dependencies.
+- `ci/fmt.sh` requires node (specifically prettier).
+- `ci/lint.sh` requires [shellcheck](https://github.com/koalaman/shellcheck#installing).
+- `ci/test.sh` requires the [Autobahn Test suite pip package](https://github.com/crossbario/autobahn-testsuite).
+- `ci/run.sh` runs everything in the above order and requires all of their dependencies.
 
 See [../ci/image/Dockerfile](../ci/image/Dockerfile) for the installation of the CI dependencies on Ubuntu.
 
