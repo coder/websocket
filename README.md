@@ -42,15 +42,15 @@ http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), time.Second*10)
 	defer cancel()
-	
+
 	var v interface{}
 	err = wsjson.Read(ctx, c, &v)
 	if err != nil {
 		// ...
 	}
-	
+
 	log.Printf("received: %v", v)
-	
+
 	c.Close(websocket.StatusNormalClosure, "")
 })
 ```
@@ -93,7 +93,7 @@ c.Close(websocket.StatusNormalClosure, "")
 ## Comparison
 
 Before the comparison, I want to point out that both gorilla/websocket and gobwas/ws were
-extremely useful in implementing the WebSocket protocol correctly so *big thanks* to the
+extremely useful in implementing the WebSocket protocol correctly so _big thanks_ to the
 authors of both. In particular, I made sure to go through the issue tracker of gorilla/websocket
 to ensure I implemented details correctly and understood how people were using WebSockets in
 production.
@@ -111,7 +111,7 @@ Just compare the godoc of
 The API for nhooyr/websocket has been designed such that there is only one way to do things
 which makes it easy to use correctly. Not only is the API simpler, the implementation is
 only 1700 lines whereas gorilla/websocket is at 3500 lines. That's more code to maintain,
- more code to test, more code to document and more surface area for bugs.
+more code to test, more code to document and more surface area for bugs.
 
 Moreover, nhooyr/websocket has support for newer Go idioms such as context.Context and
 also uses net/http's Client and ResponseWriter directly for WebSocket handshakes.
@@ -151,7 +151,7 @@ and clarity.
 
 This library is fantastic in terms of performance. The author put in significant
 effort to ensure its speed and I have applied as many of its optimizations as
-I could into nhooyr/websocket. Definitely check out his fantastic [blog post](https://medium.freecodecamp.org/million-websockets-and-go-cc58418460bb) 
+I could into nhooyr/websocket. Definitely check out his fantastic [blog post](https://medium.freecodecamp.org/million-websockets-and-go-cc58418460bb)
 about performant WebSocket servers.
 
 If you want a library that gives you absolute control over everything, this is the library,

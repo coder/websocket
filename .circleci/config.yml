@@ -2,54 +2,59 @@ version: 2
 jobs:
   fmt:
     docker:
-      - image: golang:1
+      - image: nhooyr/websocket-ci
     steps:
       - checkout
       - restore_cache:
           keys:
-            - go-{{ checksum "go.sum" }}
+            - go-v3-{{ checksum "go.sum" }}
             # Fallback to using the latest cache if no exact match is found.
-            - go-
+            - go-v3-
       - run: ./ci/fmt.sh
       - save_cache:
           paths:
-            - /go
+            - /root/gopath
             - /root/.cache/go-build
-          key: go-{{ checksum "go.sum" }}
+          key: go-v3-{{ checksum "go.sum" }}
 
   lint:
     docker:
-      - image: golang:1
+      - image: nhooyr/websocket-ci
     steps:
       - checkout
       - restore_cache:
           keys:
-            - go-{{ checksum "go.sum" }}
+            - go-v3-{{ checksum "go.sum" }}
             # Fallback to using the latest cache if no exact match is found.
-            - go-
+            - go-v3-
       - run: ./ci/lint.sh
       - save_cache:
           paths:
-            - /go
+            - /root/gopath
             - /root/.cache/go-build
-          key: go-{{ checksum "go.sum" }}
+          key: go-v3-{{ checksum "go.sum" }}
 
   test:
     docker:
-      - image: golang:1
+      - image: nhooyr/websocket-ci
     steps:
       - checkout
       - restore_cache:
           keys:
-            - go-{{ checksum "go.sum" }}
+            - go-v3-{{ checksum "go.sum" }}
             # Fallback to using the latest cache if no exact match is found.
-            - go-
+            - go-v3-
       - run: ./ci/test.sh
+      - store_artifacts:
+          path: ci/out
+          destination: out
       - save_cache:
           paths:
-            - /go
+            - /root/gopath
             - /root/.cache/go-build
-          key: go-{{ checksum "go.sum" }}
+          key: go-v3-{{ checksum "go.sum" }}
+      - store_test_results:
+          path: ci/out
 
 workflows:
   version: 2

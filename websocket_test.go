@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -781,12 +782,28 @@ func discardLoop(ctx context.Context, c *websocket.Conn) {
 	}
 }
 
+func unusedListenAddr() (string, error) {
+	l, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return "", err
+	}
+	l.Close()
+	return l.Addr().String(), nil
+}
+
 // https://github.com/crossbario/autobahn-python/blob/master/wstest/testee_client_aio.py
 func TestAutobahnClient(t *testing.T) {
 	t.Parallel()
 
+	serverAddr, err := unusedListenAddr()
+	if err != nil {
+		t.Fatalf("failed to get unused listen addr for wstest: %v", err)
+	}
+
+	wsServerURL := "ws://" + serverAddr
+
 	spec := map[string]interface{}{
-		"url":    "ws://localhost:9001",
+		"url":    wsServerURL,
 		"outdir": "ci/out/wstestClientReports",
 		"cases":  []string{"*"},
 		// See TestAutobahnServer for the reasons why we exclude these.
@@ -814,9 +831,10 @@ func TestAutobahnClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute*10)
 	defer cancel()
 
-	args := []string{"--mode", "fuzzingserver", "--spec", specFile.Name()}
-	if os.Getenv("CI") == "" {
-		args = append([]string{"--debug"}, args...)
+	args := []string{"--mode", "fuzzingserver", "--spec", specFile.Name(),
+		// Disables some server that runs as part of fuzzingserver mode.
+		// See https://github.com/crossbario/autobahn-testsuite/blob/058db3a36b7c3a1edf68c282307c6b899ca4857f/autobahntestsuite/autobahntestsuite/wstest.py#L124
+		"--webport=0",
 	}
 	wstest := exec.CommandContext(ctx, "wstest", args...)
 	err = wstest.Start()
@@ -835,9 +853,9 @@ func TestAutobahnClient(t *testing.T) {
 
 	var cases int
 	func() {
-		c, _, err := websocket.Dial(ctx, "ws://localhost:9001/getCaseCount", websocket.DialOptions{})
+		c, _, err := websocket.Dial(ctx, wsServerURL+"/getCaseCount", websocket.DialOptions{})
 		if err != nil {
-			t.Fatalf("failed to dial: %v", err)
+			t.Fatal(err)
 		}
 		defer c.Close(websocket.StatusInternalError, "")
 
@@ -862,17 +880,17 @@ func TestAutobahnClient(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, time.Second*45)
 			defer cancel()
 
-			c, _, err := websocket.Dial(ctx, fmt.Sprintf("ws://localhost:9001/runCase?case=%v&agent=main", i), websocket.DialOptions{})
+			c, _, err := websocket.Dial(ctx, fmt.Sprintf(wsServerURL+"/runCase?case=%v&agent=main", i), websocket.DialOptions{})
 			if err != nil {
-				t.Fatalf("failed to dial: %v", err)
+				t.Fatal(err)
 			}
 			echoLoop(ctx, c)
 		}()
 	}
 
-	c, _, err := websocket.Dial(ctx, fmt.Sprintf("ws://localhost:9001/updateReports?agent=main"), websocket.DialOptions{})
+	c, _, err := websocket.Dial(ctx, fmt.Sprintf(wsServerURL+"/updateReports?agent=main"), websocket.DialOptions{})
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatal(err)
 	}
 	c.Close(websocket.StatusNormalClosure, "")
 
@@ -915,9 +933,7 @@ func checkWSTestIndex(t *testing.T, path string) {
 	if failed {
 		path = strings.Replace(path, ".json", ".html", 1)
 		if os.Getenv("CI") == "" {
-			t.Errorf("wstest found failure, please see %q", path)
-		} else {
-			t.Errorf("wstest found failure, please run test.sh locally to see %q", path)
+			t.Errorf("wstest found failure, please see %q (output as an artifact in CI)", path)
 		}
 	}
 }
@@ -944,7 +960,7 @@ func benchConn(b *testing.B, echo, stream bool, size int) {
 
 	c, _, err := websocket.Dial(ctx, wsURL, websocket.DialOptions{})
 	if err != nil {
-		b.Fatalf("failed to dial: %v", err)
+		b.Fatal(err)
 	}
 	defer c.Close(websocket.StatusInternalError, "")
 
@@ -1019,7 +1035,7 @@ func BenchmarkConn(b *testing.B) {
 	b.Run("echo", func(b *testing.B) {
 		for _, size := range sizes {
 			b.Run(strconv.Itoa(size), func(b *testing.B) {
-				benchConn(b, false, false, size)
+				benchConn(b, true, true, size)
 			})
 		}
 	})

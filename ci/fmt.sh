@@ -2,11 +2,7 @@
 
 set -euo pipefail
 cd "$(dirname "${0}")"
-source ./lib.sh
-
-unstaged_files() {
-  git ls-files --other --modified --exclude-standard
-}
+cd "$(git rev-parse --show-toplevel)"
 
 gen() {
   # Unfortunately, this is the only way to ensure go.mod and go.sum are correct.
@@ -21,17 +17,33 @@ fmt() {
   gofmt -w -s .
   go run go.coder.com/go-tools/cmd/goimports -w "-local=$(go list -m)" .
   go run mvdan.cc/sh/cmd/shfmt -i 2 -w -s -sr .
+  # shellcheck disable=SC2046
+  npx prettier \
+    --write \
+    --print-width 120 \
+    --no-semi \
+    --trailing-comma all \
+    --loglevel silent \
+    $(git ls-files "*.yaml" "*.yml" "*.md")
+}
+
+unstaged_files() {
+  git ls-files --other --modified --exclude-standard
+}
+
+check() {
+  if [[ ${CI:-} && $(unstaged_files) != "" ]]; then
+    echo
+    echo "Files need generation or are formatted incorrectly."
+    echo "Please run:"
+    echo "./ci/fmt.sh"
+    echo
+    git status
+    git diff
+    exit 1
+  fi
 }
 
 gen
 fmt
-
-if [[ $CI && $(unstaged_files) != "" ]]; then
-  echo
-  echo "Files either need generation or are formatted incorrectly."
-  echo "Please run:"
-  echo "./ci/fmt.sh"
-  echo
-  git status
-  exit 1
-fi
+check

@@ -12,17 +12,26 @@ Please capitalize the first word in the commit message title.
 
 The commit message title should use the verb tense + phrase that completes the blank in
 
-> This change modifies websocket to ___________
+> This change modifies websocket to \_\_\_\_\_\_\_\_\_
 
 Be sure to link to an existing issue if one exists. In general, try creating an issue
 before making a PR to get some discussion going and to make sure you do not spend time
 on a PR that may be rejected.
 
-Run `ci/run.sh` to test your changes. You'll need [shellcheck](https://github.com/koalaman/shellcheck#installing), the [Autobahn Test suite pip package](https://github.com/crossbario/autobahn-testsuite) and Go.
+You can run tests normally with `go test`.
+You'll need the [Autobahn Test suite pip package](https://github.com/crossbario/autobahn-testsuite).
+In the future this dependency will be removed. See [#117](https://github.com/nhooyr/websocket/issues/117).
 
-See [../ci/lint.sh](../ci/lint.sh) and [../ci/lint.sh](../ci/test.sh) for the
-installation of shellcheck and the Autobahn test suite on Debian or Ubuntu.
+Please ensure CI passes for your changes. If necessary, you may run CI locally.
+The various steps are located in `ci/*.sh`.
 
-For Go, please refer to the [offical docs](https://golang.org/doc/install).
+`ci/fmt.sh` requires node (specifically prettier).
+`ci/lint.sh` requires [shellcheck](https://github.com/koalaman/shellcheck#installing).
+`ci/test.sh` requires the [Autobahn Test suite pip package](https://github.com/crossbario/autobahn-testsuite).
+`ci/run.sh` runs everything in the above order and requires all of their dependencies.
 
-You can benchmark the library with `./ci/benchmark.sh`. You only need Go to run that script.
+See [../ci/image/Dockerfile](../ci/image/Dockerfile) for the installation of the CI dependencies on Ubuntu.
+
+For CI coverage, you can use either [codecov](https://codecov.io/gh/nhooyr/websocket) or click the
+`coverage.html` artifact on the test step in CI.
+For coverage details locally, please see `ci/out/coverage.html` after running `ci/run.sh` or `ci/test.sh`.
