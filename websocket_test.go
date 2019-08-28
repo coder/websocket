@@ -654,6 +654,7 @@ func testServer(tb testing.TB, fn http.HandlerFunc) (s *httptest.Server, closeFn
 // https://github.com/crossbario/autobahn-python/tree/master/wstest
 func TestAutobahnServer(t *testing.T) {
 	t.Parallel()
+	t.Skip()
 
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, websocket.AcceptOptions{
@@ -794,6 +795,7 @@ func unusedListenAddr() (string, error) {
 // https://github.com/crossbario/autobahn-python/blob/master/wstest/testee_client_aio.py
 func TestAutobahnClient(t *testing.T) {
 	t.Parallel()
+	t.Skip()
 
 	serverAddr, err := unusedListenAddr()
 	if err != nil {

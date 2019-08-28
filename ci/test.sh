@@ -8,7 +8,7 @@ mkdir -p ci/out/websocket
 testFlags=(
   -race
   "-vet=off"
-  "-bench=."
+  #  "-bench=."
   "-coverprofile=ci/out/coverage.prof"
   "-coverpkg=./..."
 )

@@ -21,6 +21,21 @@ func randBool() bool {
 func TestHeader(t *testing.T) {
 	t.Parallel()
 
+	t.Run("writeNegativeLength", func(t *testing.T) {
+		t.Parallel()
+
+		defer func() {
+			r := recover()
+			if r == nil {
+				t.Fatal("failed to induce panic in writeHeader with negative payload length")
+			}
+		}()
+
+		writeHeader(nil, header{
+			payloadLength: -1,
+		})
+	})
+
 	t.Run("readNegativeLength", func(t *testing.T) {
 		t.Parallel()
 
