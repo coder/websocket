@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"math/rand"
-	"os"
 	"runtime"
 	"strconv"
 	"sync"
@@ -210,9 +210,8 @@ func (c *Conn) readTillMsg(ctx context.Context) (header, error) {
 		}
 
 		if h.rsv1 || h.rsv2 || h.rsv3 {
-			err := xerrors.Errorf("received header with rsv bits set: %v:%v:%v", h.rsv1, h.rsv2, h.rsv3)
-			c.Close(StatusProtocolError, err.Error())
-			return header{}, err
+			c.Close(StatusProtocolError, fmt.Sprintf("received header with rsv bits set: %v:%v:%v", h.rsv1, h.rsv2, h.rsv3))
+			return header{}, c.closeErr
 		}
 
 		if h.opcode.controlOp() {
@@ -227,9 +226,8 @@ func (c *Conn) readTillMsg(ctx context.Context) (header, error) {
 		case opBinary, opText, opContinuation:
 			return h, nil
 		default:
-			err := xerrors.Errorf("received unknown opcode %v", h.opcode)
-			c.Close(StatusProtocolError, err.Error())
-			return header{}, err
+			c.Close(StatusProtocolError, fmt.Sprintf("received unknown opcode %v", h.opcode))
+			return header{}, c.closeErr
 		}
 	}
 }
@@ -273,15 +271,13 @@ func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 
 func (c *Conn) handleControl(ctx context.Context, h header) error {
 	if h.payloadLength > maxControlFramePayload {
-		err := xerrors.Errorf("control frame too large at %v bytes", h.payloadLength)
-		c.Close(StatusProtocolError, err.Error())
-		return err
+		c.Close(StatusProtocolError, fmt.Sprintf("control frame too large at %v bytes", h.payloadLength))
+		return c.closeErr
 	}
 
 	if !h.fin {
-		err := xerrors.Errorf("received fragmented control frame")
-		c.Close(StatusProtocolError, err.Error())
-		return err
+		c.Close(StatusProtocolError, "received fragmented control frame")
+		return c.closeErr
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
@@ -311,8 +307,9 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 	case opClose:
 		ce, err := parseClosePayload(b)
 		if err != nil {
-			c.Close(StatusProtocolError, "received invalid close payload")
-			return xerrors.Errorf("received invalid close payload: %w", err)
+			err = xerrors.Errorf("received invalid close payload: %w", err)
+			c.Close(StatusProtocolError, err.Error())
+			return c.closeErr
 		}
 		// This ensures the closeErr of the Conn is always the received CloseError
 		// in case the echo close frame write fails.
@@ -376,9 +373,8 @@ func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
 
 	if c.activeReader != nil && !c.activeReader.eof() {
 		if h.opcode != opContinuation {
-			err := xerrors.Errorf("received new data message without finishing the previous message")
-			c.Close(StatusProtocolError, err.Error())
-			return 0, nil, err
+			c.Close(StatusProtocolError, "received new data message without finishing the previous message")
+			return 0, nil, c.closeErr
 		}
 
 		if !h.fin || h.payloadLength > 0 {
@@ -392,9 +388,8 @@ func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
 			return 0, nil, err
 		}
 	} else if h.opcode == opContinuation {
-		err := xerrors.Errorf("received continuation frame not after data or text frame")
-		c.Close(StatusProtocolError, err.Error())
-		return 0, nil, err
+		c.Close(StatusProtocolError, "received continuation frame not after data or text frame")
+		return 0, nil, c.closeErr
 	}
 
 	c.readerMsgCtx = ctx
@@ -460,9 +455,8 @@ func (r *messageReader) read(p []byte) (int, error) {
 	}
 
 	if r.c.readMsgLeft <= 0 {
-		err := xerrors.Errorf("read limited at %v bytes", r.c.msgReadLimit)
-		r.c.Close(StatusMessageTooBig, err.Error())
-		return 0, err
+		r.c.Close(StatusMessageTooBig, fmt.Sprintf("read limited at %v bytes", r.c.msgReadLimit))
+		return 0, r.c.closeErr
 	}
 
 	if int64(len(p)) > r.c.readMsgLeft {
@@ -476,9 +470,8 @@ func (r *messageReader) read(p []byte) (int, error) {
 		}
 
 		if h.opcode != opContinuation {
-			err := xerrors.Errorf("received new data message without finishing the previous message")
-			r.c.Close(StatusProtocolError, err.Error())
-			return 0, err
+			r.c.Close(StatusProtocolError, "received new data message without finishing the previous message")
+			return 0, r.c.closeErr
 		}
 
 		r.c.readerMsgHeader = h
@@ -828,7 +821,7 @@ func (c *Conn) writePong(p []byte) error {
 func (c *Conn) Close(code StatusCode, reason string) error {
 	err := c.exportedClose(code, reason)
 	if err != nil {
-		return xerrors.Errorf("failed to close connection: %w", err)
+		return xerrors.Errorf("failed to close websocket connection: %w", err)
 	}
 	return nil
 }
@@ -844,7 +837,7 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 	// Definitely worth seeing what popular browsers do later.
 	p, err := ce.bytes()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "websocket: failed to marshal close frame: %v\n", err)
+		log.Printf("websocket: failed to marshal close frame: %+v", err)
 		ce = CloseError{
 			Code: StatusInternalError,
 		}
@@ -853,12 +846,13 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 
 	// CloseErrors sent are made opaque to prevent applications from thinking
 	// they received a given status.
-	err = c.writeClose(p, xerrors.Errorf("sent close frame: %v", ce))
+	sentErr := xerrors.Errorf("sent close frame: %v", ce)
+	err = c.writeClose(p, sentErr)
 	if err != nil {
 		return err
 	}
 
-	if !xerrors.Is(c.closeErr, ce) {
+	if !xerrors.Is(c.closeErr, sentErr) {
 		return c.closeErr
 	}
 

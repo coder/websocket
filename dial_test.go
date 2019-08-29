@@ -33,6 +33,10 @@ func TestBadDials(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "badTLS",
+			url:  "wss://totallyfake.nhooyr.io",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -40,7 +44,10 @@ func TestBadDials(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, _, err := Dial(context.Background(), tc.url, tc.opts)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+			defer cancel()
+
+			_, _, err := Dial(ctx, tc.url, tc.opts)
 			if err == nil {
 				t.Fatalf("expected non nil error: %+v", err)
 			}

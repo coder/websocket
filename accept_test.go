@@ -6,6 +6,39 @@ import (
 	"testing"
 )
 
+func TestAccept(t *testing.T) {
+	t.Parallel()
+
+	t.Run("badClientHandshake", func(t *testing.T) {
+		t.Parallel()
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", "/", nil)
+
+		_, err := Accept(w, r, AcceptOptions{})
+		if err == nil {
+			t.Fatalf("unexpected error value: %v", err)
+		}
+
+	})
+
+	t.Run("requireHttpHijacker", func(t *testing.T) {
+		t.Parallel()
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", "/", nil)
+		r.Header.Set("Connection", "Upgrade")
+		r.Header.Set("Upgrade", "websocket")
+		r.Header.Set("Sec-WebSocket-Version", "13")
+		r.Header.Set("Sec-WebSocket-Key", "meow123")
+
+		_, err := Accept(w, r, AcceptOptions{})
+		if err == nil || !strings.Contains(err.Error(), "http.Hijacker") {
+			t.Fatalf("unexpected error value: %v", err)
+		}
+	})
+}
+
 func Test_verifyClientHandshake(t *testing.T) {
 	t.Parallel()
 

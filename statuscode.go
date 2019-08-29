@@ -35,7 +35,7 @@ const (
 	StatusTryAgainLater
 	StatusBadGateway
 	// statusTLSHandshake is unexported because we just return
-	// handshake error in dial. We do not return a conn
+	// the handshake error in dial. We do not return a conn
 	// so there is nothing to use this on. At least until WASM.
 	statusTLSHandshake
 )
