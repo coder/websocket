@@ -14,7 +14,7 @@ func TestBadDials(t *testing.T) {
 	testCases := []struct {
 		name string
 		url  string
-		opts DialOptions
+		opts *DialOptions
 	}{
 		{
 			name: "badURL",
@@ -27,7 +27,7 @@ func TestBadDials(t *testing.T) {
 		{
 			name: "badHTTPClient",
 			url:  "ws://nhooyr.io",
-			opts: DialOptions{
+			opts: &DialOptions{
 				HTTPClient: &http.Client{
 					Timeout: time.Minute,
 				},

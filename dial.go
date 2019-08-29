@@ -41,7 +41,7 @@ type DialOptions struct {
 // This function requires at least Go 1.12 to succeed as it uses a new feature
 // in net/http to perform WebSocket handshakes and get a writable body
 // from the transport. See https://github.com/golang/go/issues/26937#issuecomment-415855861
-func Dial(ctx context.Context, u string, opts DialOptions) (*Conn, *http.Response, error) {
+func Dial(ctx context.Context, u string, opts *DialOptions) (*Conn, *http.Response, error) {
 	c, r, err := dial(ctx, u, opts)
 	if err != nil {
 		return nil, r, xerrors.Errorf("failed to websocket dial: %w", err)
@@ -49,7 +49,15 @@ func Dial(ctx context.Context, u string, opts DialOptions) (*Conn, *http.Respons
 	return c, r, nil
 }
 
-func dial(ctx context.Context, u string, opts DialOptions) (_ *Conn, _ *http.Response, err error) {
+func dial(ctx context.Context, u string, opts *DialOptions) (_ *Conn, _ *http.Response, err error) {
+	if opts == nil {
+		opts = &DialOptions{}
+	}
+
+	// Shallow copy to ensure defaults do not affect user passed options.
+	opts2 := *opts
+	opts = &opts2
+
 	if opts.HTTPClient == nil {
 		opts.HTTPClient = http.DefaultClient
 	}

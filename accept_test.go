@@ -15,7 +15,7 @@ func TestAccept(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest("GET", "/", nil)
 
-		_, err := Accept(w, r, AcceptOptions{})
+		_, err := Accept(w, r, nil)
 		if err == nil {
 			t.Fatalf("unexpected error value: %v", err)
 		}
@@ -32,7 +32,7 @@ func TestAccept(t *testing.T) {
 		r.Header.Set("Sec-WebSocket-Version", "13")
 		r.Header.Set("Sec-WebSocket-Key", "meow123")
 
-		_, err := Accept(w, r, AcceptOptions{})
+		_, err := Accept(w, r, nil)
 		if err == nil || !strings.Contains(err.Error(), "http.Hijacker") {
 			t.Fatalf("unexpected error value: %v", err)
 		}

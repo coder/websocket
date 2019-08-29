@@ -14,7 +14,7 @@ import (
 // message from the client and then closes the connection.
 func ExampleAccept() {
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
+		c, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			log.Println(err)
 			return
@@ -46,7 +46,7 @@ func ExampleDial() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	c, _, err := websocket.Dial(ctx, "ws://localhost:8080", websocket.DialOptions{})
+	c, _, err := websocket.Dial(ctx, "ws://localhost:8080", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func ExampleDial() {
 // on which you will only write and do not expect to read data messages.
 func Example_writeOnly() {
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
+		c, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			log.Println(err)
 			return
