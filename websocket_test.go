@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes/timestamp"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -23,8 +21,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/xerrors"
 
@@ -592,7 +592,7 @@ func TestConn(t *testing.T) {
 				return nil
 			},
 			client: func(ctx context.Context, c *websocket.Conn) error {
-				go c.CloseRead(ctx)
+				c.CloseRead(ctx)
 
 				err := c.Write(ctx, websocket.MessageBinary, []byte(strings.Repeat("x", 32769)))
 				if err != nil {
@@ -775,7 +775,7 @@ func TestConn(t *testing.T) {
 				}
 				<-ctx.Done()
 				_, err = r.Read(make([]byte, 1))
-				if !xerrors.Is(err, context.DeadlineExceeded){
+				if !xerrors.Is(err, context.DeadlineExceeded) {
 					return xerrors.Errorf("expected deadline exceeded error: %+v", err)
 				}
 				return nil
@@ -825,6 +825,152 @@ func TestConn(t *testing.T) {
 				_, _, err := c.Read(ctx)
 				if err == nil || !strings.Contains(err.Error(), "rsv") {
 					return xerrors.Errorf("expected error that contains rsv: %+v", err)
+				}
+				return nil
+			},
+		},
+		{
+			name: "largeControlFrame",
+			server: func(ctx context.Context, c *websocket.Conn) error {
+				_, err := c.WriteFrame(ctx, true, websocket.OPClose, []byte(strings.Repeat("x", 4096)))
+				if err != nil {
+					return err
+				}
+				_, _, err = c.Read(ctx)
+				cerr := &websocket.CloseError{}
+				if !xerrors.As(err, cerr) || cerr.Code != websocket.StatusProtocolError {
+					return xerrors.Errorf("expected close error with StatusProtocolError: %+v", err)
+				}
+				return nil
+			},
+			client: func(ctx context.Context, c *websocket.Conn) error {
+				_, _, err := c.Read(ctx)
+				if err == nil || !strings.Contains(err.Error(), "too large") {
+					return xerrors.Errorf("expected error that contains too large: %+v", err)
+				}
+				return nil
+			},
+		},
+		{
+			name: "fragmentedControlFrame",
+			server: func(ctx context.Context, c *websocket.Conn) error {
+				_, err := c.WriteFrame(ctx, false, websocket.OPPing, []byte(strings.Repeat("x", 32)))
+				if err != nil {
+					return err
+				}
+				err = c.Flush()
+				if err != nil {
+					return err
+				}
+				_, _, err = c.Read(ctx)
+				cerr := &websocket.CloseError{}
+				if !xerrors.As(err, cerr) || cerr.Code != websocket.StatusProtocolError {
+					return xerrors.Errorf("expected close error with StatusProtocolError: %+v", err)
+				}
+				return nil
+			},
+			client: func(ctx context.Context, c *websocket.Conn) error {
+				_, _, err := c.Read(ctx)
+				if err == nil || !strings.Contains(err.Error(), "fragmented") {
+					return xerrors.Errorf("expected error that contains fragmented: %+v", err)
+				}
+				return nil
+			},
+		},
+		{
+			name: "invalidClosePayload",
+			server: func(ctx context.Context, c *websocket.Conn) error {
+				_, err := c.WriteFrame(ctx, true, websocket.OPClose, []byte{0x17, 0x70})
+				if err != nil {
+					return err
+				}
+				_, _, err = c.Read(ctx)
+				cerr := &websocket.CloseError{}
+				if !xerrors.As(err, cerr) || cerr.Code != websocket.StatusProtocolError {
+					return xerrors.Errorf("expected close error with StatusProtocolError: %+v", err)
+				}
+				return nil
+			},
+			client: func(ctx context.Context, c *websocket.Conn) error {
+				_, _, err := c.Read(ctx)
+				if err == nil || !strings.Contains(err.Error(), "invalid status code") {
+					return xerrors.Errorf("expected error that contains invalid status code: %+v", err)
+				}
+				return nil
+			},
+		},
+		{
+			name: "doubleReader",
+			server: func(ctx context.Context, c *websocket.Conn) error {
+				_, r, err := c.Reader(ctx)
+				if err != nil {
+					return err
+				}
+				p := make([]byte, 10)
+				_, err = io.ReadFull(r, p)
+				if err != nil {
+					return err
+				}
+				_, _, err = c.Reader(ctx)
+				if err == nil {
+					return xerrors.Errorf("expected non nil error: %v", err)
+				}
+				return nil
+			},
+			client: func(ctx context.Context, c *websocket.Conn) error {
+				err := c.Write(ctx, websocket.MessageBinary, []byte(strings.Repeat("x", 11)))
+				if err != nil {
+					return err
+				}
+				_, _, err = c.Read(ctx)
+				if err == nil {
+					return xerrors.Errorf("expected non nil error: %v", err)
+				}
+				return nil
+			},
+		},
+		{
+			name: "doubleFragmentedReader",
+			server: func(ctx context.Context, c *websocket.Conn) error {
+				_, r, err := c.Reader(ctx)
+				if err != nil {
+					return err
+				}
+				p := make([]byte, 10)
+				_, err = io.ReadFull(r, p)
+				if err != nil {
+					return err
+				}
+				_, _, err = c.Reader(ctx)
+				if err == nil {
+					return xerrors.Errorf("expected non nil error: %v", err)
+				}
+				return nil
+			},
+			client: func(ctx context.Context, c *websocket.Conn) error {
+				w, err := c.Writer(ctx, websocket.MessageBinary)
+				if err != nil {
+					return err
+				}
+				_, err = w.Write([]byte(strings.Repeat("x", 10)))
+				if err != nil {
+					return xerrors.Errorf("expected non nil error")
+				}
+				err = c.Flush()
+				if err != nil {
+					return xerrors.Errorf("failed to flush: %w", err)
+				}
+				_, err = w.Write([]byte(strings.Repeat("x", 10)))
+				if err != nil {
+					return xerrors.Errorf("expected non nil error")
+				}
+				err = c.Flush()
+				if err != nil {
+					return xerrors.Errorf("failed to flush: %w", err)
+				}
+				_, _, err = c.Read(ctx)
+				if err == nil {
+					return xerrors.Errorf("expected non nil error: %v", err)
 				}
 				return nil
 			},
