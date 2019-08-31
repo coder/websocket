@@ -166,9 +166,9 @@ func (c *Conn) timeoutLoop() {
 		case readCtx = <-c.setReadTimeout:
 
 		case <-readCtx.Done():
-			c.close(xerrors.Errorf("data read timed out: %w", readCtx.Err()))
+			c.close(xerrors.Errorf("read timed out: %w", readCtx.Err()))
 		case <-writeCtx.Done():
-			c.close(xerrors.Errorf("data write timed out: %w", writeCtx.Err()))
+			c.close(xerrors.Errorf("write timed out: %w", writeCtx.Err()))
 		}
 	}
 }

@@ -43,12 +43,10 @@ For coverage details locally, please see `ci/out/coverage.html` after running `c
 
 See [ci/image/Dockerfile](ci/image/Dockerfile) for the installation of the CI dependencies on Ubuntu.
 
-You can also run tests normally with `go test`.
-`ci/test.sh` just passes a default set of flags to `go test` to collect coverage,
-enable the race detector, run benchmarks and also prettifies the output.
+You can also run tests normally with `go test`. `ci/test.sh` just passes a default set of flags to
+`go test` to collect coverage, enable the race detector and also prettifies the output.
 
-If you pass flags to `ci/test.sh`, it will pass those flags directly to `go test` but will also
-collect coverage for you. This is nice for when you don't want to wait for benchmarks
-or the race detector but want to have coverage.
+You can pass flags to `ci/test.sh` if you want to run a specific test or otherwise
+control the behaviour of `go test`.
 
 Coverage percentage from codecov and the CI scripts will be different because they are calculated differently.
