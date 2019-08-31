@@ -25,6 +25,7 @@ go get nhooyr.io/websocket@v1.4.0
 ## Roadmap
 
 - [ ] WebSockets over HTTP/2 [#4](https://github.com/nhooyr/websocket/issues/4)
+- [ ] WASM Compilation [#121](https://github.com/nhooyr/websocket/issues/121)
 
 ## Examples
 
