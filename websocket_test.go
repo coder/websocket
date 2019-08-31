@@ -1,19 +1,17 @@
 package websocket_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
-	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
-	"os"
-	"os/exec"
 	"reflect"
 	"strconv"
 	"strings"
@@ -175,7 +173,7 @@ func TestHandshake(t *testing.T) {
 
 			wsURL := strings.Replace(s.URL, "http", "ws", 1)
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
 			err := tc.client(ctx, wsURL)
@@ -598,7 +596,7 @@ func TestConn(t *testing.T) {
 		{
 			name: "largeControlFrame",
 			server: func(ctx context.Context, c *websocket.Conn) error {
-				_, err := c.WriteFrame(ctx, true, websocket.OPClose, []byte(strings.Repeat("x", 4096)))
+				_, err := c.WriteFrame(ctx, true, websocket.OpClose, []byte(strings.Repeat("x", 4096)))
 				if err != nil {
 					return err
 				}
@@ -613,7 +611,7 @@ func TestConn(t *testing.T) {
 		{
 			name: "fragmentedControlFrame",
 			server: func(ctx context.Context, c *websocket.Conn) error {
-				_, err := c.WriteFrame(ctx, false, websocket.OPPing, []byte(strings.Repeat("x", 32)))
+				_, err := c.WriteFrame(ctx, false, websocket.OpPing, []byte(strings.Repeat("x", 32)))
 				if err != nil {
 					return err
 				}
@@ -632,7 +630,7 @@ func TestConn(t *testing.T) {
 		{
 			name: "invalidClosePayload",
 			server: func(ctx context.Context, c *websocket.Conn) error {
-				_, err := c.WriteFrame(ctx, true, websocket.OPClose, []byte{0x17, 0x70})
+				_, err := c.WriteFrame(ctx, true, websocket.OpClose, []byte{0x17, 0x70})
 				if err != nil {
 					return err
 				}
@@ -736,7 +734,7 @@ func TestConn(t *testing.T) {
 				if err != nil {
 					return xerrors.Errorf("failed to flush: %w", err)
 				}
-				_, err = c.WriteFrame(ctx, true, websocket.OPBinary, []byte(strings.Repeat("x", 10)))
+				_, err = c.WriteFrame(ctx, true, websocket.OpBinary, []byte(strings.Repeat("x", 10)))
 				if err != nil {
 					return xerrors.Errorf("expected non nil error")
 				}
@@ -751,7 +749,7 @@ func TestConn(t *testing.T) {
 				return assertErrorContains(err, "received continuation frame not after data")
 			},
 			client: func(ctx context.Context, c *websocket.Conn) error {
-				_, err := c.WriteFrame(ctx, false, websocket.OPContinuation, []byte(strings.Repeat("x", 10)))
+				_, err := c.WriteFrame(ctx, false, websocket.OpContinuation, []byte(strings.Repeat("x", 10)))
 				return err
 			},
 		},
@@ -810,7 +808,7 @@ func TestConn(t *testing.T) {
 				if err != nil {
 					return xerrors.Errorf("failed to flush: %w", err)
 				}
-				_, err = c.WriteFrame(ctx, true, websocket.OPBinary, []byte(strings.Repeat("x", 10)))
+				_, err = c.WriteFrame(ctx, true, websocket.OpBinary, []byte(strings.Repeat("x", 10)))
 				if err != nil {
 					return xerrors.Errorf("expected non nil error")
 				}
@@ -844,7 +842,11 @@ func TestConn(t *testing.T) {
 			},
 			client: func(ctx context.Context, c *websocket.Conn) error {
 				_, err := c.WriteHalfFrame(ctx)
-				return err
+				if err != nil {
+					return err
+				}
+				c.CloseUnderlyingConn()
+				return nil
 			},
 		},
 	}
@@ -871,7 +873,7 @@ func TestConn(t *testing.T) {
 
 			wsURL := strings.Replace(s.URL, "http", "ws", 1)
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
 			opts := tc.dialOpts
@@ -946,69 +948,287 @@ func testServer(tb testing.TB, fn func(w http.ResponseWriter, r *http.Request) e
 	}
 }
 
-// https://github.com/crossbario/autobahn-python/tree/master/wstest
-func TestAutobahnServer(t *testing.T) {
+func TestAutobahn(t *testing.T) {
 	t.Parallel()
-	if os.Getenv("AUTOBAHN") == "" {
-		t.Skip("Set $AUTOBAHN to run the autobahn test suite.")
-	}
 
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			Subprotocols: []string{"echo"},
-		})
-		if err != nil {
-			t.Logf("server handshake failed: %+v", err)
-			return
+	run := func(t *testing.T, name string, fn func(ctx context.Context, c *websocket.Conn) error) {
+		run2 := func(t *testing.T, testingClient bool) {
+			t.Parallel()
+
+			// Run random tests over TLS.
+			tls := rand.Intn(2) == 1
+
+			s, closeFn := testServer(t, func(w http.ResponseWriter, r *http.Request) error {
+				c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+					Subprotocols: []string{"echo"},
+				})
+				if err != nil {
+					return err
+				}
+				defer c.Close(websocket.StatusInternalError, "")
+				c.SetReadLimit(1 << 40)
+
+				ctx := r.Context()
+				if testingClient {
+					echoLoop(r.Context(), c)
+					return nil
+				}
+
+				err = fn(ctx, c)
+				if err != nil {
+					return err
+				}
+				c.Close(websocket.StatusNormalClosure, "")
+				return nil
+			}, tls)
+			defer closeFn()
+
+			wsURL := strings.Replace(s.URL, "http", "ws", 1)
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
+
+			opts := &websocket.DialOptions{
+				Subprotocols: []string{"echo"},
+			}
+			if tls {
+				opts.HTTPClient = s.Client()
+			}
+
+			c, _, err := websocket.Dial(ctx, wsURL, opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer c.Close(websocket.StatusInternalError, "")
+			c.SetReadLimit(1 << 40)
+
+			if testingClient {
+				err = fn(ctx, c)
+				if err != nil {
+					t.Fatalf("client failed: %+v", err)
+				}
+				c.Close(websocket.StatusNormalClosure, "")
+				return
+			}
+
+			echoLoop(ctx, c)
 		}
-		echoLoop(r.Context(), c)
-	}))
-	defer s.Close()
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-	spec := map[string]interface{}{
-		"outdir": "ci/out/wstestServerReports",
-		"servers": []interface{}{
-			map[string]interface{}{
-				"agent": "main",
-				"url":   strings.Replace(s.URL, "http", "ws", 1),
-			},
-		},
-		"cases": []string{"*"},
-		// We skip the UTF-8 handling tests as there isn't any reason to reject invalid UTF-8, just
-		// more performance overhead. 7.5.1 is the same.
-		// 12.* and 13.* as we do not support compression.
-		"exclude-cases": []string{"6.*", "7.5.1", "12.*", "13.*"},
-	}
-	specFile, err := ioutil.TempFile("", "websocketFuzzingClient.json")
-	if err != nil {
-		t.Fatalf("failed to create temp file for fuzzingclient.json: %v", err)
-	}
-	defer specFile.Close()
-
-	e := json.NewEncoder(specFile)
-	e.SetIndent("", "\t")
-	err = e.Encode(spec)
-	if err != nil {
-		t.Fatalf("failed to write spec: %v", err)
+			t.Run("server", func(t *testing.T) {
+				run2(t, false)
+			})
+			t.Run("client", func(t *testing.T) {
+				run2(t, true)
+			})
+		})
 	}
 
-	err = specFile.Close()
-	if err != nil {
-		t.Fatalf("failed to close file: %v", err)
+	// Section 1.
+	t.Run("echo", func(t *testing.T) {
+		t.Parallel()
+
+		lengths := []int{
+			0,
+			125,
+			126,
+			127,
+			128,
+			65535,
+			65536,
+			65536,
+		}
+		run := func(typ websocket.MessageType) {
+			for i, l := range lengths {
+				l := l
+				run(t, fmt.Sprintf("%v/%v", typ, l), func(ctx context.Context, c *websocket.Conn) error {
+					p := make([]byte, l)
+					rand.Read(p)
+					if i == len(lengths)-1 {
+						w, err := c.Writer(ctx, typ)
+						if err != nil {
+							return err
+						}
+						for i := 0; i < l; {
+							j := i + 997
+							if j > l {
+								j = l
+							}
+							_, err = w.Write(p[i:j])
+							if err != nil {
+								return err
+							}
+
+							i = j
+						}
+
+						err = w.Close()
+						if err != nil {
+							return err
+						}
+					} else {
+						err := c.Write(ctx, typ, p)
+						if err != nil {
+							return err
+						}
+					}
+					actTyp, p2, err := c.Read(ctx)
+					if err != nil {
+						return err
+					}
+					err = assertEqualf(typ, actTyp, "unexpected message type")
+					if err != nil {
+						return err
+					}
+					return assertEqualf(p, p2, "unexpected message")
+				})
+			}
+		}
+
+		run(websocket.MessageText)
+		run(websocket.MessageBinary)
+	})
+
+	// Section 2.
+	t.Run("pingPong", func(t *testing.T) {
+		run(t, "emptyPayload", func(ctx context.Context, c *websocket.Conn) error {
+			ctx = c.CloseRead(ctx)
+			return c.PingWithPayload(ctx, "")
+		})
+		run(t, "smallTextPayload", func(ctx context.Context, c *websocket.Conn) error {
+			ctx = c.CloseRead(ctx)
+			return c.PingWithPayload(ctx, "hi")
+		})
+		run(t, "smallBinaryPayload", func(ctx context.Context, c *websocket.Conn) error {
+			ctx = c.CloseRead(ctx)
+			p := bytes.Repeat([]byte{0xFE}, 16)
+			return c.PingWithPayload(ctx, string(p))
+		})
+		run(t, "largeBinaryPayload", func(ctx context.Context, c *websocket.Conn) error {
+			ctx = c.CloseRead(ctx)
+			p := bytes.Repeat([]byte{0xFE}, 125)
+			return c.PingWithPayload(ctx, string(p))
+		})
+		run(t, "tooLargeBinaryPayload", func(ctx context.Context, c *websocket.Conn) error {
+			c.CloseRead(ctx)
+			p := bytes.Repeat([]byte{0xFE}, 126)
+			err := c.PingWithPayload(ctx, string(p))
+			return assertCloseStatus(err, websocket.StatusProtocolError)
+		})
+		run(t, "streamPingPayload", func(ctx context.Context, c *websocket.Conn) error {
+			err := streamPing(ctx, c, 125)
+			if err != nil {
+				return err
+			}
+			return assertCloseHandshake(ctx, c, websocket.StatusNormalClosure, "")
+		})
+		t.Run("unsolicitedPong", func(t *testing.T) {
+			t.Parallel()
+
+			var testCases = []struct {
+				name        string
+				pongPayload string
+				ping        bool
+			}{
+				{
+					name:        "noPayload",
+					pongPayload: "",
+				},
+				{
+					name:        "payload",
+					pongPayload: "hi",
+				},
+				{
+					name:        "pongThenPing",
+					pongPayload: "hi",
+					ping:        true,
+				},
+			}
+			for _, tc := range testCases {
+				tc := tc
+				run(t, tc.name, func(ctx context.Context, c *websocket.Conn) error {
+					_, err := c.WriteFrame(ctx, true, websocket.OpPong, []byte(tc.pongPayload))
+					if err != nil {
+						return err
+					}
+					if tc.ping {
+						_, err := c.WriteFrame(ctx, true, websocket.OpPing, []byte("meow"))
+						if err != nil {
+							return err
+						}
+						err = assertReadFrame(ctx, c, websocket.OpPong, []byte("meow"))
+						if err != nil {
+							return err
+						}
+					}
+					return assertCloseHandshake(ctx, c, websocket.StatusNormalClosure, "")
+				})
+			}
+		})
+		run(t, "tenPings", func(ctx context.Context, c *websocket.Conn) error {
+			ctx = c.CloseRead(ctx)
+
+			for i := 0; i < 10; i++ {
+				err := c.Ping(ctx)
+				if err != nil {
+					return err
+				}
+			}
+
+			_, err := c.WriteClose(ctx, websocket.StatusNormalClosure, "")
+			if err != nil {
+				return err
+			}
+			<-ctx.Done()
+
+			err = c.Ping(context.Background())
+			return assertCloseStatus(err, websocket.StatusNormalClosure)
+		})
+		run(t, "tenStreamedPings", func(ctx context.Context, c *websocket.Conn) error {
+			for i := 0; i < 10; i++ {
+				err := streamPing(ctx, c, 125)
+				if err != nil {
+					return err
+				}
+			}
+
+			return assertCloseHandshake(ctx, c, websocket.StatusNormalClosure, "")
+		})
+	})
+
+}
+
+func BenchmarkConn(b *testing.B) {
+	sizes := []int{
+		2,
+		16,
+		32,
+		512,
+		4096,
+		16384,
 	}
 
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Minute*10)
-	defer cancel()
+	b.Run("write", func(b *testing.B) {
+		for _, size := range sizes {
+			b.Run(strconv.Itoa(size), func(b *testing.B) {
+				b.Run("stream", func(b *testing.B) {
+					benchConn(b, false, true, size)
+				})
+				b.Run("buffer", func(b *testing.B) {
+					benchConn(b, false, false, size)
+				})
+			})
+		}
+	})
 
-	args := []string{"--mode", "fuzzingclient", "--spec", specFile.Name()}
-	wstest := exec.CommandContext(ctx, "wstest", args...)
-	out, err := wstest.CombinedOutput()
-	if err != nil {
-		t.Fatalf("failed to run wstest: %v\nout:\n%s", err, out)
-	}
-
-	checkWSTestIndex(t, "./ci/out/wstestServerReports/index.json")
+	b.Run("echo", func(b *testing.B) {
+		for _, size := range sizes {
+			b.Run(strconv.Itoa(size), func(b *testing.B) {
+				benchConn(b, true, true, size)
+			})
+		}
+	})
 }
 
 func echoLoop(ctx context.Context, c *websocket.Conn) {
@@ -1076,165 +1296,6 @@ func discardLoop(ctx context.Context, c *websocket.Conn) {
 		err := echo()
 		if err != nil {
 			return
-		}
-	}
-}
-
-func unusedListenAddr() (string, error) {
-	l, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		return "", err
-	}
-	l.Close()
-	return l.Addr().String(), nil
-}
-
-// https://github.com/crossbario/autobahn-python/blob/master/wstest/testee_client_aio.py
-func TestAutobahnClient(t *testing.T) {
-	t.Parallel()
-	if os.Getenv("AUTOBAHN") == "" {
-		t.Skip("Set $AUTOBAHN to run the autobahn test suite.")
-	}
-
-	serverAddr, err := unusedListenAddr()
-	if err != nil {
-		t.Fatalf("failed to get unused listen addr for wstest: %v", err)
-	}
-
-	wsServerURL := "ws://" + serverAddr
-
-	spec := map[string]interface{}{
-		"url":    wsServerURL,
-		"outdir": "ci/out/wstestClientReports",
-		"cases":  []string{"*"},
-		// See TestAutobahnServer for the reasons why we exclude these.
-		"exclude-cases": []string{"6.*", "7.5.1", "12.*", "13.*"},
-	}
-	specFile, err := ioutil.TempFile("", "websocketFuzzingServer.json")
-	if err != nil {
-		t.Fatalf("failed to create temp file for fuzzingserver.json: %v", err)
-	}
-	defer specFile.Close()
-
-	e := json.NewEncoder(specFile)
-	e.SetIndent("", "\t")
-	err = e.Encode(spec)
-	if err != nil {
-		t.Fatalf("failed to write spec: %v", err)
-	}
-
-	err = specFile.Close()
-	if err != nil {
-		t.Fatalf("failed to close file: %v", err)
-	}
-
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Minute*10)
-	defer cancel()
-
-	args := []string{"--mode", "fuzzingserver", "--spec", specFile.Name(),
-		// Disables some server that runs as part of fuzzingserver mode.
-		// See https://github.com/crossbario/autobahn-testsuite/blob/058db3a36b7c3a1edf68c282307c6b899ca4857f/autobahntestsuite/autobahntestsuite/wstest.py#L124
-		"--webport=0",
-	}
-	wstest := exec.CommandContext(ctx, "wstest", args...)
-	err = wstest.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		err := wstest.Process.Kill()
-		if err != nil {
-			t.Error(err)
-		}
-	}()
-
-	// Let it come up.
-	time.Sleep(time.Second * 5)
-
-	var cases int
-	func() {
-		c, _, err := websocket.Dial(ctx, wsServerURL+"/getCaseCount", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer c.Close(websocket.StatusInternalError, "")
-
-		_, r, err := c.Reader(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		b, err := ioutil.ReadAll(r)
-		if err != nil {
-			t.Fatal(err)
-		}
-		cases, err = strconv.Atoi(string(b))
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		c.Close(websocket.StatusNormalClosure, "")
-	}()
-
-	for i := 1; i <= cases; i++ {
-		func() {
-			ctx, cancel := context.WithTimeout(ctx, time.Second*45)
-			defer cancel()
-
-			c, _, err := websocket.Dial(ctx, fmt.Sprintf(wsServerURL+"/runCase?case=%v&agent=main", i), nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			echoLoop(ctx, c)
-		}()
-	}
-
-	c, _, err := websocket.Dial(ctx, fmt.Sprintf(wsServerURL+"/updateReports?agent=main"), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c.Close(websocket.StatusNormalClosure, "")
-
-	checkWSTestIndex(t, "./ci/out/wstestClientReports/index.json")
-}
-
-func checkWSTestIndex(t *testing.T, path string) {
-	wstestOut, err := ioutil.ReadFile(path)
-	if err != nil {
-		t.Fatalf("failed to read index.json: %v", err)
-	}
-
-	var indexJSON map[string]map[string]struct {
-		Behavior      string `json:"behavior"`
-		BehaviorClose string `json:"behaviorClose"`
-	}
-	err = json.Unmarshal(wstestOut, &indexJSON)
-	if err != nil {
-		t.Fatalf("failed to unmarshal index.json: %v", err)
-	}
-
-	var failed bool
-	for _, tests := range indexJSON {
-		for test, result := range tests {
-			switch result.Behavior {
-			case "OK", "NON-STRICT", "INFORMATIONAL":
-			default:
-				failed = true
-				t.Errorf("test %v failed", test)
-			}
-			switch result.BehaviorClose {
-			case "OK", "INFORMATIONAL":
-			default:
-				failed = true
-				t.Errorf("bad close behaviour for test %v", test)
-			}
-		}
-	}
-
-	if failed {
-		path = strings.Replace(path, ".json", ".html", 1)
-		if os.Getenv("CI") == "" {
-			t.Errorf("wstest found failure, please see %q (output as an artifact in CI)", path)
 		}
 	}
 }
@@ -1310,38 +1371,6 @@ func benchConn(b *testing.B, echo, stream bool, size int) {
 	c.Close(websocket.StatusNormalClosure, "")
 }
 
-func BenchmarkConn(b *testing.B) {
-	sizes := []int{
-		2,
-		16,
-		32,
-		512,
-		4096,
-		16384,
-	}
-
-	b.Run("write", func(b *testing.B) {
-		for _, size := range sizes {
-			b.Run(strconv.Itoa(size), func(b *testing.B) {
-				b.Run("stream", func(b *testing.B) {
-					benchConn(b, false, true, size)
-				})
-				b.Run("buffer", func(b *testing.B) {
-					benchConn(b, false, false, size)
-				})
-			})
-		}
-	})
-
-	b.Run("echo", func(b *testing.B) {
-		for _, size := range sizes {
-			b.Run(strconv.Itoa(size), func(b *testing.B) {
-				benchConn(b, true, true, size)
-			})
-		}
-	})
-}
-
 func assertCloseStatus(err error, code websocket.StatusCode) error {
 	var cerr websocket.CloseError
 	if !xerrors.As(err, &cerr) {
@@ -1378,7 +1407,7 @@ func assertSubprotocol(c *websocket.Conn, exp string) error {
 
 func assertEqualf(exp, act interface{}, f string, v ...interface{}) error {
 	if diff := cmpDiff(exp, act); diff != "" {
-		return xerrors.Errorf(f+": %v", append(v, diff))
+		return xerrors.Errorf(f+": %v", append(v, diff)...)
 	}
 	return nil
 }
@@ -1404,4 +1433,42 @@ func assertErrorIs(exp, act error) error {
 		return xerrors.Errorf("expected error %+v to be in %+v", exp, act)
 	}
 	return nil
+}
+
+func assertReadFrame(ctx context.Context, c *websocket.Conn, opcode websocket.OpCode, p []byte) error {
+	actOpcode, actP, err := c.ReadFrame(ctx)
+	if err != nil {
+		return err
+	}
+	err = assertEqualf(opcode, actOpcode, "unexpected frame opcode with payload %q", p)
+	if err != nil {
+		return err
+	}
+	return assertEqualf(p, actP, "unexpected frame %v payload", opcode)
+}
+
+func assertCloseHandshake(ctx context.Context, c *websocket.Conn, code websocket.StatusCode, reason string) error {
+	p, err := c.WriteClose(ctx, code, reason)
+	if err != nil {
+		return err
+	}
+	return assertReadFrame(ctx, c, websocket.OpClose, p)
+}
+
+func streamPing(ctx context.Context, c *websocket.Conn, l int) error {
+	err := c.WriteHeader(ctx, true, websocket.OpPing, int64(l))
+	if err != nil {
+		return err
+	}
+	for i := 0; i < l; i++ {
+		err = c.BW().WriteByte(0xFE)
+		if err != nil {
+			return err
+		}
+		err = c.BW().Flush()
+		if err != nil {
+			return err
+		}
+	}
+	return assertReadFrame(ctx, c, websocket.OpPong, bytes.Repeat([]byte{0xFE}, l))
 }
