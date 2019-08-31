@@ -34,16 +34,21 @@ browse coverage.
 
 You can run CI locally. The various steps are located in `ci/*.sh`.
 
-1. `ci/fmt.sh` requires node (specifically prettier).
-1. `ci/lint.sh` requires [shellcheck](https://github.com/koalaman/shellcheck#installing).
-1. `ci/test.sh` requires the [Autobahn Test suite pip package](https://github.com/crossbario/autobahn-testsuite).
-1. `ci/run.sh` runs the above scripts in order.
+1. `ci/fmt.sh` which requires node (specifically prettier).
+1. `ci/lint.sh` which requires [shellcheck](https://github.com/koalaman/shellcheck#installing).
+1. `ci/test.sh`
+1. `ci/run.sh` which runs the above scripts in order.
 
 For coverage details locally, please see `ci/out/coverage.html` after running `ci/test.sh`.
 
 See [ci/image/Dockerfile](ci/image/Dockerfile) for the installation of the CI dependencies on Ubuntu.
 
-You can also run tests normally with `go test` once you have the
-[Autobahn Test suite pip package](https://github.com/crossbario/autobahn-testsuite)
-installed. `ci/test.sh` just passes a default set of flags to `go test` to collect coverage,
+You can also run tests normally with `go test`.
+`ci/test.sh` just passes a default set of flags to `go test` to collect coverage,
 enable the race detector, run benchmarks and also prettifies the output.
+
+If you pass flags to `ci/test.sh`, it will pass those flags directly to `go test` but will also
+collect coverage for you. This is nice for when you don't want to wait for benchmarks
+or the race detector but want to have coverage.
+
+Coverage percentage from codecov and the CI scripts will be different because they are calculated differently.

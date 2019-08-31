@@ -68,7 +68,7 @@ func Example_echo() {
 func echoServer(w http.ResponseWriter, r *http.Request) error {
 	log.Printf("serving %v", r.RemoteAddr)
 
-	c, err := websocket.Accept(w, r, websocket.AcceptOptions{
+	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		Subprotocols: []string{"echo"},
 	})
 	if err != nil {
@@ -128,7 +128,7 @@ func client(url string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	c, _, err := websocket.Dial(ctx, url, websocket.DialOptions{
+	c, _, err := websocket.Dial(ctx, url, &websocket.DialOptions{
 		Subprotocols: []string{"echo"},
 	})
 	if err != nil {

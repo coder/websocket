@@ -6,8 +6,7 @@ ENV GOFLAGS="-mod=readonly"
 ENV PAGER=cat
 
 RUN apt-get update && \
-  apt-get install -y shellcheck python-pip npm && \
-  pip2 install autobahntestsuite && \
+  apt-get install -y shellcheck npm && \
   npm install -g prettier
 
 RUN git config --global color.ui always

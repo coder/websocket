@@ -101,8 +101,8 @@ func (c *netConn) Read(p []byte) (int, error) {
 			return 0, err
 		}
 		if typ != c.msgType {
-			c.c.Close(StatusUnsupportedData, fmt.Sprintf("can only accept %v messages", c.msgType))
-			return 0, xerrors.Errorf("unexpected frame type read for net conn adapter (expected %v): %v", c.msgType, typ)
+			c.c.Close(StatusUnsupportedData, fmt.Sprintf("unexpected frame type read (expected %v): %v", c.msgType, typ))
+			return 0, c.c.closeErr
 		}
 		c.reader = r
 	}

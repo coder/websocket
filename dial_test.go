@@ -1,10 +1,59 @@
 package websocket
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
+
+func TestBadDials(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name string
+		url  string
+		opts *DialOptions
+	}{
+		{
+			name: "badURL",
+			url:  "://noscheme",
+		},
+		{
+			name: "badURLScheme",
+			url:  "ftp://nhooyr.io",
+		},
+		{
+			name: "badHTTPClient",
+			url:  "ws://nhooyr.io",
+			opts: &DialOptions{
+				HTTPClient: &http.Client{
+					Timeout: time.Minute,
+				},
+			},
+		},
+		{
+			name: "badTLS",
+			url:  "wss://totallyfake.nhooyr.io",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+			defer cancel()
+
+			_, _, err := Dial(ctx, tc.url, tc.opts)
+			if err == nil {
+				t.Fatalf("expected non nil error: %+v", err)
+			}
+		})
+	}
+}
 
 func Test_verifyServerHandshake(t *testing.T) {
 	t.Parallel()

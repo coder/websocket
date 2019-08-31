@@ -34,7 +34,7 @@ For a production quality example that shows off the full API, see the [echo exam
 
 ```go
 http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
-	c, err := websocket.Accept(w, r, websocket.AcceptOptions{})
+	c, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		// ...
 	}
@@ -64,7 +64,7 @@ in net/http](https://github.com/golang/go/issues/26937#issuecomment-415855861) t
 ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 defer cancel()
 
-c, _, err := websocket.Dial(ctx, "ws://localhost:8080", websocket.DialOptions{})
+c, _, err := websocket.Dial(ctx, "ws://localhost:8080", nil)
 if err != nil {
 	// ...
 }

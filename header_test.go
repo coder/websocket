@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"bytes"
+	"io"
 	"math/rand"
 	"strconv"
 	"testing"
@@ -20,6 +21,51 @@ func randBool() bool {
 
 func TestHeader(t *testing.T) {
 	t.Parallel()
+
+	t.Run("eof", func(t *testing.T) {
+		t.Parallel()
+
+		testCases := []struct {
+			name  string
+			bytes []byte
+		}{
+			{
+				"start",
+				[]byte{0xff},
+			},
+			{
+				"middle",
+				[]byte{0xff, 0xff, 0xff},
+			},
+		}
+		for _, tc := range testCases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+
+				b := bytes.NewBuffer(tc.bytes)
+				_, err := readHeader(nil, b)
+				if io.ErrUnexpectedEOF != err {
+					t.Fatalf("expected %v but got: %v", io.ErrUnexpectedEOF, err)
+				}
+			})
+		}
+	})
+
+	t.Run("writeNegativeLength", func(t *testing.T) {
+		t.Parallel()
+
+		defer func() {
+			r := recover()
+			if r == nil {
+				t.Fatal("failed to induce panic in writeHeader with negative payload length")
+			}
+		}()
+
+		writeHeader(nil, header{
+			payloadLength: -1,
+		})
+	})
 
 	t.Run("readNegativeLength", func(t *testing.T) {
 		t.Parallel()

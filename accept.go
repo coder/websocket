@@ -84,7 +84,7 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 //
 // If an error occurs, Accept will always write an appropriate response so you do not
 // have to.
-func Accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, error) {
+func Accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn, error) {
 	c, err := accept(w, r, opts)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to accept websocket connection: %w", err)
@@ -92,7 +92,11 @@ func Accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, 
 	return c, nil
 }
 
-func accept(w http.ResponseWriter, r *http.Request, opts AcceptOptions) (*Conn, error) {
+func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn, error) {
+	if opts == nil {
+		opts = &AcceptOptions{}
+	}
+
 	err := verifyClientRequest(w, r)
 	if err != nil {
 		return nil, err
