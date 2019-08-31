@@ -10,18 +10,16 @@ argv=(
   "--junitfile=ci/out/websocket/testReport.xml"
   "--format=short-verbose"
   --
-  -race
   "-vet=off"
-  "-bench=."
 )
-# Interactive usage probably does not want to enable benchmarks, race detection
-# turn off vet or use gotestsum by default.
+# Interactive usage does not want to turn off vet or use gotestsum by default.
 if [[ $# -gt 0 ]]; then
   argv=(go test "$@")
 fi
 
-# We always want coverage.
+# We always want coverage and race detection.
 argv+=(
+  -race
   "-coverprofile=ci/out/coverage.prof"
   "-coverpkg=./..."
 )
