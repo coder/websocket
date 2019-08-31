@@ -7,6 +7,8 @@ require (
 	github.com/google/go-cmp v0.2.0
 	github.com/kr/pretty v0.1.0 // indirect
 	go.coder.com/go-tools v0.0.0-20190317003359-0c6a35b74a16
+	go.uber.org/atomic v1.4.0 // indirect
+	go.uber.org/multierr v1.1.0
 	golang.org/x/lint v0.0.0-20190409202823-959b441ac422
 	golang.org/x/net v0.0.0-20190424112056-4829fb13d2c6
 	golang.org/x/text v0.3.2 // indirect
