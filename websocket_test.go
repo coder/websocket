@@ -47,10 +47,7 @@ func TestHandshake(t *testing.T) {
 					c.Close(websocket.StatusInternalError, "")
 					return xerrors.New("expected error regarding bad origin")
 				}
-				if !strings.Contains(err.Error(), "not authorized") {
-					return xerrors.Errorf("expected error regarding bad origin: %+v", err)
-				}
-				return nil
+				return assertErrorContains(err, "not authorized")
 			},
 			client: func(ctx context.Context, u string) error {
 				h := http.Header{}
@@ -62,10 +59,7 @@ func TestHandshake(t *testing.T) {
 					c.Close(websocket.StatusInternalError, "")
 					return xerrors.New("expected handshake failure")
 				}
-				if !strings.Contains(err.Error(), "403") {
-					return xerrors.Errorf("expected handshake failure: %+v", err)
-				}
-				return nil
+				return assertErrorContains(err, "403")
 			},
 		},
 		{
@@ -123,8 +117,9 @@ func TestHandshake(t *testing.T) {
 				if err != nil {
 					return xerrors.Errorf("request is missing mycookie: %w", err)
 				}
-				if cookie.Value != "myvalue" {
-					return xerrors.Errorf("expected %q but got %q", "myvalue", cookie.Value)
+				err = assertEqualf("myvalue", cookie.Value, "unexpected cookie value")
+				if err != nil {
+					return err
 				}
 				c, err := websocket.Accept(w, r, nil)
 				if err != nil {
