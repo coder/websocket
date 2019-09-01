@@ -1768,8 +1768,8 @@ func TestAutobahn(t *testing.T) {
 			t.Parallel()
 
 			lengths := []int{
-				1 << 16, // 65536
-				1 << 18, // 262144
+				1 << 16,
+				1 << 18,
 				// Anything higher is completely unnecessary.
 			}
 
@@ -1791,7 +1791,6 @@ func TestAutobahn(t *testing.T) {
 				1 << 12,
 				1 << 14,
 				1 << 16,
-				1 << 18,
 			}
 
 			for _, l := range fragments {
@@ -1801,7 +1800,7 @@ func TestAutobahn(t *testing.T) {
 					if err != nil {
 						return err
 					}
-					b := randBytes(1 << 18)
+					b := randBytes(1 << 16)
 					for i := 0; i < len(b); {
 						j := i + fragmentLength
 						if j > len(b) {
@@ -1835,7 +1834,6 @@ func TestAutobahn(t *testing.T) {
 			lengths := []int{
 				0,
 				16,
-				64,
 			}
 
 			for _, l := range lengths {

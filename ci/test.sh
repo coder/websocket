@@ -19,6 +19,7 @@ fi
 
 # We always want coverage and race detection.
 argv+=(
+  "-parallel=512"
   "-coverprofile=ci/out/coverage.prof"
   "-coverpkg=./..."
 )
