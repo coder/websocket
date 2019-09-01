@@ -264,7 +264,7 @@ func TestConn(t *testing.T) {
 		{
 			name: "netConn",
 			server: func(ctx context.Context, c *websocket.Conn) error {
-				nc := websocket.NetConn(c, websocket.MessageBinary)
+				nc := websocket.NetConn(ctx, c, websocket.MessageBinary)
 				defer nc.Close()
 
 				nc.SetWriteDeadline(time.Time{})
@@ -290,7 +290,7 @@ func TestConn(t *testing.T) {
 				return nil
 			},
 			client: func(ctx context.Context, c *websocket.Conn) error {
-				nc := websocket.NetConn(c, websocket.MessageBinary)
+				nc := websocket.NetConn(ctx, c, websocket.MessageBinary)
 
 				nc.SetReadDeadline(time.Time{})
 				time.Sleep(1)
@@ -317,7 +317,7 @@ func TestConn(t *testing.T) {
 		{
 			name: "netConn/badReadMsgType",
 			server: func(ctx context.Context, c *websocket.Conn) error {
-				nc := websocket.NetConn(c, websocket.MessageBinary)
+				nc := websocket.NetConn(ctx, c, websocket.MessageBinary)
 
 				nc.SetDeadline(time.Now().Add(time.Second * 15))
 
@@ -337,7 +337,7 @@ func TestConn(t *testing.T) {
 		{
 			name: "netConn/badRead",
 			server: func(ctx context.Context, c *websocket.Conn) error {
-				nc := websocket.NetConn(c, websocket.MessageBinary)
+				nc := websocket.NetConn(ctx, c, websocket.MessageBinary)
 				defer nc.Close()
 
 				nc.SetDeadline(time.Now().Add(time.Second * 15))

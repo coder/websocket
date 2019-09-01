@@ -21,8 +21,11 @@ import (
 // Every Write to the net.Conn will correspond to a message write of
 // the given type on *websocket.Conn.
 //
-// If a message is read that is not of the correct type, an error
-// will be thrown.
+// The passed ctx bounds the lifetime of the net.Conn. If cancelled,
+// all reads and writes on the net.Conn will be cancelled.
+//
+// If a message is read that is not of the correct type, the connection
+// will be closed with StatusUnsupportedData and an error will be returned.
 //
 // Close will close the *websocket.Conn with StatusNormalClosure.
 //
@@ -35,20 +38,20 @@ import (
 //
 // A received StatusNormalClosure or StatusGoingAway close frame will be translated to
 // io.EOF when reading.
-func NetConn(c *Conn, msgType MessageType) net.Conn {
+func NetConn(ctx context.Context, c *Conn, msgType MessageType) net.Conn {
 	nc := &netConn{
 		c:       c,
 		msgType: msgType,
 	}
 
 	var cancel context.CancelFunc
-	nc.writeContext, cancel = context.WithCancel(context.Background())
+	nc.writeContext, cancel = context.WithCancel(ctx)
 	nc.writeTimer = time.AfterFunc(math.MaxInt64, cancel)
 	if !nc.writeTimer.Stop() {
 		<-nc.writeTimer.C
 	}
 
-	nc.readContext, cancel = context.WithCancel(context.Background())
+	nc.readContext, cancel = context.WithCancel(ctx)
 	nc.readTimer = time.AfterFunc(math.MaxInt64, cancel)
 	if !nc.readTimer.Stop() {
 		<-nc.readTimer.C
