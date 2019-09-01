@@ -12,14 +12,13 @@ argv=(
   --
   "-vet=off"
 )
-# Interactive usage does not want to turn off vet or use gotestsum by default.
+# Interactive usage does not want to turn off vet or use gotestsum.
 if [[ $# -gt 0 ]]; then
   argv=(go test "$@")
 fi
 
 # We always want coverage and race detection.
 argv+=(
-  -race
   "-coverprofile=ci/out/coverage.prof"
   "-coverpkg=./..."
 )

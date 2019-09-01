@@ -886,17 +886,17 @@ func init() {
 //
 // TCP Keepalives should suffice for most use cases.
 func (c *Conn) Ping(ctx context.Context) error {
-	err := c.ping(ctx)
+	id := rand.Uint64()
+	p := strconv.FormatUint(id, 10)
+
+	err := c.ping(ctx, p)
 	if err != nil {
 		return xerrors.Errorf("failed to ping: %w", err)
 	}
 	return nil
 }
 
-func (c *Conn) ping(ctx context.Context) error {
-	id := rand.Uint64()
-	p := strconv.FormatUint(id, 10)
-
+func (c *Conn) ping(ctx context.Context, p string) error {
 	pong := make(chan struct{})
 
 	c.activePingsMu.Lock()
