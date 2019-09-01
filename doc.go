@@ -14,4 +14,4 @@
 // comparison with existing implementations.
 //
 // Please be sure to use the https://golang.org/x/xerrors package when inspecting returned errors.
-package websocket
+package websocket // import "nhooyr.io/websocket"
