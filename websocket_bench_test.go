@@ -5,13 +5,13 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"nhooyr.io/websocket"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
-)
 
+	"nhooyr.io/websocket"
+)
 
 func BenchmarkConn(b *testing.B) {
 	sizes := []int{
@@ -115,7 +115,6 @@ func benchConn(b *testing.B, echo, stream bool, size int) {
 
 	c.Close(websocket.StatusNormalClosure, "")
 }
-
 
 func discardLoop(ctx context.Context, c *websocket.Conn) {
 	defer c.Close(websocket.StatusInternalError, "")

@@ -15,6 +15,7 @@ type (
 const (
 	OpClose        = OpCode(opClose)
 	OpBinary       = OpCode(opBinary)
+	OpText         = OpCode(opText)
 	OpPing         = OpCode(opPing)
 	OpPong         = OpCode(opPong)
 	OpContinuation = OpCode(opContinuation)
@@ -40,16 +41,37 @@ func (c *Conn) WriteFrame(ctx context.Context, fin bool, opc OpCode, p []byte) (
 	return c.writeFrame(ctx, fin, opcode(opc), p)
 }
 
-func (c *Conn) WriteHeader(ctx context.Context, fin bool, opc OpCode, lenp int64) error {
+// header represents a WebSocket frame header.
+// See https://tools.ietf.org/html/rfc6455#section-5.2
+type Header struct {
+	Fin    bool
+	Rsv1   bool
+	Rsv2   bool
+	Rsv3   bool
+	OpCode OpCode
+
+	PayloadLength int64
+}
+
+func (c *Conn) WriteHeader(ctx context.Context, h Header) error {
 	headerBytes := writeHeader(c.writeHeaderBuf, header{
-		fin:           fin,
-		opcode:        opcode(opc),
-		payloadLength: lenp,
+		fin:           h.Fin,
+		rsv1:          h.Rsv1,
+		rsv2:          h.Rsv2,
+		rsv3:          h.Rsv3,
+		opcode:        opcode(h.OpCode),
+		payloadLength: h.PayloadLength,
 		masked:        c.client,
 	})
 	_, err := c.bw.Write(headerBytes)
 	if err != nil {
 		return xerrors.Errorf("failed to write header: %w", err)
+	}
+	if h.Fin {
+		err = c.Flush()
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -95,4 +117,8 @@ func (c *Conn) WriteClose(ctx context.Context, code StatusCode, reason string) (
 		return nil, err
 	}
 	return b, nil
+}
+
+func ParseClosePayload(p []byte) (CloseError, error) {
+	return parseClosePayload(p)
 }
