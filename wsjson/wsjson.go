@@ -1,5 +1,5 @@
 // Package wsjson provides websocket helpers for JSON messages.
-package wsjson
+package wsjson // import "nhooyr.io/websocket/wsjson"
 
 import (
 	"context"

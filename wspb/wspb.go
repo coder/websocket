@@ -1,5 +1,5 @@
 // Package wspb provides websocket helpers for protobuf messages.
-package wspb
+package wspb // import "nhooyr.io/websocket/wspb"
 
 import (
 	"bytes"
