@@ -36,7 +36,8 @@ For a production quality example that shows off the full API, see the [echo exam
 
 ```go
 http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
-	c, err := websocket.Accept(w, r, nil)
+	var opts websocket.AcceptOptions
+	c, err := websocket.Accept(w, r, opts)
 	if err != nil {
 		// ...
 	}
