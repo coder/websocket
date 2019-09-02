@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"golang.org/x/xerrors"
+
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
 )
@@ -58,6 +60,26 @@ func ExampleDial() {
 	}
 
 	c.Close(websocket.StatusNormalClosure, "")
+}
+
+// This example dials a server and then expects to be disconnected with status code
+// websocket.StatusNormalClosure.
+func ExampleCloseError() {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	c, _, err := websocket.Dial(ctx, "ws://localhost:8080", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer c.Close(websocket.StatusInternalError, "the sky is falling")
+
+	_, _, err = c.Reader(ctx)
+	var cerr websocket.CloseError
+	if !xerrors.As(err, &cerr) || cerr.Code != websocket.StatusNormalClosure {
+		log.Fatalf("expected to be disconnected with StatusNormalClosure but got: %+v", err)
+		return
+	}
 }
 
 // This example shows how to correctly handle a WebSocket connection
