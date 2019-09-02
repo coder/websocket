@@ -134,7 +134,7 @@ As mentioned above, nhooyr/websocket also supports concurrent writers.
 
 The only performance con to nhooyr/websocket is that uses one extra goroutine to support
 cancellation with context.Context. This costs 2 KB of memory which is cheap compared to
-simplicity benefits.
+the benefits.
 
 ### x/net/websocket
 
