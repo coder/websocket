@@ -43,7 +43,7 @@ const (
 // CloseError represents a WebSocket close frame.
 // It is returned by Conn's methods when a WebSocket close frame is received from
 // the peer.
-// You will need to use https://golang.org/x/xerrors to check for this error.
+// You will need to use https://godoc.org/golang.org/x/xerrors#As to check for this error.
 type CloseError struct {
 	Code   StatusCode
 	Reason string
