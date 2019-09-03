@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"strings"
 
-	"golang.org/x/net/http/httpguts"
 	"golang.org/x/xerrors"
 )
 
@@ -151,9 +150,29 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 	return c, nil
 }
 
-func headerValuesContainsToken(h http.Header, key, val string) bool {
+func headerValuesContainsToken(h http.Header, key, token string) bool {
 	key = textproto.CanonicalMIMEHeaderKey(key)
-	return httpguts.HeaderValuesContainsToken(h[key], val)
+
+	for _, val2 := range h[key] {
+		if headerValueContainsToken(val2, token) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func headerValueContainsToken(val2, token string) bool {
+	val2 = strings.TrimSpace(val2)
+
+	for _, val2 := range strings.Split(val2, ",") {
+		val2 = strings.TrimSpace(val2)
+		if strings.EqualFold(val2, token) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func selectSubprotocol(r *http.Request, subprotocols []string) string {

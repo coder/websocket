@@ -16,10 +16,10 @@ go get nhooyr.io/websocket@v1.5.0
 
 - Minimal and idiomatic API
 - Tiny codebase at 1700 lines
-- First class context.Context support
+- First class [context.Context](https://blog.golang.org/context) support
 - Thorough tests, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
-- Zero dependencies outside of the stdlib for the core library
-- JSON and ProtoBuf helpers in the wsjson and wspb subpackages
+- [Zero dependencies](https://godoc.org/nhooyr.io/websocket?imports)
+- JSON and ProtoBuf helpers in the [wsjson](https://godoc.org/nhooyr.io/websocket/wsjson) and [wspb](https://godoc.org/nhooyr.io/websocket/wspb) subpackages
 - Highly optimized by default
 - Concurrent writes out of the box
 
@@ -172,4 +172,4 @@ This is a list of companies or projects that use this library.
 
 - [Coder](https://github.com/cdr)
 
-If your company or project is using this library, please feel free to open a PR to amend the list.
+If your company or project is using this library, please feel free to open an issue or PR to amend the list.
