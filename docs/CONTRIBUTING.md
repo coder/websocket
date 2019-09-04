@@ -23,7 +23,7 @@ Be sure to [correctly link](https://help.github.com/en/articles/closing-issues-u
 to an existing issue if one exists. In general, create an issue before a PR to get some
 discussion going and to make sure you do not spend time on a PR that may be rejected.
 
-The Go module where development occurs is in the [./mod](./mod) subpath so that the README.md
+The Go module where development occurs is in the [mod](../mod) subpath so that the README.md
 is immediately visible on the main page.
 
 CI must pass on your changes for them to be merged.
@@ -35,21 +35,21 @@ It will collect coverage and report it to [codecov](https://codecov.io/gh/nhooyr
 and also upload a `out/coverage.html` artifact that you can click on to interactively
 browse coverage.
 
-You can run CI locally. The various steps are located in `mod/ci/*.sh`.
+You can run CI locally. The various steps are located in [mod/ci/\*.sh](../mod/ci).
 
-1. `mod/ci/fmt.sh` which requires node (specifically prettier).
-1. `mod/ci/lint.sh` which requires [shellcheck](https://github.com/koalaman/shellcheck#installing).
-1. `mod/ci/test.sh`
-1. `mod/ci/run.sh` which runs the above scripts in order.
+1. [fmt.sh](../mod/ci/fmt.sh) which requires node (specifically prettier).
+1. [lint.sh](../mod/ci/lint.sh) which requires [shellcheck](https://github.com/koalaman/shellcheck#installing).
+1. [test.sh](../mod/ci/test.sh)
+1. [run.sh](../mod/ci/run.sh) which runs the above scripts in order.
 
-For coverage details locally, please see `mod/ci/out/coverage.html` after running `mod/ci/test.sh`.
+For coverage details locally, please see `mod/ci/out/coverage.html` after running [test.sh](../mod/ci/test.sh).
 
-See [mod/ci/image/Dockerfile](mod/ci/image/Dockerfile) for the installation of the CI dependencies on Ubuntu.
+See [mod/ci/image/Dockerfile](../mod/ci/image/Dockerfile) for the installation of the CI dependencies on Ubuntu.
 
-You can also run tests normally with `go test`. `mod/ci/test.sh` just passes a default set of flags to
-`go test` to collect coverage, enable the race detector and also prettifies the output.
+You can also run tests normally with `go test`. [test.sh](../mod/ci/test.sh) just passes a default set of flags to
+`go test` to collect coverage and also prettify the output.
 
-You can pass flags to `mod/ci/test.sh` if you want to run a specific test or otherwise
-control the behaviour of `go test`.
+You can pass flags to [test.sh](mod/ci/test.sh) if you want to run a specific test or otherwise
+control the behaviour of `go test` but also get coverage.
 
 Coverage percentage from codecov and the CI scripts will be different because they are calculated differently.
