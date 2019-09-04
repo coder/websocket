@@ -169,10 +169,7 @@ Please see [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
 ## Users
 
-This is a list of companies or projects that use this library.
-
 - [Coder](https://github.com/cdr)
-
-- [Tatsu Works](https://github.com/tatsuworks) - Ingresses 20TB/month of websocket data on their Discord bot.
+- [Tatsu Works](https://github.com/tatsuworks) - Ingresses 20 TB in websocket data every month on their Discord bot.
 
 If your company or project is using this library, please feel free to open an issue or PR to amend the list.
