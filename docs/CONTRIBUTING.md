@@ -24,7 +24,9 @@ to an existing issue if one exists. In general, create an issue before a PR to g
 discussion going and to make sure you do not spend time on a PR that may be rejected.
 
 The Go module where development occurs is in the [mod](../mod) subpath so that the README.md
-is immediately visible on the main page.
+is immediately visible on the main page. I regularly clone the repo with mod as the root
+to [nhooyr/websocket-mod](https://github.com/nhooyr/websocket-mod) so that all tooling works
+normally.
 
 CI must pass on your changes for them to be merged.
 

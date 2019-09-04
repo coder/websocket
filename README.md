@@ -31,7 +31,7 @@ go get nhooyr.io/websocket
 
 ## Examples
 
-For a production quality example that shows off the full API, see the [echo example on the godoc](https://godoc.org/nhooyr.io/websocket#example-package--Echo). On github, the example is at [./mod/example_echo_test.go](./mod/example_echo_test.go).
+For a production quality example that shows off the full API, see the [echo example on the godoc](https://godoc.org/nhooyr.io/websocket#example-package--Echo). On github, the example is at [mod/example_echo_test.go](./mod/example_echo_test.go).
 
 Please use the [errors.As](https://golang.org/pkg/errors/#As) function [new in Go 1.13](https://golang.org/doc/go1.13#error_wrapping) to check for [websocket.CloseError](https://godoc.org/nhooyr.io/websocket#CloseError). See the [CloseError godoc example](https://godoc.org/nhooyr.io/websocket#example-CloseError).
 
