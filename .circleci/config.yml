@@ -2,7 +2,7 @@ version: 2
 jobs:
   fmt:
     docker:
-      - image: nhooyr/websocket-ci@sha256:371ca985ce2548840aeb0f8434a551708cdfe0628be722c361958e65cdded945
+      - image: nhooyr/websocket-ci@sha256:77e37211ded3c528e947439e294fbfc03b4fb9f9537c4e5198d5b304fd1df435
     steps:
       - checkout
       - restore_cache:
@@ -19,7 +19,7 @@ jobs:
 
   lint:
     docker:
-      - image: nhooyr/websocket-ci@sha256:371ca985ce2548840aeb0f8434a551708cdfe0628be722c361958e65cdded945
+      - image: nhooyr/websocket-ci@sha256:77e37211ded3c528e947439e294fbfc03b4fb9f9537c4e5198d5b304fd1df435
     steps:
       - checkout
       - restore_cache:
@@ -36,7 +36,7 @@ jobs:
 
   test:
     docker:
-      - image: nhooyr/websocket-ci@sha256:371ca985ce2548840aeb0f8434a551708cdfe0628be722c361958e65cdded945
+      - image: nhooyr/websocket-ci@sha256:77e37211ded3c528e947439e294fbfc03b4fb9f9537c4e5198d5b304fd1df435
     steps:
       - checkout
       - restore_cache:
