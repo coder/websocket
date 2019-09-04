@@ -165,7 +165,7 @@ as performant but much easier to use correctly and idiomatic.
 
 ## Contributing
 
-Please see [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
+Please see [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
 ## Users
 
