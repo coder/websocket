@@ -46,7 +46,7 @@ See [ci/image/Dockerfile](../ci/image/Dockerfile) for the installation of the CI
 You can also run tests normally with `go test`. [test.sh](../ci/test.sh) just passes a default set of flags to
 `go test` to collect coverage and also prettify the output.
 
-You can pass flags to [test.sh](ci/test.sh) if you want to run a specific test or otherwise
+You can pass flags to [test.sh](../ci/test.sh) if you want to run a specific test or otherwise
 control the behaviour of `go test` but also get coverage.
 
 Coverage percentage from codecov and the CI scripts will be different because they are calculated differently.
