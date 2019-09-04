@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/textproto"
 	"net/url"
 	"strings"
-
-	"golang.org/x/xerrors"
 )
 
 // AcceptOptions represents the options available to pass to Accept.
@@ -42,31 +42,31 @@ type AcceptOptions struct {
 
 func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 	if !headerValuesContainsToken(r.Header, "Connection", "Upgrade") {
-		err := xerrors.Errorf("websocket protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
+		err := fmt.Errorf("websocket protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
 
 	if !headerValuesContainsToken(r.Header, "Upgrade", "WebSocket") {
-		err := xerrors.Errorf("websocket protocol violation: Upgrade header %q does not contain websocket", r.Header.Get("Upgrade"))
+		err := fmt.Errorf("websocket protocol violation: Upgrade header %q does not contain websocket", r.Header.Get("Upgrade"))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
 
 	if r.Method != "GET" {
-		err := xerrors.Errorf("websocket protocol violation: handshake request method is not GET but %q", r.Method)
+		err := fmt.Errorf("websocket protocol violation: handshake request method is not GET but %q", r.Method)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
 
 	if r.Header.Get("Sec-WebSocket-Version") != "13" {
-		err := xerrors.Errorf("unsupported websocket protocol version (only 13 is supported): %q", r.Header.Get("Sec-WebSocket-Version"))
+		err := fmt.Errorf("unsupported websocket protocol version (only 13 is supported): %q", r.Header.Get("Sec-WebSocket-Version"))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
 
 	if r.Header.Get("Sec-WebSocket-Key") == "" {
-		err := xerrors.New("websocket protocol violation: missing Sec-WebSocket-Key")
+		err := errors.New("websocket protocol violation: missing Sec-WebSocket-Key")
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
 	}
@@ -86,7 +86,7 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 func Accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn, error) {
 	c, err := accept(w, r, opts)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to accept websocket connection: %w", err)
+		return nil, fmt.Errorf("failed to accept websocket connection: %w", err)
 	}
 	return c, nil
 }
@@ -111,7 +111,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 
 	hj, ok := w.(http.Hijacker)
 	if !ok {
-		err = xerrors.New("passed ResponseWriter does not implement http.Hijacker")
+		err = errors.New("passed ResponseWriter does not implement http.Hijacker")
 		http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 
 	netConn, brw, err := hj.Hijack()
 	if err != nil {
-		err = xerrors.Errorf("failed to hijack connection: %w", err)
+		err = fmt.Errorf("failed to hijack connection: %w", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return nil, err
 	}
@@ -206,10 +206,10 @@ func authenticateOrigin(r *http.Request) error {
 	}
 	u, err := url.Parse(origin)
 	if err != nil {
-		return xerrors.Errorf("failed to parse Origin header %q: %w", origin, err)
+		return fmt.Errorf("failed to parse Origin header %q: %w", origin, err)
 	}
 	if strings.EqualFold(u.Host, r.Host) {
 		return nil
 	}
-	return xerrors.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host)
+	return fmt.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host)
 }

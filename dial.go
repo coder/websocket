@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -12,8 +13,6 @@ import (
 	"net/url"
 	"strings"
 	"sync"
-
-	"golang.org/x/xerrors"
 )
 
 // DialOptions represents the options available to pass to Dial.
@@ -44,7 +43,7 @@ type DialOptions struct {
 func Dial(ctx context.Context, u string, opts *DialOptions) (*Conn, *http.Response, error) {
 	c, r, err := dial(ctx, u, opts)
 	if err != nil {
-		return nil, r, xerrors.Errorf("failed to websocket dial: %w", err)
+		return nil, r, fmt.Errorf("failed to websocket dial: %w", err)
 	}
 	return c, r, nil
 }
@@ -62,7 +61,7 @@ func dial(ctx context.Context, u string, opts *DialOptions) (_ *Conn, _ *http.Re
 		opts.HTTPClient = http.DefaultClient
 	}
 	if opts.HTTPClient.Timeout > 0 {
-		return nil, nil, xerrors.Errorf("please use context for cancellation instead of http.Client.Timeout; see https://github.com/nhooyr/websocket/issues/67")
+		return nil, nil, fmt.Errorf("please use context for cancellation instead of http.Client.Timeout; see https://github.com/nhooyr/websocket/issues/67")
 	}
 	if opts.HTTPHeader == nil {
 		opts.HTTPHeader = http.Header{}
@@ -70,7 +69,7 @@ func dial(ctx context.Context, u string, opts *DialOptions) (_ *Conn, _ *http.Re
 
 	parsedURL, err := url.Parse(u)
 	if err != nil {
-		return nil, nil, xerrors.Errorf("failed to parse url: %w", err)
+		return nil, nil, fmt.Errorf("failed to parse url: %w", err)
 	}
 
 	switch parsedURL.Scheme {
@@ -79,7 +78,7 @@ func dial(ctx context.Context, u string, opts *DialOptions) (_ *Conn, _ *http.Re
 	case "wss":
 		parsedURL.Scheme = "https"
 	default:
-		return nil, nil, xerrors.Errorf("unexpected url scheme: %q", parsedURL.Scheme)
+		return nil, nil, fmt.Errorf("unexpected url scheme: %q", parsedURL.Scheme)
 	}
 
 	req, _ := http.NewRequest("GET", parsedURL.String(), nil)
@@ -95,7 +94,7 @@ func dial(ctx context.Context, u string, opts *DialOptions) (_ *Conn, _ *http.Re
 
 	resp, err := opts.HTTPClient.Do(req)
 	if err != nil {
-		return nil, nil, xerrors.Errorf("failed to send handshake request: %w", err)
+		return nil, nil, fmt.Errorf("failed to send handshake request: %w", err)
 	}
 	defer func() {
 		if err != nil {
@@ -114,7 +113,7 @@ func dial(ctx context.Context, u string, opts *DialOptions) (_ *Conn, _ *http.Re
 
 	rwc, ok := resp.Body.(io.ReadWriteCloser)
 	if !ok {
-		return nil, resp, xerrors.Errorf("response body is not a io.ReadWriteCloser: %T", rwc)
+		return nil, resp, fmt.Errorf("response body is not a io.ReadWriteCloser: %T", rwc)
 	}
 
 	c := &Conn{
@@ -132,19 +131,19 @@ func dial(ctx context.Context, u string, opts *DialOptions) (_ *Conn, _ *http.Re
 
 func verifyServerResponse(r *http.Request, resp *http.Response) error {
 	if resp.StatusCode != http.StatusSwitchingProtocols {
-		return xerrors.Errorf("expected handshake response status code %v but got %v", http.StatusSwitchingProtocols, resp.StatusCode)
+		return fmt.Errorf("expected handshake response status code %v but got %v", http.StatusSwitchingProtocols, resp.StatusCode)
 	}
 
 	if !headerValuesContainsToken(resp.Header, "Connection", "Upgrade") {
-		return xerrors.Errorf("websocket protocol violation: Connection header %q does not contain Upgrade", resp.Header.Get("Connection"))
+		return fmt.Errorf("websocket protocol violation: Connection header %q does not contain Upgrade", resp.Header.Get("Connection"))
 	}
 
 	if !headerValuesContainsToken(resp.Header, "Upgrade", "WebSocket") {
-		return xerrors.Errorf("websocket protocol violation: Upgrade header %q does not contain websocket", resp.Header.Get("Upgrade"))
+		return fmt.Errorf("websocket protocol violation: Upgrade header %q does not contain websocket", resp.Header.Get("Upgrade"))
 	}
 
 	if resp.Header.Get("Sec-WebSocket-Accept") != secWebSocketAccept(r.Header.Get("Sec-WebSocket-Key")) {
-		return xerrors.Errorf("websocket protocol violation: invalid Sec-WebSocket-Accept %q, key %q",
+		return fmt.Errorf("websocket protocol violation: invalid Sec-WebSocket-Accept %q, key %q",
 			resp.Header.Get("Sec-WebSocket-Accept"),
 			r.Header.Get("Sec-WebSocket-Key"),
 		)

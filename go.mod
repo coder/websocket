@@ -1,6 +1,6 @@
 module nhooyr.io/websocket
 
-go 1.12
+go 1.13
 
 require (
 	github.com/fatih/color v1.7.0 // indirect
@@ -21,7 +21,6 @@ require (
 	golang.org/x/sys v0.0.0-20190830142957-1e83adbbebd0 // indirect
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	golang.org/x/tools v0.0.0-20190830223141-573d9926052a
-	golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gotest.tools v2.2.0+incompatible // indirect
 	gotest.tools/gotestsum v0.3.6-0.20190825182939-fc6cb5870c52

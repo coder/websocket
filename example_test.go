@@ -2,11 +2,10 @@ package websocket_test
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"time"
-
-	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
@@ -76,7 +75,7 @@ func ExampleCloseError() {
 
 	_, _, err = c.Reader(ctx)
 	var cerr websocket.CloseError
-	if !xerrors.As(err, &cerr) || cerr.Code != websocket.StatusNormalClosure {
+	if !errors.As(err, &cerr) || cerr.Code != websocket.StatusNormalClosure {
 		log.Fatalf("expected to be disconnected with StatusNormalClosure but got: %+v", err)
 		return
 	}

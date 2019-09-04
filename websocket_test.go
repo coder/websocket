@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -24,7 +25,6 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"go.uber.org/multierr"
-	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
@@ -45,7 +45,7 @@ func TestHandshake(t *testing.T) {
 				c, err := websocket.Accept(w, r, nil)
 				if err == nil {
 					c.Close(websocket.StatusInternalError, "")
-					return xerrors.New("expected error regarding bad origin")
+					return errors.New("expected error regarding bad origin")
 				}
 				return assertErrorContains(err, "not authorized")
 			},
@@ -57,7 +57,7 @@ func TestHandshake(t *testing.T) {
 				})
 				if err == nil {
 					c.Close(websocket.StatusInternalError, "")
-					return xerrors.New("expected handshake failure")
+					return errors.New("expected handshake failure")
 				}
 				return assertErrorContains(err, "403")
 			},
@@ -115,7 +115,7 @@ func TestHandshake(t *testing.T) {
 			server: func(w http.ResponseWriter, r *http.Request) error {
 				cookie, err := r.Cookie("mycookie")
 				if err != nil {
-					return xerrors.Errorf("request is missing mycookie: %w", err)
+					return fmt.Errorf("request is missing mycookie: %w", err)
 				}
 				err = assertEqualf("myvalue", cookie.Value, "unexpected cookie value")
 				if err != nil {
@@ -131,11 +131,11 @@ func TestHandshake(t *testing.T) {
 			client: func(ctx context.Context, u string) error {
 				jar, err := cookiejar.New(nil)
 				if err != nil {
-					return xerrors.Errorf("failed to create cookie jar: %w", err)
+					return fmt.Errorf("failed to create cookie jar: %w", err)
 				}
 				parsedURL, err := url.Parse(u)
 				if err != nil {
-					return xerrors.Errorf("failed to parse url: %w", err)
+					return fmt.Errorf("failed to parse url: %w", err)
 				}
 				parsedURL.Scheme = "http"
 				jar.SetCookies(parsedURL, []*http.Cookie{
@@ -410,7 +410,7 @@ func TestConn(t *testing.T) {
 				case err = <-pingErrc:
 					return err
 				case <-ctx2.Done():
-					return xerrors.Errorf("failed to wait for pong: %w", ctx2.Err())
+					return fmt.Errorf("failed to wait for pong: %w", ctx2.Err())
 				}
 			},
 		},
@@ -576,15 +576,15 @@ func TestConn(t *testing.T) {
 				}
 				_, _, err = c.Read(ctx)
 				cerr := &websocket.CloseError{}
-				if !xerrors.As(err, cerr) || cerr.Code != websocket.StatusProtocolError {
-					return xerrors.Errorf("expected close error with StatusProtocolError: %+v", err)
+				if !errors.As(err, cerr) || cerr.Code != websocket.StatusProtocolError {
+					return fmt.Errorf("expected close error with StatusProtocolError: %+v", err)
 				}
 				return nil
 			},
 			client: func(ctx context.Context, c *websocket.Conn) error {
 				_, _, err := c.Read(ctx)
 				if err == nil || !strings.Contains(err.Error(), "rsv") {
-					return xerrors.Errorf("expected error that contains rsv: %+v", err)
+					return fmt.Errorf("expected error that contains rsv: %+v", err)
 				}
 				return nil
 			},
@@ -684,19 +684,19 @@ func TestConn(t *testing.T) {
 				}
 				_, err = w.Write([]byte(strings.Repeat("x", 10)))
 				if err != nil {
-					return xerrors.Errorf("expected non nil error")
+					return fmt.Errorf("expected non nil error")
 				}
 				err = c.Flush()
 				if err != nil {
-					return xerrors.Errorf("failed to flush: %w", err)
+					return fmt.Errorf("failed to flush: %w", err)
 				}
 				_, err = w.Write([]byte(strings.Repeat("x", 10)))
 				if err != nil {
-					return xerrors.Errorf("expected non nil error")
+					return fmt.Errorf("expected non nil error")
 				}
 				err = c.Flush()
 				if err != nil {
-					return xerrors.Errorf("failed to flush: %w", err)
+					return fmt.Errorf("failed to flush: %w", err)
 				}
 				_, _, err = c.Read(ctx)
 				return assertCloseStatus(err, websocket.StatusInternalError)
@@ -724,15 +724,15 @@ func TestConn(t *testing.T) {
 				}
 				_, err = w.Write([]byte(strings.Repeat("x", 10)))
 				if err != nil {
-					return xerrors.Errorf("expected non nil error")
+					return fmt.Errorf("expected non nil error")
 				}
 				err = c.Flush()
 				if err != nil {
-					return xerrors.Errorf("failed to flush: %w", err)
+					return fmt.Errorf("failed to flush: %w", err)
 				}
 				_, err = c.WriteFrame(ctx, true, websocket.OpBinary, []byte(strings.Repeat("x", 10)))
 				if err != nil {
-					return xerrors.Errorf("expected non nil error")
+					return fmt.Errorf("expected non nil error")
 				}
 				_, _, err = c.Read(ctx)
 				return assertErrorContains(err, "received new data message without finishing")
@@ -798,15 +798,15 @@ func TestConn(t *testing.T) {
 				}
 				_, err = w.Write([]byte(strings.Repeat("x", 10)))
 				if err != nil {
-					return xerrors.Errorf("expected non nil error")
+					return fmt.Errorf("expected non nil error")
 				}
 				err = c.Flush()
 				if err != nil {
-					return xerrors.Errorf("failed to flush: %w", err)
+					return fmt.Errorf("failed to flush: %w", err)
 				}
 				_, err = c.WriteFrame(ctx, true, websocket.OpBinary, []byte(strings.Repeat("x", 10)))
 				if err != nil {
-					return xerrors.Errorf("expected non nil error")
+					return fmt.Errorf("expected non nil error")
 				}
 				_, _, err = c.Read(ctx)
 				return assertCloseStatus(err, websocket.StatusProtocolError)
@@ -1890,8 +1890,8 @@ func echoLoop(ctx context.Context, c *websocket.Conn) {
 
 func assertCloseStatus(err error, code websocket.StatusCode) error {
 	var cerr websocket.CloseError
-	if !xerrors.As(err, &cerr) {
-		return xerrors.Errorf("no websocket close error in error chain: %+v", err)
+	if !errors.As(err, &cerr) {
+		return fmt.Errorf("no websocket close error in error chain: %+v", err)
 	}
 	return assertEqualf(code, cerr.Code, "unexpected status code")
 }
@@ -1949,7 +1949,7 @@ func assertSubprotocol(c *websocket.Conn, exp string) error {
 
 func assertEqualf(exp, act interface{}, f string, v ...interface{}) error {
 	if diff := cmpDiff(exp, act); diff != "" {
-		return xerrors.Errorf(f+": %v", append(v, diff)...)
+		return fmt.Errorf(f+": %v", append(v, diff)...)
 	}
 	return nil
 }
@@ -1965,14 +1965,14 @@ func assertNetConnRead(r io.Reader, exp string) error {
 
 func assertErrorContains(err error, exp string) error {
 	if err == nil || !strings.Contains(err.Error(), exp) {
-		return xerrors.Errorf("expected error that contains %q but got: %+v", exp, err)
+		return fmt.Errorf("expected error that contains %q but got: %+v", exp, err)
 	}
 	return nil
 }
 
 func assertErrorIs(exp, act error) error {
-	if !xerrors.Is(act, exp) {
-		return xerrors.Errorf("expected error %+v to be in %+v", exp, act)
+	if !errors.Is(act, exp) {
+		return fmt.Errorf("expected error %+v to be in %+v", exp, act)
 	}
 	return nil
 }
@@ -2000,7 +2000,7 @@ func assertReadCloseFrame(ctx context.Context, c *websocket.Conn, code websocket
 	}
 	ce, err := websocket.ParseClosePayload(actP)
 	if err != nil {
-		return xerrors.Errorf("failed to parse close frame payload: %w", err)
+		return fmt.Errorf("failed to parse close frame payload: %w", err)
 	}
 	return assertEqualf(ce.Code, code, "unexpected frame close frame code with payload %q", actP)
 }
