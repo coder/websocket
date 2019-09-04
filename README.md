@@ -169,7 +169,7 @@ Please see [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
 ## Users
 
+If your company or project is using this library, please feel free to open an issue or PR to amend the list.
+
 - [Coder](https://github.com/cdr)
 - [Tatsu Works](https://github.com/tatsuworks) - Ingresses 20 TB in websocket data every month on their Discord bot.
-
-If your company or project is using this library, please feel free to open an issue or PR to amend the list.
