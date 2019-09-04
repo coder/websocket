@@ -2,7 +2,7 @@
 
 set -euo pipefail
 cd "$(dirname "${0}")"
-cd "$(git rev-parse --show-toplevel)/mod"
+cd "$(git rev-parse --show-toplevel)"
 
 argv=(
   go run gotest.tools/gotestsum

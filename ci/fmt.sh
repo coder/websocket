@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-set -euox pipefail
+set -euo pipefail
 cd "$(dirname "${0}")"
-cd "$(git rev-parse --show-toplevel)/mod"
+cd "$(git rev-parse --show-toplevel)"
 
 gen() {
   # Unfortunately, this is the only way to ensure go.mod and go.sum are correct.
@@ -24,11 +24,11 @@ fmt() {
     --no-semi \
     --trailing-comma all \
     --loglevel silent \
-    $(git ls-files "../*.yaml" "../*.yml" "../*.md")
+    $(git ls-files "*.yaml" "*.yml" "*.md")
 }
 
 unstaged_files() {
-  git ls-files --other --modified --exclude-standard ..
+  git ls-files --other --modified --exclude-standard
 }
 
 check() {

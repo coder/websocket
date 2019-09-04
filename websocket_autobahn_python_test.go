@@ -19,8 +19,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"nhooyr.io/websocket"
 )
 
 // https://github.com/crossbario/autobahn-python/tree/master/wstest
@@ -28,7 +26,7 @@ func TestPythonAutobahnServer(t *testing.T) {
 	t.Parallel()
 
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		c, err := Accept(w, r, &AcceptOptions{
 			Subprotocols: []string{"echo"},
 		})
 		if err != nil {
@@ -156,11 +154,11 @@ func TestPythonAutobahnClientOld(t *testing.T) {
 
 	var cases int
 	func() {
-		c, _, err := websocket.Dial(ctx, wsServerURL+"/getCaseCount", nil)
+		c, _, err := Dial(ctx, wsServerURL+"/getCaseCount", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer c.Close(websocket.StatusInternalError, "")
+		defer c.Close(StatusInternalError, "")
 
 		_, r, err := c.Reader(ctx)
 		if err != nil {
@@ -175,7 +173,7 @@ func TestPythonAutobahnClientOld(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		c.Close(websocket.StatusNormalClosure, "")
+		c.Close(StatusNormalClosure, "")
 	}()
 
 	for i := 1; i <= cases; i++ {
@@ -183,7 +181,7 @@ func TestPythonAutobahnClientOld(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, time.Second*45)
 			defer cancel()
 
-			c, _, err := websocket.Dial(ctx, fmt.Sprintf(wsServerURL+"/runCase?case=%v&agent=main", i), nil)
+			c, _, err := Dial(ctx, fmt.Sprintf(wsServerURL+"/runCase?case=%v&agent=main", i), nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -191,11 +189,11 @@ func TestPythonAutobahnClientOld(t *testing.T) {
 		}()
 	}
 
-	c, _, err := websocket.Dial(ctx, fmt.Sprintf(wsServerURL+"/updateReports?agent=main"), nil)
+	c, _, err := Dial(ctx, fmt.Sprintf(wsServerURL+"/updateReports?agent=main"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Close(websocket.StatusNormalClosure, "")
+	c.Close(StatusNormalClosure, "")
 
 	checkWSTestIndex(t, "./ci/out/wstestClientReports/index.json")
 }

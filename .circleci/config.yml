@@ -7,15 +7,15 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - go-v4-{{ checksum "mod/go.sum" }}
+            - go-v4-{{ checksum "go.sum" }}
             # Fallback to using the latest cache if no exact match is found.
             - go-v4-
-      - run: ./mod/ci/fmt.sh
+      - run: ./ci/fmt.sh
       - save_cache:
           paths:
             - /root/gopath
             - /root/.cache/go-build
-          key: go-v4-{{ checksum "mod/go.sum" }}
+          key: go-v4-{{ checksum "go.sum" }}
 
   lint:
     docker:
@@ -24,15 +24,15 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - go-v4-{{ checksum "mod/go.sum" }}
+            - go-v4-{{ checksum "go.sum" }}
             # Fallback to using the latest cache if no exact match is found.
             - go-v4-
-      - run: ./mod/ci/lint.sh
+      - run: ./ci/lint.sh
       - save_cache:
           paths:
             - /root/gopath
             - /root/.cache/go-build
-          key: go-v4-{{ checksum "mod/go.sum" }}
+          key: go-v4-{{ checksum "go.sum" }}
 
   test:
     docker:
@@ -41,20 +41,20 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - go-v4-{{ checksum "mod/go.sum" }}
+            - go-v4-{{ checksum "go.sum" }}
             # Fallback to using the latest cache if no exact match is found.
             - go-v4-
-      - run: ./mod/ci/test.sh
+      - run: ./ci/test.sh
       - store_artifacts:
-          path: mod/ci/out
+          path: ci/out
           destination: out
       - save_cache:
           paths:
             - /root/gopath
             - /root/.cache/go-build
-          key: go-v4-{{ checksum "mod/go.sum" }}
+          key: go-v4-{{ checksum "go.sum" }}
       - store_test_results:
-          path: mod/ci/out
+          path: ci/out
 
 workflows:
   version: 2
