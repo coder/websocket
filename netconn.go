@@ -2,13 +2,12 @@ package websocket
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"net"
 	"time"
-
-	"golang.org/x/xerrors"
 )
 
 // NetConn converts a *websocket.Conn into a net.Conn.
@@ -97,7 +96,7 @@ func (c *netConn) Read(p []byte) (int, error) {
 		typ, r, err := c.c.Reader(c.readContext)
 		if err != nil {
 			var ce CloseError
-			if xerrors.As(err, &ce) && (ce.Code == StatusNormalClosure) || (ce.Code == StatusGoingAway) {
+			if errors.As(err, &ce) && (ce.Code == StatusNormalClosure) || (ce.Code == StatusGoingAway) {
 				c.eofed = true
 				return 0, io.EOF
 			}

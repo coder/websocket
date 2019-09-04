@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-
-	"golang.org/x/xerrors"
 )
 
 // First byte contains fin, rsv1, rsv2, rsv3.
@@ -145,7 +143,7 @@ func readHeader(b []byte, r io.Reader) (header, error) {
 	case payloadLength == 127:
 		h.payloadLength = int64(binary.BigEndian.Uint64(b))
 		if h.payloadLength < 0 {
-			return header{}, xerrors.Errorf("header with negative payload length: %v", h.payloadLength)
+			return header{}, fmt.Errorf("header with negative payload length: %v", h.payloadLength)
 		}
 		b = b[8:]
 	}

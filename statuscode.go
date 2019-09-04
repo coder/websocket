@@ -3,8 +3,6 @@ package websocket
 import (
 	"encoding/binary"
 	"fmt"
-
-	"golang.org/x/xerrors"
 )
 
 // StatusCode represents a WebSocket status code.
@@ -43,7 +41,8 @@ const (
 // CloseError represents a WebSocket close frame.
 // It is returned by Conn's methods when a WebSocket close frame is received from
 // the peer.
-// You will need to use https://godoc.org/golang.org/x/xerrors#As to check for this error.
+// You will need to use the https://golang.org/pkg/errors/#As function, new in Go 1.13,
+// to check for this error. See the CloseError example.
 type CloseError struct {
 	Code   StatusCode
 	Reason string
@@ -61,7 +60,7 @@ func parseClosePayload(p []byte) (CloseError, error) {
 	}
 
 	if len(p) < 2 {
-		return CloseError{}, xerrors.Errorf("close payload %q too small, cannot even contain the 2 byte status code", p)
+		return CloseError{}, fmt.Errorf("close payload %q too small, cannot even contain the 2 byte status code", p)
 	}
 
 	ce := CloseError{
@@ -70,7 +69,7 @@ func parseClosePayload(p []byte) (CloseError, error) {
 	}
 
 	if !validWireCloseCode(ce.Code) {
-		return CloseError{}, xerrors.Errorf("invalid status code %v", ce.Code)
+		return CloseError{}, fmt.Errorf("invalid status code %v", ce.Code)
 	}
 
 	return ce, nil
@@ -98,10 +97,10 @@ const maxControlFramePayload = 125
 
 func (ce CloseError) bytes() ([]byte, error) {
 	if len(ce.Reason) > maxControlFramePayload-2 {
-		return nil, xerrors.Errorf("reason string max is %v but got %q with length %v", maxControlFramePayload-2, ce.Reason, len(ce.Reason))
+		return nil, fmt.Errorf("reason string max is %v but got %q with length %v", maxControlFramePayload-2, ce.Reason, len(ce.Reason))
 	}
 	if !validWireCloseCode(ce.Code) {
-		return nil, xerrors.Errorf("status code %v cannot be set", ce.Code)
+		return nil, fmt.Errorf("status code %v cannot be set", ce.Code)
 	}
 
 	buf := make([]byte, 2+len(ce.Reason))

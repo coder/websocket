@@ -3,8 +3,7 @@ package websocket
 import (
 	"bufio"
 	"context"
-
-	"golang.org/x/xerrors"
+	"fmt"
 )
 
 type (
@@ -65,7 +64,7 @@ func (c *Conn) WriteHeader(ctx context.Context, h Header) error {
 	})
 	_, err := c.bw.Write(headerBytes)
 	if err != nil {
-		return xerrors.Errorf("failed to write header: %w", err)
+		return fmt.Errorf("failed to write header: %w", err)
 	}
 	if h.Fin {
 		err = c.Flush()

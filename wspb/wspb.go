@@ -4,10 +4,10 @@ package wspb // import "nhooyr.io/websocket/wspb"
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/bpool"
@@ -18,7 +18,7 @@ import (
 func Read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 	err := read(ctx, c, v)
 	if err != nil {
-		return xerrors.Errorf("failed to read protobuf: %w", err)
+		return fmt.Errorf("failed to read protobuf: %w", err)
 	}
 	return nil
 }
@@ -31,7 +31,7 @@ func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 
 	if typ != websocket.MessageBinary {
 		c.Close(websocket.StatusUnsupportedData, "can only accept binary messages")
-		return xerrors.Errorf("unexpected frame type for protobuf (expected %v): %v", websocket.MessageBinary, typ)
+		return fmt.Errorf("unexpected frame type for protobuf (expected %v): %v", websocket.MessageBinary, typ)
 	}
 
 	b := bpool.Get()
@@ -47,7 +47,7 @@ func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 	err = proto.Unmarshal(b.Bytes(), v)
 	if err != nil {
 		c.Close(websocket.StatusInvalidFramePayloadData, "failed to unmarshal protobuf")
-		return xerrors.Errorf("failed to unmarshal protobuf: %w", err)
+		return fmt.Errorf("failed to unmarshal protobuf: %w", err)
 	}
 
 	return nil
@@ -58,7 +58,7 @@ func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 func Write(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 	err := write(ctx, c, v)
 	if err != nil {
-		return xerrors.Errorf("failed to write protobuf: %w", err)
+		return fmt.Errorf("failed to write protobuf: %w", err)
 	}
 	return nil
 }
@@ -74,7 +74,7 @@ func write(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 
 	err := pb.Marshal(v)
 	if err != nil {
-		return xerrors.Errorf("failed to marshal protobuf: %w", err)
+		return fmt.Errorf("failed to marshal protobuf: %w", err)
 	}
 
 	return c.Write(ctx, websocket.MessageBinary, pb.Bytes())

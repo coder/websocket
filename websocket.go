@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	cryptorand "crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -14,8 +15,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"golang.org/x/xerrors"
 )
 
 // Conn represents a WebSocket connection.
@@ -107,7 +106,7 @@ func (c *Conn) init() {
 	c.controlPayloadBuf = make([]byte, maxControlFramePayload)
 
 	runtime.SetFinalizer(c, func(c *Conn) {
-		c.close(xerrors.New("connection garbage collected"))
+		c.close(errors.New("connection garbage collected"))
 	})
 
 	go c.timeoutLoop()
@@ -121,7 +120,7 @@ func (c *Conn) Subprotocol() string {
 
 func (c *Conn) setCloseErr(err error) {
 	c.closeErrOnce.Do(func() {
-		c.closeErr = xerrors.Errorf("websocket closed: %w", err)
+		c.closeErr = fmt.Errorf("websocket closed: %w", err)
 	})
 }
 
@@ -166,9 +165,9 @@ func (c *Conn) timeoutLoop() {
 		case readCtx = <-c.setReadTimeout:
 
 		case <-readCtx.Done():
-			c.close(xerrors.Errorf("read timed out: %w", readCtx.Err()))
+			c.close(fmt.Errorf("read timed out: %w", readCtx.Err()))
 		case <-writeCtx.Done():
-			c.close(xerrors.Errorf("write timed out: %w", writeCtx.Err()))
+			c.close(fmt.Errorf("write timed out: %w", writeCtx.Err()))
 		}
 	}
 }
@@ -179,9 +178,9 @@ func (c *Conn) acquireLock(ctx context.Context, lock chan struct{}) error {
 		var err error
 		switch lock {
 		case c.writeFrameLock, c.writeMsgLock:
-			err = xerrors.Errorf("could not acquire write lock: %v", ctx.Err())
+			err = fmt.Errorf("could not acquire write lock: %v", ctx.Err())
 		case c.readFrameLock:
-			err = xerrors.Errorf("could not acquire read lock: %v", ctx.Err())
+			err = fmt.Errorf("could not acquire read lock: %v", ctx.Err())
 		default:
 			panic(fmt.Sprintf("websocket: failed to acquire unknown lock: %v", ctx.Err()))
 		}
@@ -217,7 +216,7 @@ func (c *Conn) readTillMsg(ctx context.Context) (header, error) {
 		if h.opcode.controlOp() {
 			err = c.handleControl(ctx, h)
 			if err != nil {
-				return header{}, xerrors.Errorf("failed to handle control frame: %w", err)
+				return header{}, fmt.Errorf("failed to handle control frame: %w", err)
 			}
 			continue
 		}
@@ -254,7 +253,7 @@ func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 			err = ctx.Err()
 		default:
 		}
-		err := xerrors.Errorf("failed to read header: %w", err)
+		err := fmt.Errorf("failed to read header: %w", err)
 		c.releaseLock(c.readFrameLock)
 		c.close(err)
 		return header{}, err
@@ -307,14 +306,14 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 	case opClose:
 		ce, err := parseClosePayload(b)
 		if err != nil {
-			err = xerrors.Errorf("received invalid close payload: %w", err)
+			err = fmt.Errorf("received invalid close payload: %w", err)
 			c.Close(StatusProtocolError, err.Error())
 			return c.closeErr
 		}
 		// This ensures the closeErr of the Conn is always the received CloseError
 		// in case the echo close frame write fails.
 		// See https://github.com/nhooyr/websocket/issues/109
-		c.setCloseErr(xerrors.Errorf("received close frame: %w", ce))
+		c.setCloseErr(fmt.Errorf("received close frame: %w", ce))
 		c.writeClose(b, nil)
 		return c.closeErr
 	default:
@@ -347,12 +346,12 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 // Most users should not need this.
 func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 	if atomic.LoadInt64(&c.readClosed) == 1 {
-		return 0, nil, xerrors.Errorf("websocket connection read closed")
+		return 0, nil, fmt.Errorf("websocket connection read closed")
 	}
 
 	typ, r, err := c.reader(ctx)
 	if err != nil {
-		return 0, nil, xerrors.Errorf("failed to get reader: %w", err)
+		return 0, nil, fmt.Errorf("failed to get reader: %w", err)
 	}
 	return typ, r, nil
 }
@@ -363,7 +362,7 @@ func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
 		// if there is an active frame not yet fully read.
 		// Otherwise, a user may have read the last byte but not the EOF if the EOF
 		// is in the next frame so we check for that below.
-		return 0, nil, xerrors.Errorf("previous message not read to completion")
+		return 0, nil, fmt.Errorf("previous message not read to completion")
 	}
 
 	h, err := c.readTillMsg(ctx)
@@ -378,7 +377,7 @@ func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
 		}
 
 		if !h.fin || h.payloadLength > 0 {
-			return 0, nil, xerrors.Errorf("previous message not read to completion")
+			return 0, nil, fmt.Errorf("previous message not read to completion")
 		}
 
 		c.activeReader = nil
@@ -441,17 +440,17 @@ func (r *messageReader) Read(p []byte) (int, error) {
 	if err != nil {
 		// Have to return io.EOF directly for now, we cannot wrap as xerrors
 		// isn't used in stdlib.
-		if xerrors.Is(err, io.EOF) {
+		if errors.Is(err, io.EOF) {
 			return n, io.EOF
 		}
-		return n, xerrors.Errorf("failed to read: %w", err)
+		return n, fmt.Errorf("failed to read: %w", err)
 	}
 	return n, nil
 }
 
 func (r *messageReader) read(p []byte) (int, error) {
 	if r.eof() {
-		return 0, xerrors.Errorf("cannot use EOFed reader")
+		return 0, fmt.Errorf("cannot use EOFed reader")
 	}
 
 	if r.c.readMsgLeft <= 0 {
@@ -531,7 +530,7 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
 			err = ctx.Err()
 		default:
 		}
-		err = xerrors.Errorf("failed to read frame payload: %w", err)
+		err = fmt.Errorf("failed to read frame payload: %w", err)
 		c.releaseLock(c.readFrameLock)
 		c.close(err)
 		return n, err
@@ -580,7 +579,7 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, error) {
 	wc, err := c.writer(ctx, typ)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to get writer: %w", err)
+		return nil, fmt.Errorf("failed to get writer: %w", err)
 	}
 	return wc, nil
 }
@@ -605,7 +604,7 @@ func (c *Conn) writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	_, err := c.write(ctx, typ, p)
 	if err != nil {
-		return xerrors.Errorf("failed to write msg: %w", err)
+		return fmt.Errorf("failed to write msg: %w", err)
 	}
 	return nil
 }
@@ -634,18 +633,18 @@ func (w *messageWriter) closed() bool {
 func (w *messageWriter) Write(p []byte) (int, error) {
 	n, err := w.write(p)
 	if err != nil {
-		return n, xerrors.Errorf("failed to write: %w", err)
+		return n, fmt.Errorf("failed to write: %w", err)
 	}
 	return n, nil
 }
 
 func (w *messageWriter) write(p []byte) (int, error) {
 	if w.closed() {
-		return 0, xerrors.Errorf("cannot use closed writer")
+		return 0, fmt.Errorf("cannot use closed writer")
 	}
 	n, err := w.c.writeFrame(w.c.writeMsgCtx, false, w.c.writeMsgOpcode, p)
 	if err != nil {
-		return n, xerrors.Errorf("failed to write data frame: %w", err)
+		return n, fmt.Errorf("failed to write data frame: %w", err)
 	}
 	w.c.writeMsgOpcode = opContinuation
 	return n, nil
@@ -656,20 +655,20 @@ func (w *messageWriter) write(p []byte) (int, error) {
 func (w *messageWriter) Close() error {
 	err := w.close()
 	if err != nil {
-		return xerrors.Errorf("failed to close writer: %w", err)
+		return fmt.Errorf("failed to close writer: %w", err)
 	}
 	return nil
 }
 
 func (w *messageWriter) close() error {
 	if w.closed() {
-		return xerrors.Errorf("cannot use closed writer")
+		return fmt.Errorf("cannot use closed writer")
 	}
 	w.c.activeWriter = nil
 
 	_, err := w.c.writeFrame(w.c.writeMsgCtx, true, w.c.writeMsgOpcode, nil)
 	if err != nil {
-		return xerrors.Errorf("failed to write fin frame: %w", err)
+		return fmt.Errorf("failed to write fin frame: %w", err)
 	}
 
 	w.c.releaseLock(w.c.writeMsgLock)
@@ -679,7 +678,7 @@ func (w *messageWriter) close() error {
 func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error {
 	_, err := c.writeFrame(ctx, true, opcode, p)
 	if err != nil {
-		return xerrors.Errorf("failed to write control frame: %w", err)
+		return fmt.Errorf("failed to write control frame: %w", err)
 	}
 	return nil
 }
@@ -706,7 +705,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 	if c.client {
 		_, err := io.ReadFull(cryptorand.Reader, c.writeHeader.maskKey[:])
 		if err != nil {
-			return 0, xerrors.Errorf("failed to generate masking key: %w", err)
+			return 0, fmt.Errorf("failed to generate masking key: %w", err)
 		}
 	}
 
@@ -737,7 +736,7 @@ func (c *Conn) realWriteFrame(ctx context.Context, h header, p []byte) (n int, e
 			default:
 			}
 
-			err = xerrors.Errorf("failed to write %v frame: %w", h.opcode, err)
+			err = fmt.Errorf("failed to write %v frame: %w", h.opcode, err)
 			// We need to release the lock first before closing the connection to ensure
 			// the lock can be acquired inside close to ensure no one can access c.bw.
 			c.releaseLock(c.writeFrameLock)
@@ -821,7 +820,7 @@ func (c *Conn) writePong(p []byte) error {
 func (c *Conn) Close(code StatusCode, reason string) error {
 	err := c.exportedClose(code, reason)
 	if err != nil {
-		return xerrors.Errorf("failed to close websocket connection: %w", err)
+		return fmt.Errorf("failed to close websocket connection: %w", err)
 	}
 	return nil
 }
@@ -846,13 +845,13 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 
 	// CloseErrors sent are made opaque to prevent applications from thinking
 	// they received a given status.
-	sentErr := xerrors.Errorf("sent close frame: %v", ce)
+	sentErr := fmt.Errorf("sent close frame: %v", ce)
 	err = c.writeClose(p, sentErr)
 	if err != nil {
 		return err
 	}
 
-	if !xerrors.Is(c.closeErr, sentErr) {
+	if !errors.Is(c.closeErr, sentErr) {
 		return c.closeErr
 	}
 
@@ -891,7 +890,7 @@ func (c *Conn) Ping(ctx context.Context) error {
 
 	err := c.ping(ctx, p)
 	if err != nil {
-		return xerrors.Errorf("failed to ping: %w", err)
+		return fmt.Errorf("failed to ping: %w", err)
 	}
 	return nil
 }
@@ -918,7 +917,7 @@ func (c *Conn) ping(ctx context.Context, p string) error {
 	case <-c.closed:
 		return c.closeErr
 	case <-ctx.Done():
-		err := xerrors.Errorf("failed to wait for pong: %w", ctx.Err())
+		err := fmt.Errorf("failed to wait for pong: %w", ctx.Err())
 		c.close(err)
 		return err
 	case <-pong:
