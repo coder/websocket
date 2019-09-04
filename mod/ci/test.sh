@@ -33,5 +33,5 @@ mv ci/out/coverage2.prof ci/out/coverage.prof
 
 go tool cover -html=ci/out/coverage.prof -o=ci/out/coverage.html
 if [[ ${CI:-} ]]; then
-  bash <(curl -s https://codecov.io/bash) -f ci/out/coverage.prof
+  bash <(curl -s https://codecov.io/bash) -R . -f ci/out/coverage.prof
 fi
