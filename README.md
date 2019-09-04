@@ -31,7 +31,7 @@ go get nhooyr.io/websocket
 
 ## Examples
 
-For a production quality example that shows off the full API, see the [echo example on the godoc](https://godoc.org/nhooyr.io/websocket#example-package--Echo). On github, the example is at [example_echo_test.go](./example_echo_test.go).
+For a production quality example that shows off the full API, see the [echo example on the godoc](https://godoc.org/nhooyr.io/websocket#example-package--Echo). On github, the example is at [./mod/example_echo_test.go](./mod/example_echo_test.go).
 
 Please use the [errors.As](https://golang.org/pkg/errors/#As) function [new in Go 1.13](https://golang.org/doc/go1.13#error_wrapping) to check for [websocket.CloseError](https://godoc.org/nhooyr.io/websocket#CloseError). See the [CloseError godoc example](https://godoc.org/nhooyr.io/websocket#example-CloseError).
 
@@ -62,7 +62,7 @@ http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
 
 ### Client
 
-The client side of this library requires at minimum Go 1.12 as it uses a [new feature
+The client side of this library requires at least Go 1.12 as it uses a [new feature
 in net/http](https://github.com/golang/go/issues/26937#issuecomment-415855861) to perform WebSocket handshakes.
 
 ```go

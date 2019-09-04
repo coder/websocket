@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -euox pipefail
 cd "$(dirname "${0}")"
-cd "$(git rev-parse --show-toplevel)"
+cd "$(git rev-parse --show-toplevel)/mod"
 
 gen() {
   # Unfortunately, this is the only way to ensure go.mod and go.sum are correct.
@@ -16,7 +16,7 @@ gen() {
 fmt() {
   gofmt -w -s .
   go run go.coder.com/go-tools/cmd/goimports -w "-local=$(go list -m)" .
-  go run mvdan.cc/sh/cmd/shfmt -i 2 -w -s -sr .
+  go run mvdan.cc/sh/cmd/shfmt -i 2 -w -s -sr ..
   # shellcheck disable=SC2046
   npx prettier \
     --write \
@@ -24,11 +24,11 @@ fmt() {
     --no-semi \
     --trailing-comma all \
     --loglevel silent \
-    $(git ls-files "*.yaml" "*.yml" "*.md")
+    $(git ls-files "../*.yaml" "../*.yml" "../*.md")
 }
 
 unstaged_files() {
-  git ls-files --other --modified --exclude-standard
+  git ls-files --other --modified --exclude-standard ..
 }
 
 check() {

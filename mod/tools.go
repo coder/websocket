@@ -1,6 +1,6 @@
 // +build tools
 
-package tools
+package websocket
 
 // See https://github.com/go-modules-by-example/index/blob/master/010_tools/README.md
 import (
