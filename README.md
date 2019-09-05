@@ -33,7 +33,7 @@ go get nhooyr.io/websocket
 
 For a production quality example that shows off the full API, see the [echo example on the godoc](https://godoc.org/nhooyr.io/websocket#example-package--Echo). On github, the example is at [example_echo_test.go](./example_echo_test.go).
 
-Please use the [errors.As](https://golang.org/pkg/errors/#As) function [new in Go 1.13](https://golang.org/doc/go1.13#error_wrapping) to check for [websocket.CloseError](https://godoc.org/nhooyr.io/websocket#CloseError). See the [CloseError godoc example](https://godoc.org/nhooyr.io/websocket#example-CloseError).
+Use the [errors.As](https://golang.org/pkg/errors/#As) function [new in Go 1.13](https://golang.org/doc/go1.13#error_wrapping) to check for [websocket.CloseError](https://godoc.org/nhooyr.io/websocket#CloseError). See the [CloseError godoc example](https://godoc.org/nhooyr.io/websocket#example-CloseError).
 
 ### Server
 
@@ -165,11 +165,11 @@ as performant but much easier to use correctly and idiomatic.
 
 ## Contributing
 
-Please see [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md).
+See [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
 ## Users
 
-If your company or project is using this library, please feel free to open an issue or PR to amend this list.
+If your company or project is using this library, feel free to open an issue or PR to amend this list.
 
 - [Coder](https://github.com/cdr)
 - [Tatsu Works](https://github.com/tatsuworks) - Ingresses 20 TB in websocket data every month on their Discord bot.

@@ -24,7 +24,7 @@ import (
 // You must always read from the connection. Otherwise control
 // frames will not be handled. See the docs on Reader and CloseRead.
 //
-// Please be sure to call Close on the connection when you
+// Be sure to call Close on the connection when you
 // are finished with it to release the associated resources.
 //
 // Every error from Read or Reader will cause the connection

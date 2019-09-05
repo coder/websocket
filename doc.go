@@ -1,6 +1,6 @@
 // Package websocket is a minimal and idiomatic implementation of the WebSocket protocol.
 //
-// See https://tools.ietf.org/html/rfc6455
+// https://tools.ietf.org/html/rfc6455
 //
 // Conn, Dial, and Accept are the main entrypoints into this package. Use Dial to dial
 // a WebSocket server, Accept to accept a WebSocket client dial and then Conn to interact
@@ -10,8 +10,9 @@
 //
 // The wsjson and wspb subpackages contain helpers for JSON and ProtoBuf messages.
 //
-// Please see https://nhooyr.io/websocket for more overview docs and a
+// See https://nhooyr.io/websocket for more overview docs and a
 // comparison with existing implementations.
 //
-// Please be sure to use the https://golang.org/x/xerrors package when inspecting returned errors.
+// Use the errors.As function new in Go 1.13 to check for websocket.CloseError.
+// See the CloseError example.
 package websocket // import "nhooyr.io/websocket"

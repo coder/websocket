@@ -8,7 +8,7 @@ Reproducible examples are key to finding and fixing bugs.
 
 ## Pull requests
 
-Good issues for first time contributors are marked as such. Please feel free to
+Good issues for first time contributors are marked as such. Feel free to
 reach out for clarification on what needs to be done.
 
 Split up large changes into several small descriptive commits.
@@ -39,7 +39,7 @@ You can run CI locally. The various steps are located in [ci/\*.sh](../ci).
 1. [test.sh](../ci/test.sh)
 1. [run.sh](../ci/run.sh) which runs the above scripts in order.
 
-For coverage details locally, please see `ci/out/coverage.html` after running [test.sh](../ci/test.sh).
+For coverage details locally, see `ci/out/coverage.html` after running [test.sh](../ci/test.sh).
 
 See [ci/image/Dockerfile](../ci/image/Dockerfile) for the installation of the CI dependencies on Ubuntu.
 

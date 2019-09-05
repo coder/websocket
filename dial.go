@@ -61,7 +61,7 @@ func dial(ctx context.Context, u string, opts *DialOptions) (_ *Conn, _ *http.Re
 		opts.HTTPClient = http.DefaultClient
 	}
 	if opts.HTTPClient.Timeout > 0 {
-		return nil, nil, fmt.Errorf("please use context for cancellation instead of http.Client.Timeout; see https://github.com/nhooyr/websocket/issues/67")
+		return nil, nil, fmt.Errorf("use context for cancellation instead of http.Client.Timeout; see https://github.com/nhooyr/websocket/issues/67")
 	}
 	if opts.HTTPHeader == nil {
 		opts.HTTPHeader = http.Header{}
