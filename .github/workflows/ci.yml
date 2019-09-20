@@ -1,0 +1,30 @@
+name: ci
+on: [push]
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    container: docker://nhooyr/websocket-ci@sha256:549cc2716fd1ff08608b39a52af95a67bf9f490f6f31933cccd94e750985e2dc
+    steps:
+      - uses: actions/checkout@v1
+        with:
+          fetch-depth: 1
+      - run: ./ci/fmt.sh
+  lint:
+    runs-on: ubuntu-latest
+    container: docker://nhooyr/websocket-ci@sha256:549cc2716fd1ff08608b39a52af95a67bf9f490f6f31933cccd94e750985e2dc
+    steps:
+      - uses: actions/checkout@v1
+        with:
+          fetch-depth: 1
+      - run: ./ci/lint.sh
+  test:
+    runs-on: ubuntu-latest
+    container: docker://nhooyr/websocket-ci@sha256:549cc2716fd1ff08608b39a52af95a67bf9f490f6f31933cccd94e750985e2dc
+    steps:
+      - uses: actions/checkout@v1
+        with:
+          fetch-depth: 1
+      - run: ./ci/test.sh
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

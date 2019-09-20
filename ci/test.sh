@@ -6,8 +6,6 @@ cd "$(git rev-parse --show-toplevel)"
 
 argv=(
   go run gotest.tools/gotestsum
-  # https://circleci.com/docs/2.0/collect-test-data/
-  "--junitfile=ci/out/websocket/testReport.xml"
   "--format=short-verbose"
   --
   "-vet=off"
@@ -33,5 +31,5 @@ mv ci/out/coverage2.prof ci/out/coverage.prof
 
 go tool cover -html=ci/out/coverage.prof -o=ci/out/coverage.html
 if [[ ${CI:-} ]]; then
-  bash <(curl -s https://codecov.io/bash) -R . -f ci/out/coverage.prof
+  bash <(curl -s https://codecov.io/bash) -Z -R . -f ci/out/coverage.prof
 fi

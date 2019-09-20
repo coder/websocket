@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# This script is for local testing. See .circleci for CI.
+# This script is for local testing. See .github/workflows/ci.yml for CI.
 
 set -euo pipefail
 cd "$(dirname "${0}")"
