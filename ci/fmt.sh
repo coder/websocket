@@ -32,7 +32,7 @@ unstaged_files() {
 }
 
 check() {
-  if [[ ${CI:-} && $(unstaged_files) != "" ]]; then
+  if [[ ${CI-} && $(unstaged_files) != "" ]]; then
     echo
     echo "Files need generation or are formatted incorrectly."
     echo "Run:"
