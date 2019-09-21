@@ -1,6 +1,6 @@
 // +build js
 
-package websocketjs
+package wsjs
 
 import (
 	"context"

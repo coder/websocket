@@ -1,8 +1,8 @@
 // +build js
 
-// websocketjs implements typed access to the browser javascript WebSocket API.
+// Package wsjs implements typed access to the browser javascript WebSocket API.
 // https://developer.mozilla.org/en-US/docs/Web/API/WebSocket
-package websocketjs
+package wsjs
 
 import (
 	"context"
@@ -101,8 +101,14 @@ type MessageEvent struct {
 
 func (c *WebSocket) OnMessage(fn func(m MessageEvent)) {
 	c.addEventListener("message", func(e js.Value) {
+		var data []byte
+
 		arrayBuffer := e.Get("data")
-		data := extractArrayBuffer(arrayBuffer)
+		if arrayBuffer.Type() == js.TypeString {
+			data = []byte(arrayBuffer.String())
+		} else {
+			data = extractArrayBuffer(arrayBuffer)
+		}
 
 		me := MessageEvent{
 			Data: data,

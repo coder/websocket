@@ -9,3 +9,4 @@ cd "$(git rev-parse --show-toplevel)"
 ./ci/fmt.sh
 ./ci/lint.sh
 ./ci/test.sh
+./ci/wasm.sh
