@@ -1,7 +1,6 @@
-// +build !js
+// +build js
 
-// Package wsjson provides websocket helpers for JSON messages.
-package wsjson // import "nhooyr.io/websocket/wsjson"
+package wsjson
 
 import (
 	"context"
@@ -9,11 +8,9 @@ import (
 	"fmt"
 
 	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/internal/bpool"
 )
 
 // Read reads a json message from c into v.
-// It will reuse buffers to avoid allocations.
 func Read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 	err := read(ctx, c, v)
 	if err != nil {
@@ -23,7 +20,7 @@ func Read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 }
 
 func read(ctx context.Context, c *websocket.Conn, v interface{}) error {
-	typ, r, err := c.Reader(ctx)
+	typ, b, err := c.Read(ctx)
 	if err != nil {
 		return err
 	}
@@ -33,17 +30,7 @@ func read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 		return fmt.Errorf("unexpected frame type for json (expected %v): %v", websocket.MessageText, typ)
 	}
 
-	b := bpool.Get()
-	defer func() {
-		bpool.Put(b)
-	}()
-
-	_, err = b.ReadFrom(r)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(b.Bytes(), v)
+	err = json.Unmarshal(b, v)
 	if err != nil {
 		c.Close(websocket.StatusInvalidFramePayloadData, "failed to unmarshal JSON")
 		return fmt.Errorf("failed to unmarshal json: %w", err)
@@ -53,7 +40,6 @@ func read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 }
 
 // Write writes the json message v to c.
-// It will reuse buffers to avoid allocations.
 func Write(ctx context.Context, c *websocket.Conn, v interface{}) error {
 	err := write(ctx, c, v)
 	if err != nil {
@@ -63,22 +49,10 @@ func Write(ctx context.Context, c *websocket.Conn, v interface{}) error {
 }
 
 func write(ctx context.Context, c *websocket.Conn, v interface{}) error {
-	w, err := c.Writer(ctx, websocket.MessageText)
+	b, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
 
-	// We use Encode because it automatically enables buffer reuse without us
-	// needing to do anything. Though see https://github.com/golang/go/issues/27735
-	e := json.NewEncoder(w)
-	err = e.Encode(v)
-	if err != nil {
-		return fmt.Errorf("failed to encode json: %w", err)
-	}
-
-	err = w.Close()
-	if err != nil {
-		return err
-	}
-	return nil
+	return c.Write(ctx, websocket.MessageBinary, b)
 }

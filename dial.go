@@ -1,3 +1,5 @@
+// +build !js
+
 package websocket
 
 import (
@@ -147,6 +149,10 @@ func verifyServerResponse(r *http.Request, resp *http.Response) error {
 			resp.Header.Get("Sec-WebSocket-Accept"),
 			r.Header.Get("Sec-WebSocket-Key"),
 		)
+	}
+
+	if proto := resp.Header.Get("Sec-WebSocket-Protocol"); proto != "" && !headerValuesContainsToken(r.Header, "Sec-WebSocket-Protocol", proto) {
+		return fmt.Errorf("websocket protocol violation: unexpected Sec-WebSocket-Protocol from server: %q", proto)
 	}
 
 	return nil

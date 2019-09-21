@@ -93,7 +93,7 @@ func (c *netConn) Read(p []byte) (int, error) {
 	}
 
 	if c.reader == nil {
-		typ, r, err := c.c.Reader(c.readContext)
+		typ, r, err := c.netConnReader(c.readContext)
 		if err != nil {
 			var ce CloseError
 			if errors.As(err, &ce) && (ce.Code == StatusNormalClosure) || (ce.Code == StatusGoingAway) {

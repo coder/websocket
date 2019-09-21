@@ -1,3 +1,5 @@
+// +build !js
+
 package websocket
 
 import (
@@ -45,6 +47,7 @@ func Test_verifyClientHandshake(t *testing.T) {
 	testCases := []struct {
 		name    string
 		method  string
+		http1   bool
 		h       map[string]string
 		success bool
 	}{
@@ -87,6 +90,16 @@ func Test_verifyClientHandshake(t *testing.T) {
 			},
 		},
 		{
+			name: "badHTTPVersion",
+			h: map[string]string{
+				"Connection":            "Upgrade",
+				"Upgrade":               "websocket",
+				"Sec-WebSocket-Version": "13",
+				"Sec-WebSocket-Key":     "meow123",
+			},
+			http1: true,
+		},
+		{
 			name: "success",
 			h: map[string]string{
 				"Connection":            "Upgrade",
@@ -105,6 +118,12 @@ func Test_verifyClientHandshake(t *testing.T) {
 
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(tc.method, "/", nil)
+
+			r.ProtoMajor = 1
+			r.ProtoMinor = 1
+			if tc.http1 {
+				r.ProtoMinor = 0
+			}
 
 			for k, v := range tc.h {
 				r.Header.Set(k, v)

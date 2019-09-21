@@ -1,6 +1,7 @@
 // This file contains the old autobahn test suite tests that use the
-// python binary. The approach is very clunky and slow so new tests
+// python binary. The approach is clunky and slow so new tests
 // have been written in pure Go in websocket_test.go.
+// These have been kept for correctness purposes and are occasionally ran.
 // +build autobahn-python
 
 package websocket_test
