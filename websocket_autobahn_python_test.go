@@ -20,6 +20,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"nhooyr.io/websocket/internal/wsecho"
 )
 
 // https://github.com/crossbario/autobahn-python/tree/master/wstest
@@ -34,7 +36,7 @@ func TestPythonAutobahnServer(t *testing.T) {
 			t.Logf("server handshake failed: %+v", err)
 			return
 		}
-		echoLoop(r.Context(), c)
+		wsecho.Loop(r.Context(), c)
 	}))
 	defer s.Close()
 
@@ -186,7 +188,7 @@ func TestPythonAutobahnClientOld(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			echoLoop(ctx, c)
+			wsecho.Loop(ctx, c)
 		}()
 	}
 

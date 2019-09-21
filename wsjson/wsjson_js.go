@@ -54,5 +54,5 @@ func write(ctx context.Context, c *websocket.Conn, v interface{}) error {
 		return err
 	}
 
-	return c.Write(ctx, websocket.MessageBinary, b)
+	return c.Write(ctx, websocket.MessageText, b)
 }

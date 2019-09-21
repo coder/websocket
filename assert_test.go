@@ -1,9 +1,14 @@
 package websocket_test
 
 import (
+	"context"
+	"fmt"
 	"reflect"
 
 	"github.com/google/go-cmp/cmp"
+
+	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/wsjson"
 )
 
 // https://github.com/google/go-cmp/issues/40#issuecomment-328615283
@@ -50,4 +55,45 @@ func structTypes(v reflect.Value, m map[reflect.Type]struct{}) {
 			structTypes(v.Field(i), m)
 		}
 	}
+}
+
+func assertEqualf(exp, act interface{}, f string, v ...interface{}) error {
+	if diff := cmpDiff(exp, act); diff != "" {
+		return fmt.Errorf(f+": %v", append(v, diff)...)
+	}
+	return nil
+}
+
+func assertJSONEcho(ctx context.Context, c *websocket.Conn, n int) error {
+	exp := randString(n)
+	err := wsjson.Write(ctx, c, exp)
+	if err != nil {
+		return err
+	}
+
+	var act interface{}
+	err = wsjson.Read(ctx, c, &act)
+	if err != nil {
+		return err
+	}
+
+	return assertEqualf(exp, act, "unexpected JSON")
+}
+
+func assertJSONRead(ctx context.Context, c *websocket.Conn, exp interface{}) error {
+	var act interface{}
+	err := wsjson.Read(ctx, c, &act)
+	if err != nil {
+		return err
+	}
+
+	return assertEqualf(exp, act, "unexpected JSON")
+}
+
+func randBytes(n int) []byte {
+	return make([]byte, n)
+}
+
+func randString(n int) string {
+	return string(randBytes(n))
 }

@@ -16,9 +16,13 @@ if [[ ${CI-} ]]; then
   )
 fi
 
-argv+=(
-  "$@"
-)
+if [[ $# -gt 0 ]]; then
+  argv+=(
+    "$@"
+  )
+else
+  argv+=(./...)
+fi
 
 mkdir -p ci/out/websocket
 "${argv[@]}"

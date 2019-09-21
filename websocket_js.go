@@ -59,7 +59,7 @@ func (c *Conn) init() {
 	})
 
 	runtime.SetFinalizer(c, func(c *Conn) {
-		c.ws.Close(int(StatusInternalError), "internal error")
+		c.ws.Close(int(StatusInternalError), "")
 		c.close(errors.New("connection garbage collected"))
 	})
 }
@@ -133,12 +133,10 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 		return fmt.Errorf("already closed: %w", c.closeErr)
 	}
 
-	cerr := CloseError{
+	err := fmt.Errorf("sent close frame: %v", CloseError{
 		Code:   code,
 		Reason: reason,
-	}
-
-	err := fmt.Errorf("sent close frame: %v", cerr)
+	})
 
 	err2 := c.ws.Close(int(code), reason)
 	if err2 != nil {
@@ -146,7 +144,7 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 	}
 	c.close(err)
 
-	if !xerrors.Is(c.closeErr, cerr) {
+	if !xerrors.Is(c.closeErr, err) {
 		return xerrors.Errorf("failed to close websocket: %w", err)
 	}
 
