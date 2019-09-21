@@ -9,9 +9,9 @@ type MessageType int
 // MessageType constants.
 const (
 	// MessageText is for UTF-8 encoded text messages like JSON.
-	MessageText MessageType = MessageType(opText)
+	MessageText MessageType = iota + 1
 	// MessageBinary is for binary messages like Protobufs.
-	MessageBinary MessageType = MessageType(opBinary)
+	MessageBinary
 )
 
 // Above I've explicitly included the types of the constants for stringer.
