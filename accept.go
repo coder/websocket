@@ -1,3 +1,5 @@
+// +build !js
+
 package websocket
 
 import (
@@ -41,6 +43,12 @@ type AcceptOptions struct {
 }
 
 func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
+	if !r.ProtoAtLeast(1, 1) {
+		err := fmt.Errorf("websocket protocol violation: handshake request must be at least HTTP/1.1: %q", r.Proto)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return err
+	}
+
 	if !headerValuesContainsToken(r.Header, "Connection", "Upgrade") {
 		err := fmt.Errorf("websocket protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
 		http.Error(w, err.Error(), http.StatusBadRequest)

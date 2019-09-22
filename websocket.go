@@ -1,3 +1,5 @@
+// +build !js
+
 package websocket
 
 import (
@@ -438,8 +440,8 @@ func (r *messageReader) eof() bool {
 func (r *messageReader) Read(p []byte) (int, error) {
 	n, err := r.read(p)
 	if err != nil {
-		// Have to return io.EOF directly for now, we cannot wrap as xerrors
-		// isn't used in stdlib.
+		// Have to return io.EOF directly for now, we cannot wrap as errors.Is
+		// isn't used widely yet.
 		if errors.Is(err, io.EOF) {
 			return n, io.EOF
 		}
@@ -943,4 +945,8 @@ func (c *Conn) extractBufioWriterBuf(w io.Writer) {
 	c.bw.Flush()
 
 	c.bw.Reset(w)
+}
+
+func (c *netConn) netConnReader(ctx context.Context) (MessageType, io.Reader, error) {
+	return c.c.Reader(c.readContext)
 }

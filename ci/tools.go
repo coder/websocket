@@ -4,6 +4,7 @@ package ci
 
 // See https://github.com/go-modules-by-example/index/blob/master/010_tools/README.md
 import (
+	_ "github.com/agnivade/wasmbrowsertest"
 	_ "go.coder.com/go-tools/cmd/goimports"
 	_ "golang.org/x/lint/golint"
 	_ "golang.org/x/tools/cmd/stringer"

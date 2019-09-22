@@ -16,18 +16,18 @@ go get nhooyr.io/websocket
 ## Features
 
 - Minimal and idiomatic API
-- Tiny codebase at 1700 lines
+- Tiny codebase at 2200 lines
 - First class [context.Context](https://blog.golang.org/context) support
 - Thorough tests, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 - [Zero dependencies](https://godoc.org/nhooyr.io/websocket?imports)
 - JSON and ProtoBuf helpers in the [wsjson](https://godoc.org/nhooyr.io/websocket/wsjson) and [wspb](https://godoc.org/nhooyr.io/websocket/wspb) subpackages
 - Highly optimized by default
 - Concurrent writes out of the box
+- [Complete WASM](https://godoc.org/nhooyr.io/websocket#hdr-WASM) support
 
 ## Roadmap
 
 - [ ] WebSockets over HTTP/2 [#4](https://github.com/nhooyr/websocket/issues/4)
-- [ ] WASM Compilation [#121](https://github.com/nhooyr/websocket/issues/121)
 
 ## Examples
 
@@ -115,7 +115,7 @@ Just compare the godoc of
 
 The API for nhooyr/websocket has been designed such that there is only one way to do things
 which makes it easy to use correctly. Not only is the API simpler, the implementation is
-only 1700 lines whereas gorilla/websocket is at 3500 lines. That's more code to maintain,
+only 2200 lines whereas gorilla/websocket is at 3500 lines. That's more code to maintain,
 more code to test, more code to document and more surface area for bugs.
 
 Moreover, nhooyr/websocket has support for newer Go idioms such as context.Context and
@@ -130,6 +130,8 @@ The ping API is also nicer. gorilla/websocket requires registering a pong handle
 which results in awkward control flow. With nhooyr/websocket you use the Ping method on the Conn
 that sends a ping and also waits for the pong, though you must be reading from the connection
 for the pong to be read.
+
+Additionally, nhooyr.io/websocket can compile to [WASM](https://godoc.org/nhooyr.io/websocket#hdr-WASM) for the browser.
 
 In terms of performance, the differences mostly depend on your application code. nhooyr/websocket
 reuses message buffers out of the box if you use the wsjson and wspb subpackages.

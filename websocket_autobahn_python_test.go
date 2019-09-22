@@ -1,6 +1,7 @@
 // This file contains the old autobahn test suite tests that use the
-// python binary. The approach is very clunky and slow so new tests
+// python binary. The approach is clunky and slow so new tests
 // have been written in pure Go in websocket_test.go.
+// These have been kept for correctness purposes and are occasionally ran.
 // +build autobahn-python
 
 package websocket_test
@@ -19,6 +20,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"nhooyr.io/websocket/internal/wsecho"
 )
 
 // https://github.com/crossbario/autobahn-python/tree/master/wstest
@@ -33,7 +36,7 @@ func TestPythonAutobahnServer(t *testing.T) {
 			t.Logf("server handshake failed: %+v", err)
 			return
 		}
-		echoLoop(r.Context(), c)
+		wsecho.Loop(r.Context(), c)
 	}))
 	defer s.Close()
 
@@ -185,7 +188,7 @@ func TestPythonAutobahnClientOld(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			echoLoop(ctx, c)
+			wsecho.Loop(ctx, c)
 		}()
 	}
 

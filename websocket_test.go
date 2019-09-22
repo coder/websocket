@@ -1,3 +1,5 @@
+// +build !js
+
 package websocket_test
 
 import (
@@ -27,6 +29,7 @@ import (
 	"go.uber.org/multierr"
 
 	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/internal/wsecho"
 	"nhooyr.io/websocket/wsjson"
 	"nhooyr.io/websocket/wspb"
 )
@@ -960,14 +963,14 @@ func TestAutobahn(t *testing.T) {
 					return err
 				}
 				defer c.Close(websocket.StatusInternalError, "")
-				c.SetReadLimit(1 << 40)
 
 				ctx := r.Context()
 				if testingClient {
-					echoLoop(r.Context(), c)
+					wsecho.Loop(r.Context(), c)
 					return nil
 				}
 
+				c.SetReadLimit(1 << 30)
 				err = fn(ctx, c)
 				if err != nil {
 					return err
@@ -994,9 +997,9 @@ func TestAutobahn(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer c.Close(websocket.StatusInternalError, "")
-			c.SetReadLimit(1 << 40)
 
 			if testingClient {
+				c.SetReadLimit(1 << 30)
 				err = fn(ctx, c)
 				if err != nil {
 					t.Fatalf("client failed: %+v", err)
@@ -1005,7 +1008,7 @@ func TestAutobahn(t *testing.T) {
 				return
 			}
 
-			echoLoop(ctx, c)
+			wsecho.Loop(ctx, c)
 		}
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -1847,88 +1850,12 @@ func TestAutobahn(t *testing.T) {
 	})
 }
 
-func echoLoop(ctx context.Context, c *websocket.Conn) {
-	defer c.Close(websocket.StatusInternalError, "")
-
-	c.SetReadLimit(1 << 40)
-
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
-	defer cancel()
-
-	b := make([]byte, 32768)
-	echo := func() error {
-		typ, r, err := c.Reader(ctx)
-		if err != nil {
-			return err
-		}
-
-		w, err := c.Writer(ctx, typ)
-		if err != nil {
-			return err
-		}
-
-		_, err = io.CopyBuffer(w, r, b)
-		if err != nil {
-			return err
-		}
-
-		err = w.Close()
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	for {
-		err := echo()
-		if err != nil {
-			return
-		}
-	}
-}
-
 func assertCloseStatus(err error, code websocket.StatusCode) error {
 	var cerr websocket.CloseError
 	if !errors.As(err, &cerr) {
 		return fmt.Errorf("no websocket close error in error chain: %+v", err)
 	}
 	return assertEqualf(code, cerr.Code, "unexpected status code")
-}
-
-func assertJSONRead(ctx context.Context, c *websocket.Conn, exp interface{}) (err error) {
-	var act interface{}
-	err = wsjson.Read(ctx, c, &act)
-	if err != nil {
-		return err
-	}
-
-	return assertEqualf(exp, act, "unexpected JSON")
-}
-
-func randBytes(n int) []byte {
-	return make([]byte, n)
-}
-
-func randString(n int) string {
-	return string(randBytes(n))
-}
-
-func assertEcho(ctx context.Context, c *websocket.Conn, typ websocket.MessageType, n int) error {
-	p := randBytes(n)
-	err := c.Write(ctx, typ, p)
-	if err != nil {
-		return err
-	}
-	typ2, p2, err := c.Read(ctx)
-	if err != nil {
-		return err
-	}
-	err = assertEqualf(typ, typ2, "unexpected data type")
-	if err != nil {
-		return err
-	}
-	return assertEqualf(p, p2, "unexpected payload")
 }
 
 func assertProtobufRead(ctx context.Context, c *websocket.Conn, exp interface{}) error {
@@ -1941,17 +1868,6 @@ func assertProtobufRead(ctx context.Context, c *websocket.Conn, exp interface{})
 	}
 
 	return assertEqualf(exp, act, "unexpected protobuf")
-}
-
-func assertSubprotocol(c *websocket.Conn, exp string) error {
-	return assertEqualf(exp, c.Subprotocol(), "unexpected subprotocol")
-}
-
-func assertEqualf(exp, act interface{}, f string, v ...interface{}) error {
-	if diff := cmpDiff(exp, act); diff != "" {
-		return fmt.Errorf(f+": %v", append(v, diff)...)
-	}
-	return nil
 }
 
 func assertNetConnRead(r io.Reader, exp string) error {

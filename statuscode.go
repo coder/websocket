@@ -18,12 +18,15 @@ const (
 	StatusGoingAway
 	StatusProtocolError
 	StatusUnsupportedData
+
 	_ // 1004 is reserved.
+
 	StatusNoStatusRcvd
-	// statusAbnormalClosure is unexported because it isn't necessary, at least until WASM.
-	// The error returned will indicate whether the connection was closed or not or what happened.
-	// It only makes sense for browser clients.
-	statusAbnormalClosure
+
+	// This StatusCode is only exported for use with WASM.
+	// In pure Go, the returned error will indicate whether the connection was closed or not or what happened.
+	StatusAbnormalClosure
+
 	StatusInvalidFramePayloadData
 	StatusPolicyViolation
 	StatusMessageTooBig
@@ -32,10 +35,10 @@ const (
 	StatusServiceRestart
 	StatusTryAgainLater
 	StatusBadGateway
-	// statusTLSHandshake is unexported because we just return
-	// the handshake error in dial. We do not return a conn
-	// so there is nothing to use this on. At least until WASM.
-	statusTLSHandshake
+
+	// This StatusCode is only exported for use with WASM.
+	// In pure Go, the returned error will indicate whether there was a TLS handshake failure.
+	StatusTLSHandshake
 )
 
 // CloseError represents a WebSocket close frame.
@@ -79,7 +82,7 @@ func parseClosePayload(p []byte) (CloseError, error) {
 // and https://tools.ietf.org/html/rfc6455#section-7.4.1
 func validWireCloseCode(code StatusCode) bool {
 	switch code {
-	case 1004, StatusNoStatusRcvd, statusAbnormalClosure, statusTLSHandshake:
+	case 1004, StatusNoStatusRcvd, StatusAbnormalClosure, StatusTLSHandshake:
 		return false
 	}
 

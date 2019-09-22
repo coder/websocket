@@ -1,3 +1,5 @@
+// +build !js
+
 package websocket
 
 import (
@@ -93,6 +95,16 @@ func Test_verifyServerHandshake(t *testing.T) {
 				w.Header().Set("Connection", "Upgrade")
 				w.Header().Set("Upgrade", "websocket")
 				w.Header().Set("Sec-WebSocket-Accept", "xd")
+				w.WriteHeader(http.StatusSwitchingProtocols)
+			},
+			success: false,
+		},
+		{
+			name: "badSecWebSocketProtocol",
+			response: func(w http.ResponseWriter) {
+				w.Header().Set("Connection", "Upgrade")
+				w.Header().Set("Upgrade", "websocket")
+				w.Header().Set("Sec-WebSocket-Protocol", "xd")
 				w.WriteHeader(http.StatusSwitchingProtocols)
 			},
 			success: false,

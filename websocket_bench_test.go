@@ -1,3 +1,5 @@
+// +build !js
+
 package websocket_test
 
 import (
@@ -11,6 +13,7 @@ import (
 	"time"
 
 	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/internal/wsecho"
 )
 
 func BenchmarkConn(b *testing.B) {
@@ -52,7 +55,7 @@ func benchConn(b *testing.B, echo, stream bool, size int) {
 			return err
 		}
 		if echo {
-			echoLoop(r.Context(), c)
+			wsecho.Loop(r.Context(), c)
 		} else {
 			discardLoop(r.Context(), c)
 		}

@@ -18,7 +18,7 @@ fmt() {
   go run go.coder.com/go-tools/cmd/goimports -w "-local=$(go list -m)" .
   go run mvdan.cc/sh/cmd/shfmt -i 2 -w -s -sr .
   # shellcheck disable=SC2046
-  npx prettier \
+  npx -q prettier \
     --write \
     --print-width 120 \
     --no-semi \
