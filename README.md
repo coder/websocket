@@ -16,7 +16,7 @@ go get nhooyr.io/websocket
 ## Features
 
 - Minimal and idiomatic API
-- Tiny codebase at 1700 lines
+- Tiny codebase at 2200 lines
 - First class [context.Context](https://blog.golang.org/context) support
 - Thorough tests, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 - [Zero dependencies](https://godoc.org/nhooyr.io/websocket?imports)
@@ -115,7 +115,7 @@ Just compare the godoc of
 
 The API for nhooyr/websocket has been designed such that there is only one way to do things
 which makes it easy to use correctly. Not only is the API simpler, the implementation is
-only 1700 lines whereas gorilla/websocket is at 3500 lines. That's more code to maintain,
+only 2200 lines whereas gorilla/websocket is at 3500 lines. That's more code to maintain,
 more code to test, more code to document and more surface area for bugs.
 
 Moreover, nhooyr/websocket has support for newer Go idioms such as context.Context and
