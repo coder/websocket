@@ -138,7 +138,7 @@ func (c *Conn) close(err error) {
 		// closeErr.
 		c.closer.Close()
 
-		// See comment in dial.go
+		// See comment on bufioReaderPool in handshake.go
 		if c.client {
 			// By acquiring the locks, we ensure no goroutine will touch the bufio reader or writer
 			// and we can safely return them.
