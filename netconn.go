@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -69,8 +70,9 @@ type netConn struct {
 
 	readTimer   *time.Timer
 	readContext context.Context
-	eofed       bool
 
+	readMu sync.Mutex
+	eofed  bool
 	reader io.Reader
 }
 
@@ -89,6 +91,9 @@ func (c *netConn) Write(p []byte) (int, error) {
 }
 
 func (c *netConn) Read(p []byte) (int, error) {
+	c.readMu.Lock()
+	defer c.readMu.Unlock()
+
 	if c.eofed {
 		return 0, io.EOF
 	}
