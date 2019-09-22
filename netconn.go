@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"sync/atomic"
 	"time"
 )
 
@@ -158,4 +159,28 @@ func (c *netConn) SetReadDeadline(t time.Time) error {
 		c.readTimer.Reset(t.Sub(time.Now()))
 	}
 	return nil
+}
+
+// CloseRead will start a goroutine to read from the connection until it is closed or a data message
+// is received. If a data message is received, the connection will be closed with StatusPolicyViolation.
+// Since CloseRead reads from the connection, it will respond to ping, pong and close frames.
+// After calling this method, you cannot read any data messages from the connection.
+// The returned context will be cancelled when the connection is closed.
+//
+// Use this when you do not want to read data messages from the connection anymore but will
+// want to write messages to it.
+func (c *Conn) CloseRead(ctx context.Context) context.Context {
+	atomic.StoreInt64(&c.readClosed, 1)
+
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		defer cancel()
+		// We use the unexported reader method so that we don't get the read closed error.
+		c.reader(ctx)
+		// Either the connection is already closed since there was a read error
+		// or the context was cancelled or a message was read and we should close
+		// the connection.
+		c.Close(StatusPolicyViolation, "unexpected data message")
+	}()
+	return ctx
 }

@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"syscall/js"
 
 	"nhooyr.io/websocket/internal/wsjs"
@@ -19,9 +20,10 @@ import (
 type Conn struct {
 	ws wsjs.WebSocket
 
-	closeOnce sync.Once
-	closed    chan struct{}
-	closeErr  error
+	readClosed int64
+	closeOnce  sync.Once
+	closed     chan struct{}
+	closeErr   error
 
 	releaseOnClose   func()
 	releaseOnMessage func()
@@ -67,6 +69,10 @@ func (c *Conn) init() {
 // Read attempts to read a message from the connection.
 // The maximum time spent waiting is bounded by the context.
 func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
+	if atomic.LoadInt64(&c.readClosed) == 1 {
+		return 0, nil, fmt.Errorf("websocket connection read closed")
+	}
+
 	typ, p, err := c.read(ctx)
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to read: %w", err)
@@ -78,6 +84,7 @@ func (c *Conn) read(ctx context.Context) (MessageType, []byte, error) {
 	var me wsjs.MessageEvent
 	select {
 	case <-ctx.Done():
+		c.Close(StatusPolicyViolation, "read timed out")
 		return 0, nil, ctx.Err()
 	case me = <-c.readch:
 	case <-c.closed:
@@ -198,6 +205,7 @@ func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Resp
 
 	select {
 	case <-ctx.Done():
+		c.Close(StatusPolicyViolation, "dial timed out")
 		return nil, nil, ctx.Err()
 	case <-opench:
 	case <-c.closed:
@@ -214,4 +222,9 @@ func (c *netConn) netConnReader(ctx context.Context) (MessageType, io.Reader, er
 		return 0, nil, err
 	}
 	return typ, bytes.NewReader(p), nil
+}
+
+// Only implemented for use by *Conn.CloseRead in netconn.go
+func (c *Conn) reader(ctx context.Context) {
+	c.read(ctx)
 }

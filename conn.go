@@ -406,27 +406,6 @@ func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
 	return MessageType(h.opcode), r, nil
 }
 
-// CloseRead will start a goroutine to read from the connection until it is closed or a data message
-// is received. If a data message is received, the connection will be closed with StatusPolicyViolation.
-// Since CloseRead reads from the connection, it will respond to ping, pong and close frames.
-// After calling this method, you cannot read any data messages from the connection.
-// The returned context will be cancelled when the connection is closed.
-//
-// Use this when you do not want to read data messages from the connection anymore but will
-// want to write messages to it.
-func (c *Conn) CloseRead(ctx context.Context) context.Context {
-	atomic.StoreInt64(&c.readClosed, 1)
-
-	ctx, cancel := context.WithCancel(ctx)
-	go func() {
-		defer cancel()
-		// We use the unexported reader so that we don't get the read closed error.
-		c.reader(ctx)
-		c.Close(StatusPolicyViolation, "unexpected data message")
-	}()
-	return ctx
-}
-
 // messageReader enables reading a data frame from the WebSocket connection.
 type messageReader struct {
 	c *Conn
