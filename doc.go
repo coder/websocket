@@ -22,13 +22,12 @@
 //
 // The client side fully supports compiling to WASM.
 // It wraps the WebSocket browser API.
+//
 // See https://developer.mozilla.org/en-US/docs/Web/API/WebSocket
 //
 // Thus the unsupported features when compiling to WASM are:
-//  - Accept API
-//  - Reader/Writer API
-//  - SetReadLimit
-//  - Ping
+//  - Accept and AcceptOptions
+//  - Conn's Reader, Writer, SetReadLimit, Ping methods
 //  - HTTPClient and HTTPHeader dial options
 //
 // The *http.Response returned by Dial will always either be nil or &http.Response{} as

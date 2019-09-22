@@ -50,6 +50,4 @@ func TestConn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	time.Sleep(time.Millisecond * 100)
 }
