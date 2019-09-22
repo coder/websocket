@@ -10,7 +10,7 @@ import (
 	"nhooyr.io/websocket"
 )
 
-func TestWebSocket(t *testing.T) {
+func TestConn(t *testing.T) {
 	t.Parallel()
 
 	wsEchoServerURL := flag.Arg(0)
@@ -18,18 +18,30 @@ func TestWebSocket(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	c, resp, err := websocket.Dial(ctx, wsEchoServerURL, nil)
+	c, resp, err := websocket.Dial(ctx, wsEchoServerURL, &websocket.DialOptions{
+		Subprotocols: []string{"echo"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer c.Close(websocket.StatusInternalError, "")
+
+	assertSubprotocol(c, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	err = assertEqualf(&http.Response{}, resp, "unexpected http response")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = assertJSONEcho(ctx, c, 4096)
+	err = assertJSONEcho(ctx, c, 16)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = assertEcho(ctx, c, websocket.MessageBinary, 16)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,4 +50,6 @@ func TestWebSocket(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	time.Sleep(time.Millisecond * 100)
 }

@@ -2,7 +2,9 @@ package websocket_test
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
+	"math/rand"
 	"reflect"
 
 	"github.com/google/go-cmp/cmp"
@@ -91,9 +93,32 @@ func assertJSONRead(ctx context.Context, c *websocket.Conn, exp interface{}) err
 }
 
 func randBytes(n int) []byte {
-	return make([]byte, n)
+	b := make([]byte, n)
+	rand.Read(b)
+	return b
 }
 
 func randString(n int) string {
-	return string(randBytes(n))
+	return hex.EncodeToString(randBytes(n))[:n]
+}
+
+func assertEcho(ctx context.Context, c *websocket.Conn, typ websocket.MessageType, n int) error {
+	p := randBytes(n)
+	err := c.Write(ctx, typ, p)
+	if err != nil {
+		return err
+	}
+	typ2, p2, err := c.Read(ctx)
+	if err != nil {
+		return err
+	}
+	err = assertEqualf(typ, typ2, "unexpected data type")
+	if err != nil {
+		return err
+	}
+	return assertEqualf(p, p2, "unexpected payload")
+}
+
+func assertSubprotocol(c *websocket.Conn, exp string) error {
+	return assertEqualf(exp, c.Subprotocol(), "unexpected subprotocol")
 }

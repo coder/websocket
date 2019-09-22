@@ -1,16 +1,16 @@
 package websocket // import "nhooyr.io/websocket"
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"runtime"
 	"sync"
 	"syscall/js"
-
-	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket/internal/wsjs"
 )
@@ -35,9 +35,6 @@ func (c *Conn) close(err error) {
 
 		c.closeErr = fmt.Errorf("websocket closed: %w", err)
 		close(c.closed)
-
-		c.releaseOnClose()
-		c.releaseOnMessage()
 	})
 }
 
@@ -52,6 +49,9 @@ func (c *Conn) init() {
 		}
 
 		c.close(fmt.Errorf("received close frame: %w", cerr))
+
+		c.releaseOnClose()
+		c.releaseOnMessage()
 	})
 
 	c.releaseOnMessage = c.ws.OnMessage(func(e wsjs.MessageEvent) {
@@ -144,8 +144,8 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 	}
 	c.close(err)
 
-	if !xerrors.Is(c.closeErr, err) {
-		return xerrors.Errorf("failed to close websocket: %w", err)
+	if !errors.Is(c.closeErr, err) {
+		return fmt.Errorf("failed to close websocket: %w", err)
 	}
 
 	return nil
@@ -206,4 +206,12 @@ func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Resp
 
 	// Have to return a non nil response as the normal API does that.
 	return c, &http.Response{}, nil
+}
+
+func (c *netConn) netConnReader(ctx context.Context) (MessageType, io.Reader, error) {
+	typ, p, err := c.c.Read(ctx)
+	if err != nil {
+		return 0, nil, err
+	}
+	return typ, bytes.NewReader(p), nil
 }

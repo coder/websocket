@@ -1858,23 +1858,6 @@ func assertCloseStatus(err error, code websocket.StatusCode) error {
 	return assertEqualf(code, cerr.Code, "unexpected status code")
 }
 
-func assertEcho(ctx context.Context, c *websocket.Conn, typ websocket.MessageType, n int) error {
-	p := randBytes(n)
-	err := c.Write(ctx, typ, p)
-	if err != nil {
-		return err
-	}
-	typ2, p2, err := c.Read(ctx)
-	if err != nil {
-		return err
-	}
-	err = assertEqualf(typ, typ2, "unexpected data type")
-	if err != nil {
-		return err
-	}
-	return assertEqualf(p, p2, "unexpected payload")
-}
-
 func assertProtobufRead(ctx context.Context, c *websocket.Conn, exp interface{}) error {
 	expType := reflect.TypeOf(exp)
 	actv := reflect.New(expType.Elem())
@@ -1885,10 +1868,6 @@ func assertProtobufRead(ctx context.Context, c *websocket.Conn, exp interface{})
 	}
 
 	return assertEqualf(exp, act, "unexpected protobuf")
-}
-
-func assertSubprotocol(c *websocket.Conn, exp string) error {
-	return assertEqualf(exp, c.Subprotocol(), "unexpected subprotocol")
 }
 
 func assertNetConnRead(r io.Reader, exp string) error {

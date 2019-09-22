@@ -946,3 +946,7 @@ func (c *Conn) extractBufioWriterBuf(w io.Writer) {
 
 	c.bw.Reset(w)
 }
+
+func (c *netConn) netConnReader(ctx context.Context) (MessageType, io.Reader, error) {
+	return c.c.Reader(c.readContext)
+}

@@ -41,7 +41,7 @@ func New(url string, protocols []string) (c WebSocket, err error) {
 		v: js.Global().Get("WebSocket").New(url, jsProtocols),
 	}
 
-	c.setBinaryType("arrayBuffer")
+	c.setBinaryType("arraybuffer")
 
 	c.Extensions = c.v.Get("extensions").String()
 	c.Protocol = c.v.Get("protocol").String()
