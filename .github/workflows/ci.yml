@@ -4,7 +4,7 @@ on: [push]
 jobs:
   fmt:
     runs-on: ubuntu-latest
-    container: docker://nhooyr/websocket-ci@sha256:6f6a00284eff008ad2cece8f3d0b4a2a3a8f2fcf7a54c691c64a92403abc4c75
+    container: docker://nhooyr/websocket-ci@sha256:b6331f8f64803c8b1bbd2a0ee9e2547317e0de2348bccd9c8dbcc1d88ff5747f
     steps:
       - uses: actions/checkout@v1
         with:
@@ -12,7 +12,7 @@ jobs:
       - run: ./ci/fmt.sh
   lint:
     runs-on: ubuntu-latest
-    container: docker://nhooyr/websocket-ci@sha256:6f6a00284eff008ad2cece8f3d0b4a2a3a8f2fcf7a54c691c64a92403abc4c75
+    container: docker://nhooyr/websocket-ci@sha256:b6331f8f64803c8b1bbd2a0ee9e2547317e0de2348bccd9c8dbcc1d88ff5747f
     steps:
       - uses: actions/checkout@v1
         with:
@@ -20,7 +20,7 @@ jobs:
       - run: ./ci/lint.sh
   test:
     runs-on: ubuntu-latest
-    container: docker://nhooyr/websocket-ci@sha256:6f6a00284eff008ad2cece8f3d0b4a2a3a8f2fcf7a54c691c64a92403abc4c75
+    container: docker://nhooyr/websocket-ci@sha256:b6331f8f64803c8b1bbd2a0ee9e2547317e0de2348bccd9c8dbcc1d88ff5747f
     steps:
       - uses: actions/checkout@v1
         with:
@@ -30,7 +30,7 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
   wasm:
     runs-on: ubuntu-latest
-    container: docker://nhooyr/websocket-ci@sha256:6f6a00284eff008ad2cece8f3d0b4a2a3a8f2fcf7a54c691c64a92403abc4c75
+    container: docker://nhooyr/websocket-ci@sha256:b6331f8f64803c8b1bbd2a0ee9e2547317e0de2348bccd9c8dbcc1d88ff5747f
     steps:
       - uses: actions/checkout@v1
         with:

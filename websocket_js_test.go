@@ -2,18 +2,18 @@ package websocket_test
 
 import (
 	"context"
+	"flag"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
 	"nhooyr.io/websocket"
 )
 
-var wsEchoServerURL = os.Args[1]
-
 func TestWebSocket(t *testing.T) {
 	t.Parallel()
+
+	wsEchoServerURL := flag.Arg(0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()

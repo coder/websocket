@@ -963,7 +963,6 @@ func TestAutobahn(t *testing.T) {
 					return err
 				}
 				defer c.Close(websocket.StatusInternalError, "")
-				c.SetReadLimit(1 << 40)
 
 				ctx := r.Context()
 				if testingClient {
@@ -971,6 +970,7 @@ func TestAutobahn(t *testing.T) {
 					return nil
 				}
 
+				c.SetReadLimit(1 << 30)
 				err = fn(ctx, c)
 				if err != nil {
 					return err
@@ -997,9 +997,9 @@ func TestAutobahn(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer c.Close(websocket.StatusInternalError, "")
-			c.SetReadLimit(1 << 40)
 
 			if testingClient {
+				c.SetReadLimit(1 << 30)
 				err = fn(ctx, c)
 				if err != nil {
 					t.Fatalf("client failed: %+v", err)

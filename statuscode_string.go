@@ -13,7 +13,7 @@ func _() {
 	_ = x[StatusProtocolError-1002]
 	_ = x[StatusUnsupportedData-1003]
 	_ = x[StatusNoStatusRcvd-1005]
-	_ = x[statusAbnormalClosure-1006]
+	_ = x[StatusAbnormalClosure-1006]
 	_ = x[StatusInvalidFramePayloadData-1007]
 	_ = x[StatusPolicyViolation-1008]
 	_ = x[StatusMessageTooBig-1009]
@@ -22,12 +22,12 @@ func _() {
 	_ = x[StatusServiceRestart-1012]
 	_ = x[StatusTryAgainLater-1013]
 	_ = x[StatusBadGateway-1014]
-	_ = x[statusTLSHandshake-1015]
+	_ = x[StatusTLSHandshake-1015]
 }
 
 const (
 	_StatusCode_name_0 = "StatusNormalClosureStatusGoingAwayStatusProtocolErrorStatusUnsupportedData"
-	_StatusCode_name_1 = "StatusNoStatusRcvdstatusAbnormalClosureStatusInvalidFramePayloadDataStatusPolicyViolationStatusMessageTooBigStatusMandatoryExtensionStatusInternalErrorStatusServiceRestartStatusTryAgainLaterStatusBadGatewaystatusTLSHandshake"
+	_StatusCode_name_1 = "StatusNoStatusRcvdStatusAbnormalClosureStatusInvalidFramePayloadDataStatusPolicyViolationStatusMessageTooBigStatusMandatoryExtensionStatusInternalErrorStatusServiceRestartStatusTryAgainLaterStatusBadGatewayStatusTLSHandshake"
 )
 
 var (

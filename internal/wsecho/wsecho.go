@@ -30,16 +30,16 @@ func Serve(w http.ResponseWriter, r *http.Request) {
 
 // Loop echos every msg received from c until an error
 // occurs or the context expires.
-// The read limit is set to 1 << 40.
+// The read limit is set to 1 << 30.
 func Loop(ctx context.Context, c *websocket.Conn) {
 	defer c.Close(websocket.StatusInternalError, "")
 
-	c.SetReadLimit(1 << 40)
+	c.SetReadLimit(1 << 30)
 
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	b := make([]byte, 32768)
+	b := make([]byte, 32<<10)
 	echo := func() error {
 		typ, r, err := c.Reader(ctx)
 		if err != nil {
