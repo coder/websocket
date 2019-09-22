@@ -25,10 +25,10 @@
 //
 // See https://developer.mozilla.org/en-US/docs/Web/API/WebSocket
 //
-// Thus the unsupported features when compiling to WASM are:
+// Thus the unsupported features (not compiled in) for WASM are:
 //  - Accept and AcceptOptions
-//  - Conn's Reader, Writer, SetReadLimit, Ping methods
-//  - HTTPClient and HTTPHeader dial options
+//  - Conn's Reader, Writer, SetReadLimit and Ping methods
+//  - HTTPClient and HTTPHeader fields in DialOptions
 //
 // The *http.Response returned by Dial will always either be nil or &http.Response{} as
 // we do not have access to the handshake response in the browser.
