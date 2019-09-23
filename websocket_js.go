@@ -13,12 +13,15 @@ import (
 	"sync/atomic"
 	"syscall/js"
 
+	"nhooyr.io/websocket/internal/bpool"
 	"nhooyr.io/websocket/internal/wsjs"
 )
 
 // Conn provides a wrapper around the browser WebSocket API.
 type Conn struct {
 	ws wsjs.WebSocket
+
+	msgReadLimit int64
 
 	readClosed int64
 	closeOnce  sync.Once
@@ -43,6 +46,7 @@ func (c *Conn) close(err error) {
 func (c *Conn) init() {
 	c.closed = make(chan struct{})
 	c.readch = make(chan wsjs.MessageEvent, 1)
+	c.msgReadLimit = 32768
 
 	c.releaseOnClose = c.ws.OnClose(func(e wsjs.CloseEvent) {
 		cerr := CloseError{
@@ -77,6 +81,10 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to read: %w", err)
 	}
+	if int64(len(p)) > c.msgReadLimit {
+		c.Close(StatusMessageTooBig, fmt.Sprintf("read limited at %v bytes", c.msgReadLimit))
+		return 0, nil, c.closeErr
+	}
 	return typ, p, nil
 }
 
@@ -106,6 +114,11 @@ func (c *Conn) read(ctx context.Context) (MessageType, []byte, error) {
 func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	err := c.write(ctx, typ, p)
 	if err != nil {
+		// Have to ensure the WebSocket is closed after a write error
+		// to match the Go API. It can only error if the message type
+		// is unexpected or the passed bytes contain invalid UTF-8 for
+		// MessageText.
+		c.Close(StatusInternalError, "something went wrong")
 		return fmt.Errorf("failed to write: %w", err)
 	}
 	return nil
@@ -216,8 +229,10 @@ func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Resp
 	return c, &http.Response{}, nil
 }
 
-func (c *netConn) netConnReader(ctx context.Context) (MessageType, io.Reader, error) {
-	typ, p, err := c.c.Read(ctx)
+// Reader attempts to read a message from the connection.
+// The maximum time spent waiting is bounded by the context.
+func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
+	typ, p, err := c.Read(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -227,4 +242,51 @@ func (c *netConn) netConnReader(ctx context.Context) (MessageType, io.Reader, er
 // Only implemented for use by *Conn.CloseRead in netconn.go
 func (c *Conn) reader(ctx context.Context) {
 	c.read(ctx)
+}
+
+// Writer returns a writer to write a WebSocket data message to the connection.
+// It buffers the entire message in memory and then sends it when the writer
+// is closed.
+func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, error) {
+	return writer{
+		c:   c,
+		ctx: ctx,
+		typ: typ,
+		b:   bpool.Get(),
+	}, nil
+}
+
+type writer struct {
+	closed bool
+
+	c   *Conn
+	ctx context.Context
+	typ MessageType
+
+	b *bytes.Buffer
+}
+
+func (w writer) Write(p []byte) (int, error) {
+	if w.closed {
+		return 0, errors.New("cannot write to closed writer")
+	}
+	n, err := w.b.Write(p)
+	if err != nil {
+		return n, fmt.Errorf("failed to write message: %w", err)
+	}
+	return n, nil
+}
+
+func (w writer) Close() error {
+	if w.closed {
+		return errors.New("cannot close closed writer")
+	}
+	w.closed = true
+	defer bpool.Put(w.b)
+
+	err := w.c.Write(w.ctx, w.typ, w.b.Bytes())
+	if err != nil {
+		return fmt.Errorf("failed to close writer: %w", err)
+	}
+	return nil
 }

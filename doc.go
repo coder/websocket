@@ -26,12 +26,22 @@
 // See https://developer.mozilla.org/en-US/docs/Web/API/WebSocket
 //
 // Thus the unsupported features (not compiled in) for WASM are:
+//
 //  - Accept and AcceptOptions
-//  - Conn's Reader, Writer, SetReadLimit and Ping methods
+//  - Conn.Ping
 //  - HTTPClient and HTTPHeader fields in DialOptions
 //
 // The *http.Response returned by Dial will always either be nil or &http.Response{} as
 // we do not have access to the handshake response in the browser.
+//
+// The Writer method on the Conn buffers everything in memory and then sends it as a message
+// when the writer is closed.
+//
+// The Reader method also reads the entire response and then returns a reader that
+// reads from the byte slice.
+//
+// SetReadLimit cannot actually limit the number of bytes read from the connection so instead
+// when a message beyond the limit is fully read, it throws an error.
 //
 // Writes are also always async so the passed context is no-op.
 //

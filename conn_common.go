@@ -1,3 +1,6 @@
+// This file contains *Conn symbols relevant to both
+// WASM and non WASM builds.
+
 package websocket
 
 import (
@@ -99,7 +102,7 @@ func (c *netConn) Read(p []byte) (int, error) {
 	}
 
 	if c.reader == nil {
-		typ, r, err := c.netConnReader(c.readContext)
+		typ, r, err := c.c.Reader(c.readContext)
 		if err != nil {
 			var ce CloseError
 			if errors.As(err, &ce) && (ce.Code == StatusNormalClosure) || (ce.Code == StatusGoingAway) {
@@ -188,4 +191,14 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 		c.Close(StatusPolicyViolation, "unexpected data message")
 	}()
 	return ctx
+}
+
+// SetReadLimit sets the max number of bytes to read for a single message.
+// It applies to the Reader and Read methods.
+//
+// By default, the connection has a message read limit of 32768 bytes.
+//
+// When the limit is hit, the connection will be closed with StatusMessageTooBig.
+func (c *Conn) SetReadLimit(n int64) {
+	c.msgReadLimit = n
 }

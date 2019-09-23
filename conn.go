@@ -59,7 +59,7 @@ type Conn struct {
 	msgReadLimit int64
 
 	// Used to ensure a previous writer is not used after being closed.
-	activeWriter *messageWriter
+	activeWriter atomic.Value
 	// messageWriter state.
 	writeMsgOpcode opcode
 	writeMsgCtx    context.Context
@@ -526,16 +526,6 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
 	return n, err
 }
 
-// SetReadLimit sets the max number of bytes to read for a single message.
-// It applies to the Reader and Read methods.
-//
-// By default, the connection has a message read limit of 32768 bytes.
-//
-// When the limit is hit, the connection will be closed with StatusMessageTooBig.
-func (c *Conn) SetReadLimit(n int64) {
-	c.msgReadLimit = n
-}
-
 // Read is a convenience method to read a single message from the connection.
 //
 // See the Reader method if you want to be able to reuse buffers or want to stream a message.
@@ -575,7 +565,7 @@ func (c *Conn) writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 	w := &messageWriter{
 		c: c,
 	}
-	c.activeWriter = w
+	c.activeWriter.Store(w)
 	return w, nil
 }
 
@@ -607,7 +597,7 @@ type messageWriter struct {
 }
 
 func (w *messageWriter) closed() bool {
-	return w != w.c.activeWriter
+	return w != w.c.activeWriter.Load()
 }
 
 // Write writes the given bytes to the WebSocket connection.
@@ -645,7 +635,7 @@ func (w *messageWriter) close() error {
 	if w.closed() {
 		return fmt.Errorf("cannot use closed writer")
 	}
-	w.c.activeWriter = nil
+	w.c.activeWriter.Store((*messageWriter)(nil))
 
 	_, err := w.c.writeFrame(w.c.writeMsgCtx, true, w.c.writeMsgOpcode, nil)
 	if err != nil {
@@ -924,8 +914,4 @@ func (c *Conn) extractBufioWriterBuf(w io.Writer) {
 	c.bw.Flush()
 
 	c.bw.Reset(w)
-}
-
-func (c *netConn) netConnReader(ctx context.Context) (MessageType, io.Reader, error) {
-	return c.c.Reader(c.readContext)
 }

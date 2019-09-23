@@ -1,5 +1,3 @@
-// +build !js
-
 // Package wsjson provides websocket helpers for JSON messages.
 package wsjson // import "nhooyr.io/websocket/wsjson"
 
@@ -34,9 +32,7 @@ func read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 	}
 
 	b := bpool.Get()
-	defer func() {
-		bpool.Put(b)
-	}()
+	defer bpool.Put(b)
 
 	_, err = b.ReadFrom(r)
 	if err != nil {

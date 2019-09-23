@@ -1,5 +1,3 @@
-// +build !js
-
 // Package wspb provides websocket helpers for protobuf messages.
 package wspb // import "nhooyr.io/websocket/wspb"
 
@@ -36,9 +34,7 @@ func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 	}
 
 	b := bpool.Get()
-	defer func() {
-		bpool.Put(b)
-	}()
+	defer bpool.Put(b)
 
 	_, err = b.ReadFrom(r)
 	if err != nil {
