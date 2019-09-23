@@ -110,26 +110,25 @@ https://github.com/gorilla/websocket
 This package is the community standard but it is 6 years old and over time
 has accumulated cruft. There are too many ways to do the same thing.
 Just compare the godoc of
-[nhooyr/websocket](https://godoc.org/nhooyr.io/websocket) side by side with
-[gorilla/websocket](https://godoc.org/github.com/gorilla/websocket).
+[nhooyr/websocket](https://godoc.org/nhooyr.io/websocket) with
+[gorilla/websocket](https://godoc.org/github.com/gorilla/websocket) side by side.
 
-The API for nhooyr/websocket has been designed such that there is only one way to do things
-which makes it easy to use correctly. Not only is the API simpler, the implementation is
+The API for nhooyr/websocket has been designed such that there is only one way to do things.
+This makes it easy to use correctly. Not only is the API simpler, the implementation is
 only 2200 lines whereas gorilla/websocket is at 3500 lines. That's more code to maintain,
 more code to test, more code to document and more surface area for bugs.
 
-Moreover, nhooyr/websocket has support for newer Go idioms such as context.Context and
-also uses net/http's Client and ResponseWriter directly for WebSocket handshakes.
-gorilla/websocket writes its handshakes to the underlying net.Conn which means
-it has to reinvent hooks for TLS and proxies and prevents support of HTTP/2.
+Moreover, nhooyr/websocket supports newer Go idioms such as context.Context.
+It also uses net/http's Client and ResponseWriter directly for WebSocket handshakes.
+gorilla/websocket writes its handshakes to the underlying net.Conn.
+Thus it has to reinvent hooks for TLS and proxies and prevents support of HTTP/2.
 
 Some more advantages of nhooyr/websocket are that it supports concurrent writes and
 makes it very easy to close the connection with a status code and reason.
 
 The ping API is also nicer. gorilla/websocket requires registering a pong handler on the Conn
 which results in awkward control flow. With nhooyr/websocket you use the Ping method on the Conn
-that sends a ping and also waits for the pong, though you must be reading from the connection
-for the pong to be read.
+that sends a ping and also waits for the pong.
 
 Additionally, nhooyr.io/websocket can compile to [WASM](https://godoc.org/nhooyr.io/websocket#hdr-WASM) for the browser.
 
@@ -137,7 +136,7 @@ In terms of performance, the differences mostly depend on your application code.
 reuses message buffers out of the box if you use the wsjson and wspb subpackages.
 As mentioned above, nhooyr/websocket also supports concurrent writers.
 
-The only performance con to nhooyr/websocket is that uses one extra goroutine to support
+The only performance con to nhooyr/websocket is that it uses one extra goroutine to support
 cancellation with context.Context. This costs 2 KB of memory which is cheap compared to
 the benefits.
 
@@ -161,9 +160,9 @@ effort to ensure its speed and I have applied as many of its optimizations as
 I could into nhooyr/websocket. Definitely check out his fantastic [blog post](https://medium.freecodecamp.org/million-websockets-and-go-cc58418460bb)
 about performant WebSocket servers.
 
-If you want a library that gives you absolute control over everything, this is the library,
-but for most users, the API provided by nhooyr/websocket will fit better as it is nearly just
-as performant but much easier to use correctly and idiomatic.
+If you want a library that gives you absolute control over everything, this is the library.
+But for 99.9% of use cases, nhooyr/websocket will fit better. It's nearly as performant
+but much easier to use.
 
 ## Contributing
 
