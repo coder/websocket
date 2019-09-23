@@ -202,3 +202,9 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 func (c *Conn) SetReadLimit(n int64) {
 	c.msgReadLimit = n
 }
+
+func (c *Conn) setCloseErr(err error) {
+	c.closeErrOnce.Do(func() {
+		c.closeErr = fmt.Errorf("websocket closed: %w", err)
+	})
+}

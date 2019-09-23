@@ -120,12 +120,6 @@ func (c *Conn) Subprotocol() string {
 	return c.subprotocol
 }
 
-func (c *Conn) setCloseErr(err error) {
-	c.closeErrOnce.Do(func() {
-		c.closeErr = fmt.Errorf("websocket closed: %w", err)
-	})
-}
-
 func (c *Conn) close(err error) {
 	c.closeOnce.Do(func() {
 		runtime.SetFinalizer(c, nil)
