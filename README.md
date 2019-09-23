@@ -23,7 +23,7 @@ go get nhooyr.io/websocket
 - JSON and ProtoBuf helpers in the [wsjson](https://godoc.org/nhooyr.io/websocket/wsjson) and [wspb](https://godoc.org/nhooyr.io/websocket/wspb) subpackages
 - Highly optimized by default
 - Concurrent writes out of the box
-- [Complete WASM](https://godoc.org/nhooyr.io/websocket#hdr-WASM) support
+- [Complete Wasm](https://godoc.org/nhooyr.io/websocket#hdr-Wasm) support
 
 ## Roadmap
 
@@ -130,7 +130,7 @@ The ping API is also nicer. gorilla/websocket requires registering a pong handle
 which results in awkward control flow. With nhooyr/websocket you use the Ping method on the Conn
 that sends a ping and also waits for the pong.
 
-Additionally, nhooyr.io/websocket can compile to [WASM](https://godoc.org/nhooyr.io/websocket#hdr-WASM) for the browser.
+Additionally, nhooyr.io/websocket can compile to [Wasm](https://godoc.org/nhooyr.io/websocket#hdr-Wasm) for the browser.
 
 In terms of performance, the differences mostly depend on your application code. nhooyr/websocket
 reuses message buffers out of the box if you use the wsjson and wspb subpackages.

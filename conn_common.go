@@ -1,5 +1,5 @@
 // This file contains *Conn symbols relevant to both
-// WASM and non WASM builds.
+// Wasm and non Wasm builds.
 
 package websocket
 

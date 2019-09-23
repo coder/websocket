@@ -18,14 +18,14 @@
 // Use the errors.As function new in Go 1.13 to check for websocket.CloseError.
 // See the CloseError example.
 //
-// WASM
+// Wasm
 //
-// The client side fully supports compiling to WASM.
+// The client side fully supports compiling to Wasm.
 // It wraps the WebSocket browser API.
 //
 // See https://developer.mozilla.org/en-US/docs/Web/API/WebSocket
 //
-// Thus the unsupported features (not compiled in) for WASM are:
+// Thus the unsupported features (not compiled in) for Wasm are:
 //
 //  - Accept and AcceptOptions
 //  - Conn.Ping

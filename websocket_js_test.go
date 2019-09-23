@@ -36,12 +36,12 @@ func TestConn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = assertJSONEcho(ctx, c, 16)
+	err = assertJSONEcho(ctx, c, 1024)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = assertEcho(ctx, c, websocket.MessageBinary, 16)
+	err = assertEcho(ctx, c, websocket.MessageBinary, 1024)
 	if err != nil {
 		t.Fatal(err)
 	}
