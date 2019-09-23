@@ -7,7 +7,7 @@ import (
 	"math"
 )
 
-//go:generate go run golang.org/x/tools/cmd/stringer -type=opcode,MessageType,StatusCode -output=frame_string.go
+//go:generate go run golang.org/x/tools/cmd/stringer -type=opcode,MessageType,StatusCode -output=frame_stringer.go
 
 // opcode represents a WebSocket Opcode.
 type opcode int
