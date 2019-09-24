@@ -107,9 +107,11 @@ production.
 
 https://github.com/gorilla/websocket
 
-This package is the community standard but it is 6 years old and over time
-has accumulated cruft. There are too many ways to do the same thing.
-Just compare the godoc of
+The implementation of gorilla/websocket is 6 years old. As such, it is
+widely used and very mature compared to nhooyr.io/websocket.
+
+On the other hand, it has accumulated cruft over the years. There are too many ways to do
+the same thing. Just compare the godoc of
 [nhooyr/websocket](https://godoc.org/nhooyr.io/websocket) with
 [gorilla/websocket](https://godoc.org/github.com/gorilla/websocket) side by side.
 
