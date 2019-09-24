@@ -2,10 +2,10 @@ package websocket_test
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"reflect"
+	"strings"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -99,7 +99,16 @@ func randBytes(n int) []byte {
 }
 
 func randString(n int) string {
-	return hex.EncodeToString(randBytes(n))[:n]
+	s := strings.ToValidUTF8(string(randBytes(n)), "_")
+	if len(s) > n {
+		return s[:n]
+	}
+	if len(s) < n {
+		// Pad with =
+		extra := n - len(s)
+		return s + strings.Repeat("=", extra)
+	}
+	return s
 }
 
 func assertEcho(ctx context.Context, c *websocket.Conn, typ websocket.MessageType, n int) error {

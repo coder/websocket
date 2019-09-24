@@ -23,29 +23,32 @@ type Conn struct {
 
 	msgReadLimit int64
 
-	readClosed int64
-	closeOnce  sync.Once
-	closed     chan struct{}
-	closeErr   error
+	readClosed   int64
+	closeOnce    sync.Once
+	closed       chan struct{}
+	closeErrOnce sync.Once
+	closeErr     error
 
 	releaseOnClose   func()
 	releaseOnMessage func()
 
-	readch chan wsjs.MessageEvent
+	readSignal chan struct{}
+	readBufMu  sync.Mutex
+	readBuf    []wsjs.MessageEvent
 }
 
 func (c *Conn) close(err error) {
 	c.closeOnce.Do(func() {
 		runtime.SetFinalizer(c, nil)
 
-		c.closeErr = fmt.Errorf("websocket closed: %w", err)
+		c.setCloseErr(err)
 		close(c.closed)
 	})
 }
 
 func (c *Conn) init() {
 	c.closed = make(chan struct{})
-	c.readch = make(chan wsjs.MessageEvent, 1)
+	c.readSignal = make(chan struct{}, 1)
 	c.msgReadLimit = 32768
 
 	c.releaseOnClose = c.ws.OnClose(func(e wsjs.CloseEvent) {
@@ -61,13 +64,26 @@ func (c *Conn) init() {
 	})
 
 	c.releaseOnMessage = c.ws.OnMessage(func(e wsjs.MessageEvent) {
-		c.readch <- e
+		c.readBufMu.Lock()
+		defer c.readBufMu.Unlock()
+
+		c.readBuf = append(c.readBuf, e)
+
+		// Lets the read goroutine know there is definitely something in readBuf.
+		select {
+		case c.readSignal <- struct{}{}:
+		default:
+		}
 	})
 
 	runtime.SetFinalizer(c, func(c *Conn) {
-		c.ws.Close(int(StatusInternalError), "")
-		c.close(errors.New("connection garbage collected"))
+		c.setCloseErr(errors.New("connection garbage collected"))
+		c.closeWithInternal()
 	})
+}
+
+func (c *Conn) closeWithInternal() {
+	c.Close(StatusInternalError, "something went wrong")
 }
 
 // Read attempts to read a message from the connection.
@@ -89,14 +105,30 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 }
 
 func (c *Conn) read(ctx context.Context) (MessageType, []byte, error) {
-	var me wsjs.MessageEvent
 	select {
 	case <-ctx.Done():
 		c.Close(StatusPolicyViolation, "read timed out")
 		return 0, nil, ctx.Err()
-	case me = <-c.readch:
+	case <-c.readSignal:
 	case <-c.closed:
 		return 0, nil, c.closeErr
+	}
+
+	c.readBufMu.Lock()
+	defer c.readBufMu.Unlock()
+
+	me := c.readBuf[0]
+	// We copy the messages forward and decrease the size
+	// of the slice to avoid reallocating.
+	copy(c.readBuf, c.readBuf[1:])
+	c.readBuf = c.readBuf[:len(c.readBuf)-1]
+
+	if len(c.readBuf) > 0 {
+		// Next time we read, we'll grab the message.
+		select {
+		case c.readSignal <- struct{}{}:
+		default:
+		}
 	}
 
 	switch p := me.Data.(type) {
@@ -118,8 +150,10 @@ func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 		// to match the Go API. It can only error if the message type
 		// is unexpected or the passed bytes contain invalid UTF-8 for
 		// MessageText.
-		c.Close(StatusInternalError, "something went wrong")
-		return fmt.Errorf("failed to write: %w", err)
+		err := fmt.Errorf("failed to write: %w", err)
+		c.setCloseErr(err)
+		c.closeWithInternal()
+		return err
 	}
 	return nil
 }

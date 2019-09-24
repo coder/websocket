@@ -213,8 +213,8 @@ const (
 
 	StatusNoStatusRcvd
 
-	// This StatusCode is only exported for use with WASM.
-	// In non WASM Go, the returned error will indicate whether the connection was closed or not or what happened.
+	// This StatusCode is only exported for use with Wasm.
+	// In non Wasm Go, the returned error will indicate whether the connection was closed or not or what happened.
 	StatusAbnormalClosure
 
 	StatusInvalidFramePayloadData
@@ -226,8 +226,8 @@ const (
 	StatusTryAgainLater
 	StatusBadGateway
 
-	// This StatusCode is only exported for use with WASM.
-	// In non WASM Go, the returned error will indicate whether there was a TLS handshake failure.
+	// This StatusCode is only exported for use with Wasm.
+	// In non Wasm Go, the returned error will indicate whether there was a TLS handshake failure.
 	StatusTLSHandshake
 )
 
