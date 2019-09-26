@@ -221,10 +221,10 @@ func authenticateOrigin(r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse Origin header %q: %w", origin, err)
 	}
-	if strings.EqualFold(u.Host, r.Host) {
-		return nil
+	if !strings.EqualFold(u.Host, r.Host) {
+		return fmt.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host)
 	}
-	return fmt.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host)
+	return nil
 }
 
 // DialOptions represents the options available to pass to Dial.
