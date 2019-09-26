@@ -208,7 +208,7 @@ const (
 	StatusGoingAway       StatusCode = 1001
 	StatusProtocolError   StatusCode = 1002
 	StatusUnsupportedData StatusCode = 1003
-	StatusReserved        StatusCode = 1004
+	statusReserved        StatusCode = 1004
 	StatusNoStatusRcvd    StatusCode = 1005
 
 	// This StatusCode is only exported for use with Wasm.
@@ -270,7 +270,7 @@ func parseClosePayload(p []byte) (CloseError, error) {
 // and https://tools.ietf.org/html/rfc6455#section-7.4.1
 func validWireCloseCode(code StatusCode) bool {
 	switch code {
-	case StatusReserved, StatusNoStatusRcvd, StatusAbnormalClosure, StatusTLSHandshake:
+	case statusReserved, StatusNoStatusRcvd, StatusAbnormalClosure, StatusTLSHandshake:
 		return false
 	}
 
