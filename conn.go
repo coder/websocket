@@ -19,6 +19,10 @@ import (
 	"time"
 )
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 // Conn represents a WebSocket connection.
 // All methods may be called concurrently except for Reader, Read
 // and SetReadLimit.
@@ -70,7 +74,7 @@ type Conn struct {
 	activeReader *messageReader
 	// readFrameLock is acquired to read from bw.
 	readFrameLock     chan struct{}
-	readClosed        int64
+	isReadClosed      int64
 	readHeaderBuf     []byte
 	controlPayloadBuf []byte
 
@@ -341,7 +345,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 // See https://github.com/nhooyr/websocket/issues/87#issue-451703332
 // Most users should not need this.
 func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
-	if atomic.LoadInt64(&c.readClosed) == 1 {
+	if atomic.LoadInt64(&c.isReadClosed) == 1 {
 		return 0, nil, fmt.Errorf("websocket connection read closed")
 	}
 
@@ -685,9 +689,8 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 	case <-c.closed:
 		return n, c.closeErr
 	case c.setWriteTimeout <- context.Background():
+		return n, nil
 	}
-
-	return n, nil
 }
 
 func (c *Conn) realWriteFrame(ctx context.Context, h header, p []byte) (n int, err error) {
@@ -836,10 +839,6 @@ func (c *Conn) writeClose(p []byte, cerr error) error {
 	c.close(cerr)
 
 	return nil
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }
 
 // Ping sends a ping to the peer and waits for a pong.
