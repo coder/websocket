@@ -204,31 +204,29 @@ type StatusCode int
 // These codes were retrieved from:
 // https://www.iana.org/assignments/websocket/websocket.xhtml#close-code-number
 const (
-	StatusNormalClosure StatusCode = 1000 + iota
-	StatusGoingAway
-	StatusProtocolError
-	StatusUnsupportedData
-
-	_ // 1004 is reserved.
-
-	StatusNoStatusRcvd
+	StatusNormalClosure   StatusCode = 1000
+	StatusGoingAway       StatusCode = 1001
+	StatusProtocolError   StatusCode = 1002
+	StatusUnsupportedData StatusCode = 1003
+	StatusReserved        StatusCode = 1004
+	StatusNoStatusRcvd    StatusCode = 1005
 
 	// This StatusCode is only exported for use with Wasm.
 	// In non Wasm Go, the returned error will indicate whether the connection was closed or not or what happened.
-	StatusAbnormalClosure
+	StatusAbnormalClosure StatusCode = 1006
 
-	StatusInvalidFramePayloadData
-	StatusPolicyViolation
-	StatusMessageTooBig
-	StatusMandatoryExtension
-	StatusInternalError
-	StatusServiceRestart
-	StatusTryAgainLater
-	StatusBadGateway
+	StatusInvalidFramePayloadData StatusCode = 1007
+	StatusPolicyViolation         StatusCode = 1008
+	StatusMessageTooBig           StatusCode = 1009
+	StatusMandatoryExtension      StatusCode = 1010
+	StatusInternalError           StatusCode = 1011
+	StatusServiceRestart          StatusCode = 1012
+	StatusTryAgainLater           StatusCode = 1013
+	StatusBadGateway              StatusCode = 1014
 
 	// This StatusCode is only exported for use with Wasm.
 	// In non Wasm Go, the returned error will indicate whether there was a TLS handshake failure.
-	StatusTLSHandshake
+	StatusTLSHandshake StatusCode = 1015
 )
 
 // CloseError represents a WebSocket close frame.
@@ -272,7 +270,7 @@ func parseClosePayload(p []byte) (CloseError, error) {
 // and https://tools.ietf.org/html/rfc6455#section-7.4.1
 func validWireCloseCode(code StatusCode) bool {
 	switch code {
-	case 1004, StatusNoStatusRcvd, StatusAbnormalClosure, StatusTLSHandshake:
+	case StatusReserved, StatusNoStatusRcvd, StatusAbnormalClosure, StatusTLSHandshake:
 		return false
 	}
 
