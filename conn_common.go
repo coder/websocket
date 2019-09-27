@@ -178,7 +178,7 @@ func (c *netConn) SetReadDeadline(t time.Time) error {
 // Use this when you do not want to read data messages from the connection anymore but will
 // want to write messages to it.
 func (c *Conn) CloseRead(ctx context.Context) context.Context {
-	atomic.StoreInt64(&c.readClosed, 1)
+	c.readClosed.Store(1)
 
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
@@ -200,11 +200,32 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 //
 // When the limit is hit, the connection will be closed with StatusMessageTooBig.
 func (c *Conn) SetReadLimit(n int64) {
-	c.msgReadLimit = n
+	c.msgReadLimit.Store(n)
 }
 
 func (c *Conn) setCloseErr(err error) {
 	c.closeErrOnce.Do(func() {
 		c.closeErr = fmt.Errorf("websocket closed: %w", err)
 	})
+}
+
+// See https://github.com/nhooyr/websocket/issues/153
+type atomicInt64 struct {
+	v atomic.Value
+}
+
+func (v *atomicInt64) Load() int64 {
+	i, ok := v.v.Load().(int64)
+	if !ok {
+		return 0
+	}
+	return i
+}
+
+func (v *atomicInt64) Store(i int64) {
+	v.v.Store(i)
+}
+
+func (v *atomicInt64) String() string {
+	return fmt.Sprint(v.v.Load())
 }

@@ -10,7 +10,6 @@ import (
 	"reflect"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"syscall/js"
 
 	"nhooyr.io/websocket/internal/bpool"
@@ -21,9 +20,10 @@ import (
 type Conn struct {
 	ws wsjs.WebSocket
 
-	msgReadLimit int64
+	// read limit for a message in bytes.
+	msgReadLimit *atomicInt64
 
-	readClosed   int64
+	readClosed   *atomicInt64
 	closeOnce    sync.Once
 	closed       chan struct{}
 	closeErrOnce sync.Once
@@ -49,7 +49,11 @@ func (c *Conn) close(err error) {
 func (c *Conn) init() {
 	c.closed = make(chan struct{})
 	c.readSignal = make(chan struct{}, 1)
-	c.msgReadLimit = 32768
+
+	c.msgReadLimit = &atomicInt64{}
+	c.msgReadLimit.Store(32768)
+
+	c.readClosed = &atomicInt64{}
 
 	c.releaseOnClose = c.ws.OnClose(func(e wsjs.CloseEvent) {
 		cerr := CloseError{
@@ -89,7 +93,7 @@ func (c *Conn) closeWithInternal() {
 // Read attempts to read a message from the connection.
 // The maximum time spent waiting is bounded by the context.
 func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
-	if atomic.LoadInt64(&c.readClosed) == 1 {
+	if c.readClosed.Load() == 1 {
 		return 0, nil, fmt.Errorf("websocket connection read closed")
 	}
 
@@ -97,7 +101,7 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to read: %w", err)
 	}
-	if int64(len(p)) > c.msgReadLimit {
+	if int64(len(p)) > c.msgReadLimit.Load() {
 		c.Close(StatusMessageTooBig, fmt.Sprintf("read limited at %v bytes", c.msgReadLimit))
 		return 0, nil, c.closeErr
 	}
