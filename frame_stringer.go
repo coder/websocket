@@ -64,6 +64,7 @@ func _() {
 	_ = x[StatusGoingAway-1001]
 	_ = x[StatusProtocolError-1002]
 	_ = x[StatusUnsupportedData-1003]
+	_ = x[statusReserved-1004]
 	_ = x[StatusNoStatusRcvd-1005]
 	_ = x[StatusAbnormalClosure-1006]
 	_ = x[StatusInvalidFramePayloadData-1007]
@@ -77,25 +78,14 @@ func _() {
 	_ = x[StatusTLSHandshake-1015]
 }
 
-const (
-	_StatusCode_name_0 = "StatusNormalClosureStatusGoingAwayStatusProtocolErrorStatusUnsupportedData"
-	_StatusCode_name_1 = "StatusNoStatusRcvdStatusAbnormalClosureStatusInvalidFramePayloadDataStatusPolicyViolationStatusMessageTooBigStatusMandatoryExtensionStatusInternalErrorStatusServiceRestartStatusTryAgainLaterStatusBadGatewayStatusTLSHandshake"
-)
+const _StatusCode_name = "StatusNormalClosureStatusGoingAwayStatusProtocolErrorStatusUnsupportedDatastatusReservedStatusNoStatusRcvdStatusAbnormalClosureStatusInvalidFramePayloadDataStatusPolicyViolationStatusMessageTooBigStatusMandatoryExtensionStatusInternalErrorStatusServiceRestartStatusTryAgainLaterStatusBadGatewayStatusTLSHandshake"
 
-var (
-	_StatusCode_index_0 = [...]uint8{0, 19, 34, 53, 74}
-	_StatusCode_index_1 = [...]uint8{0, 18, 39, 68, 89, 108, 132, 151, 171, 190, 206, 224}
-)
+var _StatusCode_index = [...]uint16{0, 19, 34, 53, 74, 88, 106, 127, 156, 177, 196, 220, 239, 259, 278, 294, 312}
 
 func (i StatusCode) String() string {
-	switch {
-	case 1000 <= i && i <= 1003:
-		i -= 1000
-		return _StatusCode_name_0[_StatusCode_index_0[i]:_StatusCode_index_0[i+1]]
-	case 1005 <= i && i <= 1015:
-		i -= 1005
-		return _StatusCode_name_1[_StatusCode_index_1[i]:_StatusCode_index_1[i+1]]
-	default:
-		return "StatusCode(" + strconv.FormatInt(int64(i), 10) + ")"
+	i -= 1000
+	if i < 0 || i >= StatusCode(len(_StatusCode_index)-1) {
+		return "StatusCode(" + strconv.FormatInt(int64(i+1000), 10) + ")"
 	}
+	return _StatusCode_name[_StatusCode_index[i]:_StatusCode_index[i+1]]
 }
