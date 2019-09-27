@@ -215,8 +215,9 @@ const (
 	// 1004 is reserved and so not exported.
 	statusReserved StatusCode = 1004
 
-	// StatusNoStatusRcvd cannot be sent as reserved for when
-	// a close message is received without an explicit status.
+	// StatusNoStatusRcvd cannot be sent in a close message.
+	// It is reserved for when a close message is received without
+	// an explicit status.
 	StatusNoStatusRcvd StatusCode = 1005
 
 	// StatusAbnormalClosure is only exported for use with Wasm.
