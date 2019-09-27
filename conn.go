@@ -70,7 +70,8 @@ type Conn struct {
 	activeReader *messageReader
 	// readFrameLock is acquired to read from bw.
 	readFrameLock     chan struct{}
-	readClosed        int64
+	// Not int32 because of https://github.com/nhooyr/websocket/issues/153
+	readClosed        int32
 	readHeaderBuf     []byte
 	controlPayloadBuf []byte
 
@@ -341,7 +342,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 // See https://github.com/nhooyr/websocket/issues/87#issue-451703332
 // Most users should not need this.
 func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
-	if atomic.LoadInt64(&c.readClosed) == 1 {
+	if atomic.LoadInt32(&c.readClosed) == 1 {
 		return 0, nil, fmt.Errorf("websocket connection read closed")
 	}
 

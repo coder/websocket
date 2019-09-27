@@ -89,7 +89,7 @@ func (c *Conn) closeWithInternal() {
 // Read attempts to read a message from the connection.
 // The maximum time spent waiting is bounded by the context.
 func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
-	if atomic.LoadInt64(&c.readClosed) == 1 {
+	if atomic.LoadInt32(&c.readClosed) == 1 {
 		return 0, nil, fmt.Errorf("websocket connection read closed")
 	}
 
