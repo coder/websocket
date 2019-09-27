@@ -36,6 +36,7 @@ func main() {
 
 		os.Exit(0)
 	}))
+
 	wsURL := strings.Replace(s.URL, "http", "ws", 1)
 	fmt.Printf("%v\n", wsURL)
 
