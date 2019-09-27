@@ -178,7 +178,7 @@ func (c *netConn) SetReadDeadline(t time.Time) error {
 // Use this when you do not want to read data messages from the connection anymore but will
 // want to write messages to it.
 func (c *Conn) CloseRead(ctx context.Context) context.Context {
-	c.readClosed.Store(1)
+	c.isReadClosed.Store(1)
 
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {

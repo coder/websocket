@@ -23,7 +23,7 @@ type Conn struct {
 	// read limit for a message in bytes.
 	msgReadLimit *atomicInt64
 
-	readClosed   *atomicInt64
+	isReadClosed *atomicInt64
 	closeOnce    sync.Once
 	closed       chan struct{}
 	closeErrOnce sync.Once
@@ -53,7 +53,7 @@ func (c *Conn) init() {
 	c.msgReadLimit = &atomicInt64{}
 	c.msgReadLimit.Store(32768)
 
-	c.readClosed = &atomicInt64{}
+	c.isReadClosed = &atomicInt64{}
 
 	c.releaseOnClose = c.ws.OnClose(func(e wsjs.CloseEvent) {
 		cerr := CloseError{
@@ -93,7 +93,7 @@ func (c *Conn) closeWithInternal() {
 // Read attempts to read a message from the connection.
 // The maximum time spent waiting is bounded by the context.
 func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
-	if c.readClosed.Load() == 1 {
+	if c.isReadClosed.Load() == 1 {
 		return 0, nil, fmt.Errorf("websocket connection read closed")
 	}
 

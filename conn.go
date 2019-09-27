@@ -55,7 +55,7 @@ type Conn struct {
 	writeHeaderBuf []byte
 	writeHeader    *header
 	// read limit for a message in bytes.
-	msgReadLimit   *atomicInt64
+	msgReadLimit *atomicInt64
 
 	// Used to ensure a previous writer is not used after being closed.
 	activeWriter atomic.Value
@@ -69,7 +69,7 @@ type Conn struct {
 	activeReader *messageReader
 	// readFrameLock is acquired to read from bw.
 	readFrameLock     chan struct{}
-	readClosed        *atomicInt64
+	isReadClosed      *atomicInt64
 	readHeaderBuf     []byte
 	controlPayloadBuf []byte
 
@@ -105,7 +105,7 @@ func (c *Conn) init() {
 	c.writeHeaderBuf = makeWriteHeaderBuf()
 	c.writeHeader = &header{}
 	c.readHeaderBuf = makeReadHeaderBuf()
-	c.readClosed = &atomicInt64{}
+	c.isReadClosed = &atomicInt64{}
 	c.controlPayloadBuf = make([]byte, maxControlFramePayload)
 
 	runtime.SetFinalizer(c, func(c *Conn) {
@@ -342,7 +342,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 // See https://github.com/nhooyr/websocket/issues/87#issue-451703332
 // Most users should not need this.
 func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
-	if c.readClosed.Load() == 1 {
+	if c.isReadClosed.Load() == 1 {
 		return 0, nil, fmt.Errorf("websocket connection read closed")
 	}
 
