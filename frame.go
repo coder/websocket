@@ -204,7 +204,8 @@ type StatusCode int
 // These codes were retrieved from:
 // https://www.iana.org/assignments/websocket/websocket.xhtml#close-code-number
 //
-// In addition to the defined constants, 4000-4999 may be used by applications.
+// In addition to the defined constants, 4000-4999 are reserved for arbitrary
+// use by applications.
 const (
 	StatusNormalClosure   StatusCode = 1000
 	StatusGoingAway       StatusCode = 1001
