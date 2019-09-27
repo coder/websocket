@@ -11,7 +11,7 @@ GOOS=js GOARCH=wasm golint -set_exit_status ./...
 
 wsjstestOut="$(mktemp)"
 go install ./internal/wsjstest
-timeout 30s wsjstest >> "$wsjstestOut" &
+timeout 30s wsjstest >> "$wsjstestOut" 2>&1 &
 wsjstestPID=$!
 
 # See https://superuser.com/a/900134
@@ -24,6 +24,7 @@ fi
 go install github.com/agnivade/wasmbrowsertest
 GOOS=js GOARCH=wasm go test -exec=wasmbrowsertest ./... -args "$WS_ECHO_SERVER_URL"
 
+kill "$wsjstestPID"
 if ! wait "$wsjstestPID"; then
   echo "--- wsjstest exited unsuccessfully"
   echo "output:"

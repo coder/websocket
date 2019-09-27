@@ -35,6 +35,9 @@ type Conn struct {
 	readSignal chan struct{}
 	readBufMu  sync.Mutex
 	readBuf    []wsjs.MessageEvent
+
+	// Only used by tests
+	receivedCloseFrame chan struct{}
 }
 
 func (c *Conn) close(err error) {
@@ -55,7 +58,11 @@ func (c *Conn) init() {
 
 	c.isReadClosed = &atomicInt64{}
 
+	c.receivedCloseFrame = make(chan struct{})
+
 	c.releaseOnClose = c.ws.OnClose(func(e wsjs.CloseEvent) {
+		close(c.receivedCloseFrame)
+
 		cerr := CloseError{
 			Code:   StatusCode(e.Code),
 			Reason: e.Reason,

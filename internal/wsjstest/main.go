@@ -9,8 +9,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"runtime"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/wsecho"
@@ -33,12 +34,13 @@ func main() {
 		if !errors.As(err, &ce) || ce.Code != websocket.StatusNormalClosure {
 			log.Fatalf("unexpected loop error: %+v", err)
 		}
-
-		os.Exit(0)
 	}))
 
 	wsURL := strings.Replace(s.URL, "http", "ws", 1)
 	fmt.Printf("%v\n", wsURL)
 
-	runtime.Goexit()
+	sigs := make(chan os.Signal)
+	signal.Notify(sigs, syscall.SIGTERM)
+
+	<-sigs
 }
