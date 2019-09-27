@@ -26,5 +26,7 @@ GOOS=js GOARCH=wasm go test -exec=wasmbrowsertest ./... -args "$WS_ECHO_SERVER_U
 
 if ! wait "$wsjstestPID"; then
   echo "wsjstest exited unsuccessfully"
+  echo "output:"
+  cat "$wsjstestOut"
   exit 1
 fi

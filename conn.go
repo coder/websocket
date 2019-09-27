@@ -20,8 +20,7 @@ import (
 )
 
 // Conn represents a WebSocket connection.
-// All methods may be called concurrently except for Reader, Read
-// and SetReadLimit.
+// All methods may be called concurrently except for Reader and Read.
 //
 // You must always read from the connection. Otherwise control
 // frames will not be handled. See the docs on Reader and CloseRead.
@@ -56,7 +55,7 @@ type Conn struct {
 	writeHeaderBuf []byte
 	writeHeader    *header
 	// read limit for a message in bytes.
-	msgReadLimit int64
+	msgReadLimit   *atomicInt64
 
 	// Used to ensure a previous writer is not used after being closed.
 	activeWriter atomic.Value
@@ -70,8 +69,7 @@ type Conn struct {
 	activeReader *messageReader
 	// readFrameLock is acquired to read from bw.
 	readFrameLock     chan struct{}
-	// Not int32 because of https://github.com/nhooyr/websocket/issues/153
-	readClosed        int32
+	readClosed        *atomicInt64
 	readHeaderBuf     []byte
 	controlPayloadBuf []byte
 
@@ -91,7 +89,8 @@ type Conn struct {
 func (c *Conn) init() {
 	c.closed = make(chan struct{})
 
-	c.msgReadLimit = 32768
+	c.msgReadLimit = &atomicInt64{}
+	c.msgReadLimit.Store(32768)
 
 	c.writeMsgLock = make(chan struct{}, 1)
 	c.writeFrameLock = make(chan struct{}, 1)
@@ -106,6 +105,7 @@ func (c *Conn) init() {
 	c.writeHeaderBuf = makeWriteHeaderBuf()
 	c.writeHeader = &header{}
 	c.readHeaderBuf = makeReadHeaderBuf()
+	c.readClosed = &atomicInt64{}
 	c.controlPayloadBuf = make([]byte, maxControlFramePayload)
 
 	runtime.SetFinalizer(c, func(c *Conn) {
@@ -342,7 +342,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 // See https://github.com/nhooyr/websocket/issues/87#issue-451703332
 // Most users should not need this.
 func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
-	if atomic.LoadInt32(&c.readClosed) == 1 {
+	if c.readClosed.Load() == 1 {
 		return 0, nil, fmt.Errorf("websocket connection read closed")
 	}
 
@@ -392,7 +392,7 @@ func (c *Conn) reader(ctx context.Context) (MessageType, io.Reader, error) {
 	c.readerMsgHeader = h
 	c.readerFrameEOF = false
 	c.readerMaskPos = 0
-	c.readMsgLeft = c.msgReadLimit
+	c.readMsgLeft = c.msgReadLimit.Load()
 
 	r := &messageReader{
 		c: c,
