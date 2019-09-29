@@ -25,7 +25,7 @@ go install github.com/agnivade/wasmbrowsertest
 export WS_ECHO_SERVER_URL
 GOOS=js GOARCH=wasm go test -exec=wasmbrowsertest ./...
 
-kill "$wsjstestPID"
+kill "$wsjstestPID" || true
 if ! wait "$wsjstestPID"; then
   echo "--- wsjstest exited unsuccessfully"
   echo "output:"

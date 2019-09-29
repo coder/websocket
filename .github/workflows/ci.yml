@@ -7,24 +7,18 @@ jobs:
     container: docker://nhooyr/websocket-ci@sha256:b6331f8f64803c8b1bbd2a0ee9e2547317e0de2348bccd9c8dbcc1d88ff5747f
     steps:
       - uses: actions/checkout@v1
-        with:
-          fetch-depth: 1
       - run: ./ci/fmt.sh
   lint:
     runs-on: ubuntu-latest
     container: docker://nhooyr/websocket-ci@sha256:b6331f8f64803c8b1bbd2a0ee9e2547317e0de2348bccd9c8dbcc1d88ff5747f
     steps:
       - uses: actions/checkout@v1
-        with:
-          fetch-depth: 1
       - run: ./ci/lint.sh
   test:
     runs-on: ubuntu-latest
     container: docker://nhooyr/websocket-ci@sha256:b6331f8f64803c8b1bbd2a0ee9e2547317e0de2348bccd9c8dbcc1d88ff5747f
     steps:
       - uses: actions/checkout@v1
-        with:
-          fetch-depth: 1
       - run: ./ci/test.sh
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
@@ -33,6 +27,4 @@ jobs:
     container: docker://nhooyr/websocket-ci@sha256:b6331f8f64803c8b1bbd2a0ee9e2547317e0de2348bccd9c8dbcc1d88ff5747f
     steps:
       - uses: actions/checkout@v1
-        with:
-          fetch-depth: 1
       - run: ./ci/wasm.sh

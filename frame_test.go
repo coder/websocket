@@ -10,9 +10,14 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 func randBool() bool {
 	return rand.Intn(1) == 0

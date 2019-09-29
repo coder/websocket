@@ -6,13 +6,13 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha1"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"net/http"
 	"net/textproto"
 	"net/url"
@@ -299,7 +299,11 @@ func dial(ctx context.Context, u string, opts *DialOptions) (_ *Conn, _ *http.Re
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "websocket")
 	req.Header.Set("Sec-WebSocket-Version", "13")
-	req.Header.Set("Sec-WebSocket-Key", makeSecWebSocketKey())
+	secWebSocketKey, err := makeSecWebSocketKey()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate Sec-WebSocket-Key: %w", err)
+	}
+	req.Header.Set("Sec-WebSocket-Key", secWebSocketKey)
 	if len(opts.Subprotocols) > 0 {
 		req.Header.Set("Sec-WebSocket-Protocol", strings.Join(opts.Subprotocols, ","))
 	}
@@ -403,8 +407,11 @@ func returnBufioWriter(bw *bufio.Writer) {
 	bufioWriterPool.Put(bw)
 }
 
-func makeSecWebSocketKey() string {
+func makeSecWebSocketKey() (string, error) {
 	b := make([]byte, 16)
-	rand.Read(b)
-	return base64.StdEncoding.EncodeToString(b)
+	_, err := io.ReadFull(rand.Reader, b)
+	if err != nil {
+		return "", fmt.Errorf("failed to read random data from rand.Reader: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(b), nil
 }
