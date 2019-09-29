@@ -22,7 +22,8 @@ if [[ -z $WS_ECHO_SERVER_URL ]]; then
 fi
 
 go install github.com/agnivade/wasmbrowsertest
-GOOS=js GOARCH=wasm go test -exec=wasmbrowsertest ./... -args "$WS_ECHO_SERVER_URL"
+export WS_ECHO_SERVER_URL
+GOOS=js GOARCH=wasm go test -exec=wasmbrowsertest ./...
 
 kill "$wsjstestPID"
 if ! wait "$wsjstestPID"; then

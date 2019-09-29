@@ -219,7 +219,7 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 // Subprotocol returns the negotiated subprotocol.
 // An empty string means the default protocol.
 func (c *Conn) Subprotocol() string {
-	return c.ws.Protocol
+	return c.ws.Subprotocol()
 }
 
 // DialOptions represents the options available to pass to Dial.
