@@ -31,7 +31,7 @@ mkdir -p ci/out/websocket
 sed -i.bak '/_stringer.go/d' ci/out/coverage.prof
 sed -i.bak '/wsjstest/d' ci/out/coverage.prof
 sed -i.bak '/wsecho/d' ci/out/coverage.prof
-rm coverage.prof.bak
+rm ci/out/coverage.prof.bak
 
 go tool cover -html=ci/out/coverage.prof -o=ci/out/coverage.html
 if [[ ${CI-} ]]; then
