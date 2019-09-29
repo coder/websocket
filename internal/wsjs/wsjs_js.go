@@ -43,19 +43,11 @@ func New(url string, protocols []string) (c WebSocket, err error) {
 
 	c.setBinaryType("arraybuffer")
 
-	c.Extensions = c.v.Get("extensions").String()
-	c.Protocol = c.v.Get("protocol").String()
-	c.URL = c.v.Get("url").String()
-
 	return c, nil
 }
 
 // WebSocket is a wrapper around a javascript WebSocket object.
 type WebSocket struct {
-	Extensions string
-	Protocol   string
-	URL        string
-
 	v js.Value
 }
 
@@ -129,6 +121,11 @@ func (c WebSocket) OnMessage(fn func(m MessageEvent)) (remove func()) {
 
 		return
 	})
+}
+
+// Subprotocol returns the WebSocket subprotocol in use.
+func (c WebSocket) Subprotocol() string {
+	return c.v.Get("protocol").String()
 }
 
 // OnOpen registers a function to be called when the websocket is opened.

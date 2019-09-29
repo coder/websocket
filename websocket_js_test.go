@@ -2,8 +2,8 @@ package websocket_test
 
 import (
 	"context"
-	"flag"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -13,12 +13,10 @@ import (
 func TestConn(t *testing.T) {
 	t.Parallel()
 
-	wsEchoServerURL := flag.Arg(0)
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	c, resp, err := websocket.Dial(ctx, wsEchoServerURL, &websocket.DialOptions{
+	c, resp, err := websocket.Dial(ctx, os.Getenv("WS_ECHO_SERVER_URL"), &websocket.DialOptions{
 		Subprotocols: []string{"echo"},
 	})
 	if err != nil {
@@ -26,7 +24,7 @@ func TestConn(t *testing.T) {
 	}
 	defer c.Close(websocket.StatusInternalError, "")
 
-	assertSubprotocol(c, "echo")
+	err = assertSubprotocol(c, "echo")
 	if err != nil {
 		t.Fatal(err)
 	}

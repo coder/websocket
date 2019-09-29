@@ -103,8 +103,6 @@ authors of both. In particular, I made sure to go through the issue tracker of g
 to ensure I implemented details correctly and understood how people were using WebSockets in
 production.
 
-Another comparison between Go WebSocket libraries is available at [gorilla/websocket](https://github.com/gorilla/websocket#gorilla-websocket-compared-with-other-packages).
-
 ### gorilla/websocket
 
 https://github.com/gorilla/websocket
