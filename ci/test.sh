@@ -27,8 +27,12 @@ fi
 mkdir -p ci/out/websocket
 "${argv[@]}"
 
-# Removes coverage of generated files.
-grep -v _string.go < ci/out/coverage.prof > ci/out/coverage2.prof
+# Removes coverage of generated/test related files.
+grep -v _stringer.go < ci/out/coverage.prof > ci/out/coverage2.prof
+mv ci/out/coverage2.prof ci/out/coverage.prof
+grep -v wsjstest < ci/out/coverage.prof > ci/out/coverage2.prof
+mv ci/out/coverage2.prof ci/out/coverage.prof
+grep -v wsecho < ci/out/coverage.prof > ci/out/coverage2.prof
 mv ci/out/coverage2.prof ci/out/coverage.prof
 
 go tool cover -html=ci/out/coverage.prof -o=ci/out/coverage.html
