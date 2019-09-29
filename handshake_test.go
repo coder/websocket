@@ -367,14 +367,17 @@ func Test_verifyServerHandshake(t *testing.T) {
 			resp := w.Result()
 
 			r := httptest.NewRequest("GET", "/", nil)
-			key := makeSecWebSocketKey()
+			key, err := makeSecWebSocketKey()
+			if err != nil {
+				t.Fatal(err)
+			}
 			r.Header.Set("Sec-WebSocket-Key", key)
 
 			if resp.Header.Get("Sec-WebSocket-Accept") == "" {
 				resp.Header.Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
 			}
 
-			err := verifyServerResponse(r, resp)
+			err = verifyServerResponse(r, resp)
 			if (err == nil) != tc.success {
 				t.Fatalf("unexpected error: %+v", err)
 			}

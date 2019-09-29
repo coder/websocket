@@ -6,12 +6,17 @@ import (
 	"math/rand"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 // https://github.com/google/go-cmp/issues/40#issuecomment-328615283
 func cmpDiff(exp, act interface{}) string {

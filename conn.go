@@ -5,13 +5,12 @@ package websocket
 import (
 	"bufio"
 	"context"
-	cryptorand "crypto/rand"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"runtime"
 	"strconv"
 	"sync"
@@ -82,6 +81,7 @@ type Conn struct {
 	setReadTimeout  chan context.Context
 	setWriteTimeout chan context.Context
 
+	pingCounter   *atomicInt64
 	activePingsMu sync.Mutex
 	activePings   map[string]chan<- struct{}
 }
@@ -100,6 +100,7 @@ func (c *Conn) init() {
 	c.setReadTimeout = make(chan context.Context)
 	c.setWriteTimeout = make(chan context.Context)
 
+	c.pingCounter = &atomicInt64{}
 	c.activePings = make(map[string]chan<- struct{})
 
 	c.writeHeaderBuf = makeWriteHeaderBuf()
@@ -669,7 +670,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 	c.writeHeader.payloadLength = int64(len(p))
 
 	if c.client {
-		_, err := io.ReadFull(cryptorand.Reader, c.writeHeader.maskKey[:])
+		_, err := io.ReadFull(rand.Reader, c.writeHeader.maskKey[:])
 		if err != nil {
 			return 0, fmt.Errorf("failed to generate masking key: %w", err)
 		}
@@ -839,10 +840,6 @@ func (c *Conn) writeClose(p []byte, cerr error) error {
 	return nil
 }
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
 // Ping sends a ping to the peer and waits for a pong.
 // Use this to measure latency or ensure the peer is responsive.
 // Ping must be called concurrently with Reader as it does
@@ -851,10 +848,9 @@ func init() {
 //
 // TCP Keepalives should suffice for most use cases.
 func (c *Conn) Ping(ctx context.Context) error {
-	id := rand.Uint64()
-	p := strconv.FormatUint(id, 10)
+	p := c.pingCounter.Increment(1)
 
-	err := c.ping(ctx, p)
+	err := c.ping(ctx, strconv.FormatInt(p, 10))
 	if err != nil {
 		return fmt.Errorf("failed to ping: %w", err)
 	}

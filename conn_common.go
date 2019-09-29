@@ -211,21 +211,22 @@ func (c *Conn) setCloseErr(err error) {
 
 // See https://github.com/nhooyr/websocket/issues/153
 type atomicInt64 struct {
-	v atomic.Value
+	v int64
 }
 
 func (v *atomicInt64) Load() int64 {
-	i, ok := v.v.Load().(int64)
-	if !ok {
-		return 0
-	}
-	return i
+	return atomic.LoadInt64(&v.v)
 }
 
 func (v *atomicInt64) Store(i int64) {
-	v.v.Store(i)
+	atomic.StoreInt64(&v.v, i)
 }
 
 func (v *atomicInt64) String() string {
-	return fmt.Sprint(v.v.Load())
+	return fmt.Sprint(v.Load())
+}
+
+// Increment increments the value and returns the new value.
+func (v *atomicInt64) Increment(delta int64) int64 {
+	return atomic.AddInt64(&v.v, delta)
 }

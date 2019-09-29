@@ -37,6 +37,10 @@ import (
 	"nhooyr.io/websocket/wspb"
 )
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 func TestHandshake(t *testing.T) {
 	t.Parallel()
 
@@ -909,10 +913,6 @@ func TestConn(t *testing.T) {
 			c.Close(websocket.StatusNormalClosure, "")
 		})
 	}
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }
 
 func testServer(tb testing.TB, fn func(w http.ResponseWriter, r *http.Request) error, tls bool) (s *httptest.Server, closeFn func()) {
