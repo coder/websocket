@@ -29,8 +29,7 @@ CI must pass on your changes for them to be merged.
 
 CI will ensure your code is formatted correctly, passes linting and tests.
 It will collect coverage and report it to [codecov](https://codecov.io/gh/nhooyr/websocket)
-and also upload a `out/coverage.html` artifact that you can click on to interactively
-browse coverage.
+and also upload a `coverage` artifact that you can download to inspect browse coverage.
 
 You can run CI locally. The various steps are located in [ci/\*.sh](../ci).
 
