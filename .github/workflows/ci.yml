@@ -4,22 +4,22 @@ on: [push]
 jobs:
   fmt:
     runs-on: ubuntu-latest
-    container: docker://nhooyr/websocket-ci@sha256:b6331f8f64803c8b1bbd2a0ee9e2547317e0de2348bccd9c8dbcc1d88ff5747f
+    container: nhooyr/websocket-ci@sha256:7f5513545dcbaa3ed06a2919acfd1cfbff1e6e0decc1602c98672a4aad2f68ab
     steps:
       - uses: actions/checkout@v1
-      - run: ./ci/fmt.sh
+      - run: yarn --frozen-lockfile && yarn fmt
   lint:
     runs-on: ubuntu-latest
-    container: docker://nhooyr/websocket-ci@sha256:b6331f8f64803c8b1bbd2a0ee9e2547317e0de2348bccd9c8dbcc1d88ff5747f
+    container: nhooyr/websocket-ci@sha256:7f5513545dcbaa3ed06a2919acfd1cfbff1e6e0decc1602c98672a4aad2f68ab
     steps:
       - uses: actions/checkout@v1
-      - run: ./ci/lint.sh
+      - run: yarn --frozen-lockfile && yarn lint
   test:
     runs-on: ubuntu-latest
-    container: docker://nhooyr/websocket-ci@sha256:b6331f8f64803c8b1bbd2a0ee9e2547317e0de2348bccd9c8dbcc1d88ff5747f
+    container: nhooyr/websocket-ci@sha256:7f5513545dcbaa3ed06a2919acfd1cfbff1e6e0decc1602c98672a4aad2f68ab
     steps:
       - uses: actions/checkout@v1
-      - run: ./ci/test.sh
+      - run: yarn --frozen-lockfile && yarn test
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       - name: Upload coverage.html
@@ -29,7 +29,7 @@ jobs:
           path: ci/out/coverage.html
   wasm:
     runs-on: ubuntu-latest
-    container: docker://nhooyr/websocket-ci@sha256:b6331f8f64803c8b1bbd2a0ee9e2547317e0de2348bccd9c8dbcc1d88ff5747f
+    container: nhooyr/websocket-ci@sha256:7f5513545dcbaa3ed06a2919acfd1cfbff1e6e0decc1602c98672a4aad2f68ab
     steps:
       - uses: actions/checkout@v1
-      - run: ./ci/wasm.sh
+      - run: yarn --frozen-lockfile && yarn wasm

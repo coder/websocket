@@ -947,6 +947,7 @@ func testServer(tb testing.TB, fn func(w http.ResponseWriter, r *http.Request) e
 				tb.Fatalf("waiting for server to come down timed out: %v", ctx.Err())
 			}
 		}
+
 	}
 }
 
