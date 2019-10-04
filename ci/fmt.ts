@@ -2,7 +2,7 @@
 
 import { exec, main } from "./lib"
 
-if (process.argv[1] === __filename) {
+if (require.main === module) {
   main(async (ctx: Promise<unknown>) => {
     await gen(ctx)
     await fmt(ctx)

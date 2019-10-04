@@ -4,19 +4,19 @@ on: [push]
 jobs:
   fmt:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:7f5513545dcbaa3ed06a2919acfd1cfbff1e6e0decc1602c98672a4aad2f68ab
+    container: nhooyr/websocket-ci@sha256:f8b6e53a9fd256bcf6c90029276385b9ec730b76a0d7ccf3ff19084bce210c50
     steps:
       - uses: actions/checkout@v1
       - run: yarn --frozen-lockfile && yarn fmt
   lint:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:7f5513545dcbaa3ed06a2919acfd1cfbff1e6e0decc1602c98672a4aad2f68ab
+    container: nhooyr/websocket-ci@sha256:f8b6e53a9fd256bcf6c90029276385b9ec730b76a0d7ccf3ff19084bce210c50
     steps:
       - uses: actions/checkout@v1
       - run: yarn --frozen-lockfile && yarn lint
   test:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:7f5513545dcbaa3ed06a2919acfd1cfbff1e6e0decc1602c98672a4aad2f68ab
+    container: nhooyr/websocket-ci@sha256:f8b6e53a9fd256bcf6c90029276385b9ec730b76a0d7ccf3ff19084bce210c50
     steps:
       - uses: actions/checkout@v1
       - run: yarn --frozen-lockfile && yarn test
@@ -27,9 +27,3 @@ jobs:
         with:
           name: coverage
           path: ci/out/coverage.html
-  wasm:
-    runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:7f5513545dcbaa3ed06a2919acfd1cfbff1e6e0decc1602c98672a4aad2f68ab
-    steps:
-      - uses: actions/checkout@v1
-      - run: yarn --frozen-lockfile && yarn wasm

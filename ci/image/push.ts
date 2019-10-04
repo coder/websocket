@@ -13,11 +13,9 @@ async function run(ctx: Promise<unknown>) {
 
   try {
     await spawn(ctx, "docker build -f ./ci/image/Dockerfile -t nhooyr/websocket-ci .", [], {
-      timeout: 180_000,
       stdio: "inherit",
     })
     await spawn(ctx, "docker push nhooyr/websocket-ci", [], {
-      timeout: 30_000,
       stdio: "inherit",
     })
   } finally {

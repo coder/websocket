@@ -27,25 +27,29 @@ CI must pass on your changes for them to be merged.
 
 ### CI
 
-CI will ensure your code is formatted correctly, passes linting and tests.
+CI will ensure your code is formatted, lints and passes tests.
 It will collect coverage and report it to [codecov](https://codecov.io/gh/nhooyr/websocket)
-and also upload a `coverage` artifact that you can download to inspect browse coverage.
+and also upload a html `coverage` artifact that you can download to browse coverage.
 
-You can run CI locally. The various steps are located in [ci/\*.sh](../ci).
+You can run CI locally. You only need [Go](https://golang.org), [nodejs](https://nodejs.org/en/) and [yarn](https://yarnpkg.com).
 
-1. [fmt.sh](../ci/fmt.sh) which requires node (specifically prettier).
-1. [lint.sh](../ci/lint.sh) which requires [shellcheck](https://github.com/koalaman/shellcheck#installing).
-1. [test.sh](../ci/test.sh)
-1. [run.sh](../ci/run.sh) which runs the above scripts in order.
+See the scripts in [package.json](../package.json).
 
-For coverage details locally, see `ci/out/coverage.html` after running [test.sh](../ci/test.sh).
+1. `yarn fmt` performs code generation and formatting.
+1. `yarn lint` performs linting.
+1. `yarn test` runs tests.
+1. `yarn all` runs the above scripts in parallel.
+
+For coverage details locally, see `ci/out/coverage.html` after running `yarn test`.
+
+CI is written with nodejs to enable running as much as possible concurrently.
 
 See [ci/image/Dockerfile](../ci/image/Dockerfile) for the installation of the CI dependencies on Ubuntu.
 
-You can also run tests normally with `go test`. [test.sh](../ci/test.sh) just passes a default set of flags to
-`go test` to collect coverage and also prettify the output.
+You can also run tests normally with `go test`. `yarn test` just passes a default set of flags to
+`go test` to collect coverage and runs the WASM tests.
 
-You can pass flags to [test.sh](../ci/test.sh) if you want to run a specific test or otherwise
+You can pass flags to `yarn test` if you want to run a specific test or otherwise
 control the behaviour of `go test` but also get coverage.
 
 Coverage percentage from codecov and the CI scripts will be different because they are calculated differently.

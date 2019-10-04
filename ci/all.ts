@@ -4,7 +4,6 @@ import { fmt, gen } from "./fmt"
 import { main } from "./lib"
 import { lint } from "./lint"
 import { test } from "./test"
-import { wasm } from "./wasm"
 
 main(run)
 
@@ -15,6 +14,5 @@ async function run(ctx: Promise<unknown>) {
     fmt(ctx),
     lint(ctx),
     test(ctx),
-    wasm(ctx),
   ])
 }

@@ -5,7 +5,7 @@ import { ExecOptions, SpawnOptions } from "child_process"
 export async function main(fn: (ctx: Promise<unknown>) => void, opts: {
   timeout: number
 } = {
-  timeout: 180_000,
+  timeout: 3 * 60_000,
 }) {
 
   const timer = new Timeout();
@@ -45,7 +45,6 @@ export async function main(fn: (ctx: Promise<unknown>) => void, opts: {
 // TODO promisify native versions
 export async function exec(ctx: Promise<unknown>, cmd: string, opts?: ExecOptions) {
   opts = {
-    timeout: 60_000,
     ...opts,
   }
   const p = cp.exec(cmd, opts)
@@ -62,7 +61,6 @@ export async function spawn(ctx: Promise<unknown>, cmd: string, args: string[], 
     args = []
   }
   opts = {
-    timeout: 60_000,
     shell: true,
     ...opts,
   }
@@ -114,4 +112,11 @@ export function withCancel<T>(p: Promise<T>) {
     rej: rej!,
     p: p,
   }
+}
+
+
+export const wasmEnv = {
+  ...process.env,
+  GOOS: "js",
+  GOARCH: "wasm",
 }
