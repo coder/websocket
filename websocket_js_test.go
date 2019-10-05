@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/internal/assert"
 )
 
 func TestConn(t *testing.T) {
@@ -29,7 +30,7 @@ func TestConn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = assertEqualf(&http.Response{}, resp, "unexpected http response")
+	err = assert.Equalf(&http.Response{}, resp, "unexpected http response")
 	if err != nil {
 		t.Fatal(err)
 	}

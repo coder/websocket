@@ -32,6 +32,7 @@ import (
 	"go.uber.org/multierr"
 
 	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/internal/assert"
 	"nhooyr.io/websocket/internal/wsecho"
 	"nhooyr.io/websocket/wsjson"
 	"nhooyr.io/websocket/wspb"
@@ -127,7 +128,7 @@ func TestHandshake(t *testing.T) {
 				if err != nil {
 					return fmt.Errorf("request is missing mycookie: %w", err)
 				}
-				err = assertEqualf("myvalue", cookie.Value, "unexpected cookie value")
+				err = assert.Equalf("myvalue", cookie.Value, "unexpected cookie value")
 				if err != nil {
 					return err
 				}
@@ -219,7 +220,7 @@ func TestConn(t *testing.T) {
 				}
 				for h, exp := range headers {
 					value := resp.Header.Get(h)
-					err := assertEqualf(exp, value, "unexpected value for header %v", h)
+					err := assert.Equalf(exp, value, "unexpected value for header %v", h)
 					if err != nil {
 						return err
 					}
@@ -276,11 +277,11 @@ func TestConn(t *testing.T) {
 				time.Sleep(1)
 				nc.SetWriteDeadline(time.Now().Add(time.Second * 15))
 
-				err := assertEqualf(websocket.Addr{}, nc.LocalAddr(), "net conn local address is not equal to websocket.Addr")
+				err := assert.Equalf(websocket.Addr{}, nc.LocalAddr(), "net conn local address is not equal to websocket.Addr")
 				if err != nil {
 					return err
 				}
-				err = assertEqualf(websocket.Addr{}, nc.RemoteAddr(), "net conn remote address is not equal to websocket.Addr")
+				err = assert.Equalf(websocket.Addr{}, nc.RemoteAddr(), "net conn remote address is not equal to websocket.Addr")
 				if err != nil {
 					return err
 				}
@@ -310,13 +311,13 @@ func TestConn(t *testing.T) {
 
 				// Ensure the close frame is converted to an EOF and multiple read's after all return EOF.
 				err2 := assertNetConnRead(nc, "hello")
-				err := assertEqualf(io.EOF, err2, "unexpected error")
+				err := assert.Equalf(io.EOF, err2, "unexpected error")
 				if err != nil {
 					return err
 				}
 
 				err2 = assertNetConnRead(nc, "hello")
-				return assertEqualf(io.EOF, err2, "unexpected error")
+				return assert.Equalf(io.EOF, err2, "unexpected error")
 			},
 		},
 		{
@@ -772,7 +773,7 @@ func TestConn(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = assertEqualf("hi", v, "unexpected JSON")
+				err = assert.Equalf("hi", v, "unexpected JSON")
 				if err != nil {
 					return err
 				}
@@ -780,7 +781,7 @@ func TestConn(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				return assertEqualf("hi", string(b), "unexpected JSON")
+				return assert.Equalf("hi", string(b), "unexpected JSON")
 			},
 			client: func(ctx context.Context, c *websocket.Conn) error {
 				err := wsjson.Write(ctx, c, "hi")
@@ -1079,11 +1080,11 @@ func TestAutobahn(t *testing.T) {
 					if err != nil {
 						return err
 					}
-					err = assertEqualf(typ, actTyp, "unexpected message type")
+					err = assert.Equalf(typ, actTyp, "unexpected message type")
 					if err != nil {
 						return err
 					}
-					return assertEqualf(p, p2, "unexpected message")
+					return assert.Equalf(p, p2, "unexpected message")
 				})
 			}
 		}
@@ -1859,7 +1860,7 @@ func assertCloseStatus(err error, code websocket.StatusCode) error {
 	if !errors.As(err, &cerr) {
 		return fmt.Errorf("no websocket close error in error chain: %+v", err)
 	}
-	return assertEqualf(code, cerr.Code, "unexpected status code")
+	return assert.Equalf(code, cerr.Code, "unexpected status code")
 }
 
 func assertProtobufRead(ctx context.Context, c *websocket.Conn, exp interface{}) error {
@@ -1871,7 +1872,7 @@ func assertProtobufRead(ctx context.Context, c *websocket.Conn, exp interface{})
 		return err
 	}
 
-	return assertEqualf(exp, act, "unexpected protobuf")
+	return assert.Equalf(exp, act, "unexpected protobuf")
 }
 
 func assertNetConnRead(r io.Reader, exp string) error {
@@ -1880,7 +1881,7 @@ func assertNetConnRead(r io.Reader, exp string) error {
 	if err != nil {
 		return err
 	}
-	return assertEqualf(exp, string(act), "unexpected net conn read")
+	return assert.Equalf(exp, string(act), "unexpected net conn read")
 }
 
 func assertErrorContains(err error, exp string) error {
@@ -1902,11 +1903,11 @@ func assertReadFrame(ctx context.Context, c *websocket.Conn, opcode websocket.Op
 	if err != nil {
 		return err
 	}
-	err = assertEqualf(opcode, actOpcode, "unexpected frame opcode with payload %q", actP)
+	err = assert.Equalf(opcode, actOpcode, "unexpected frame opcode with payload %q", actP)
 	if err != nil {
 		return err
 	}
-	return assertEqualf(p, actP, "unexpected frame %v payload", opcode)
+	return assert.Equalf(p, actP, "unexpected frame %v payload", opcode)
 }
 
 func assertReadCloseFrame(ctx context.Context, c *websocket.Conn, code websocket.StatusCode) error {
@@ -1914,7 +1915,7 @@ func assertReadCloseFrame(ctx context.Context, c *websocket.Conn, code websocket
 	if err != nil {
 		return err
 	}
-	err = assertEqualf(websocket.OpClose, actOpcode, "unexpected frame opcode with payload %q", actP)
+	err = assert.Equalf(websocket.OpClose, actOpcode, "unexpected frame opcode with payload %q", actP)
 	if err != nil {
 		return err
 	}
@@ -1922,7 +1923,7 @@ func assertReadCloseFrame(ctx context.Context, c *websocket.Conn, code websocket
 	if err != nil {
 		return fmt.Errorf("failed to parse close frame payload: %w", err)
 	}
-	return assertEqualf(ce.Code, code, "unexpected frame close frame code with payload %q", actP)
+	return assert.Equalf(ce.Code, code, "unexpected frame close frame code with payload %q", actP)
 }
 
 func assertCloseHandshake(ctx context.Context, c *websocket.Conn, code websocket.StatusCode, reason string) error {
@@ -1960,11 +1961,11 @@ func assertReadMessage(ctx context.Context, c *websocket.Conn, typ websocket.Mes
 	if err != nil {
 		return err
 	}
-	err = assertEqualf(websocket.MessageText, actTyp, "unexpected frame opcode with payload %q", actP)
+	err = assert.Equalf(websocket.MessageText, actTyp, "unexpected frame opcode with payload %q", actP)
 	if err != nil {
 		return err
 	}
-	return assertEqualf(p, actP, "unexpected frame %v payload", actTyp)
+	return assert.Equalf(p, actP, "unexpected frame %v payload", actTyp)
 }
 
 func BenchmarkConn(b *testing.B) {
