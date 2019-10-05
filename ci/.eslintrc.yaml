@@ -1,0 +1,23 @@
+parser: "@typescript-eslint/parser"
+env:
+  node: true
+
+parserOptions:
+  ecmaVersion: 2018
+  sourceType: module
+
+extends:
+  # https://github.com/typescript-eslint/typescript-eslint/tree/master/packages/eslint-plugin#usage
+  - eslint:recommended
+  - plugin:@typescript-eslint/eslint-recommended
+  - plugin:@typescript-eslint/recommended
+  # https://www.npmjs.com/package/eslint-plugin-import#typescript
+  - plugin:import/recommended
+  - plugin:import/typescript
+  #  https://dev.to/robertcoopercode/using-eslint-and-prettier-in-a-typescript-project-53jb
+  - prettier/@typescript-eslint
+
+rules:
+  "@typescript-eslint/no-use-before-define": off
+  "@typescript-eslint/explicit-function-return-type": off
+  "@typescript-eslint/no-non-null-assertion": off
