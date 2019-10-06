@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+
+	"nhooyr.io/websocket/internal/assert"
 )
 
 func init() {
@@ -372,6 +374,46 @@ func BenchmarkXOR(b *testing.B) {
 						fn.fn(maskKey, 0, data)
 					}
 				})
+			}
+		})
+	}
+}
+
+func TestCloseStatus(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name string
+		in   error
+		exp  StatusCode
+	}{
+		{
+			name: "nil",
+			in:   nil,
+			exp:  -1,
+		},
+		{
+			name: "io.EOF",
+			in:   io.EOF,
+			exp:  -1,
+		},
+		{
+			name: "StatusInternalError",
+			in: CloseError{
+				Code: StatusInternalError,
+			},
+			exp: StatusInternalError,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := assert.Equalf(tc.exp, CloseStatus(tc.in), "unexpected close status")
+			if err != nil {
+				t.Fatal(err)
 			}
 		})
 	}

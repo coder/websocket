@@ -4,7 +4,6 @@ package websocket_test
 
 import (
 	"context"
-	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -76,8 +75,7 @@ func ExampleCloseError() {
 	defer c.Close(websocket.StatusInternalError, "the sky is falling")
 
 	_, _, err = c.Reader(ctx)
-	var cerr websocket.CloseError
-	if !errors.As(err, &cerr) || cerr.Code != websocket.StatusNormalClosure {
+	if websocket.CloseStatus(err) != websocket.StatusNormalClosure {
 		log.Fatalf("expected to be disconnected with StatusNormalClosure but got: %+v", err)
 		return
 	}

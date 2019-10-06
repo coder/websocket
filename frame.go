@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -250,6 +251,17 @@ type CloseError struct {
 
 func (ce CloseError) Error() string {
 	return fmt.Sprintf("status = %v and reason = %q", ce.Code, ce.Reason)
+}
+
+// CloseStatus is a convenience wrapper around errors.As to grab
+// the status code from a *CloseError. If the passed error is nil
+// or not a *CloseError, the returned StatusCode will be -1.
+func CloseStatus(err error) StatusCode {
+	var ce CloseError
+	if errors.As(err, &ce) {
+		return ce.Code
+	}
+	return -1
 }
 
 func parseClosePayload(p []byte) (CloseError, error) {
