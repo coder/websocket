@@ -40,8 +40,9 @@ export async function test(ctx: Promise<unknown>) {
     files: "./ci/out/coverage.prof",
     from: [
       /.+frame_stringer.go.+\n/g,
-      /.+wsjstest.+\n/g,
-      /.+wsecho.+\n/g,
+      /.+wsjstest\/.+\n/g,
+      /.+wsecho\/.+\n/g,
+      /.+assert\/.+\n/g,
     ],
     to: "",
   }))
