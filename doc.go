@@ -16,6 +16,7 @@
 // comparison with existing implementations.
 //
 // Use the errors.As function new in Go 1.13 to check for websocket.CloseError.
+// Or use the CloseStatus function to grab the StatusCode out of a websocket.CloseError
 // See the CloseError example.
 //
 // Wasm

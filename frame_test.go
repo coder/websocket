@@ -399,7 +399,7 @@ func TestCloseStatus(t *testing.T) {
 		},
 		{
 			name: "StatusInternalError",
-			in: &CloseError{
+			in: CloseError{
 				Code: StatusInternalError,
 			},
 			exp: StatusInternalError,
