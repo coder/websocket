@@ -23,12 +23,12 @@ const (
 )
 
 func (c *Conn) ReadFrame(ctx context.Context) (OpCode, []byte, error) {
-	h, err := c.readFrameHeader(ctx)
+	h, err := c.readFrameHeader(ctx, true)
 	if err != nil {
 		return 0, nil, err
 	}
 	b := make([]byte, h.payloadLength)
-	_, err = c.readFramePayload(ctx, b)
+	_, err = c.readFramePayload(ctx, b, true)
 	if err != nil {
 		return 0, nil, err
 	}

@@ -23,11 +23,12 @@ type Conn struct {
 	// read limit for a message in bytes.
 	msgReadLimit *atomicInt64
 
-	isReadClosed *atomicInt64
-	closeOnce    sync.Once
-	closed       chan struct{}
-	closeErrOnce sync.Once
-	closeErr     error
+	isReadClosed  *atomicInt64
+	closeOnce     sync.Once
+	closed        chan struct{}
+	closeErrOnce  sync.Once
+	closeErr      error
+	closeWasClean bool
 
 	releaseOnClose   func()
 	releaseOnMessage func()
@@ -35,15 +36,14 @@ type Conn struct {
 	readSignal chan struct{}
 	readBufMu  sync.Mutex
 	readBuf    []wsjs.MessageEvent
-
-	closeEventCh chan wsjs.CloseEvent
 }
 
-func (c *Conn) close(err error) {
+func (c *Conn) close(err error, wasClean bool) {
 	c.closeOnce.Do(func() {
 		runtime.SetFinalizer(c, nil)
 
 		c.setCloseErr(err)
+		c.closeWasClean = wasClean
 		close(c.closed)
 	})
 }
@@ -57,18 +57,15 @@ func (c *Conn) init() {
 
 	c.isReadClosed = &atomicInt64{}
 
-	c.closeEventCh = make(chan wsjs.CloseEvent, 1)
-
 	c.releaseOnClose = c.ws.OnClose(func(e wsjs.CloseEvent) {
-		c.closeEventCh <- e
-		close(c.closeEventCh)
-
-		cerr := CloseError{
+		var err error = CloseError{
 			Code:   StatusCode(e.Code),
 			Reason: e.Reason,
 		}
-
-		c.close(fmt.Errorf("received close frame: %w", cerr))
+		if !e.WasClean {
+			err = fmt.Errorf("connection close was not clean: %w", err)
+		}
+		c.close(err, e.WasClean)
 
 		c.releaseOnClose()
 		c.releaseOnMessage()
@@ -209,32 +206,15 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 		return fmt.Errorf("already closed: %w", c.closeErr)
 	}
 
-	cerr := CloseError{
-		Code:   code,
-		Reason: reason,
-	}
-	closeErr := fmt.Errorf("sent close frame: %v", cerr)
-	c.close(closeErr)
-	if !errors.Is(c.closeErr, closeErr) {
-		return c.closeErr
-	}
-
-	// We're the only goroutine allowed to get this far.
 	// The only possible error from closing the connection here
 	// is that the connection is already closed in which case,
-	// we do not really care.
+	// we do not really care since c.closed will immediately return.
 	c.ws.Close(int(code), reason)
 
-	// Guaranteed for this channel receive to succeed since the above
-	// if statement means we are the goroutine that closed this connection.
-	ev := <-c.closeEventCh
-	if !ev.WasClean {
-		return fmt.Errorf("unclean connection close: %v", CloseError{
-			Code:   StatusCode(ev.Code),
-			Reason: ev.Reason,
-		})
+	<-c.closed
+	if !c.closeWasClean {
+		return c.closeErr
 	}
-
 	return nil
 }
 
