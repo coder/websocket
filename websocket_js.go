@@ -36,8 +36,7 @@ type Conn struct {
 	readBufMu  sync.Mutex
 	readBuf    []wsjs.MessageEvent
 
-	// Only used by tests
-	receivedCloseFrame chan struct{}
+	closeEventCh chan wsjs.CloseEvent
 }
 
 func (c *Conn) close(err error) {
@@ -58,10 +57,11 @@ func (c *Conn) init() {
 
 	c.isReadClosed = &atomicInt64{}
 
-	c.receivedCloseFrame = make(chan struct{})
+	c.closeEventCh = make(chan wsjs.CloseEvent, 1)
 
 	c.releaseOnClose = c.ws.OnClose(func(e wsjs.CloseEvent) {
-		close(c.receivedCloseFrame)
+		c.closeEventCh <- e
+		close(c.closeEventCh)
 
 		cerr := CloseError{
 			Code:   StatusCode(e.Code),
@@ -193,24 +193,46 @@ func (c *Conn) isClosed() bool {
 }
 
 // Close closes the websocket with the given code and reason.
+// It will wait until the peer responds with a close frame
+// or the connection is closed.
+// It thus performs the full WebSocket close handshake.
 func (c *Conn) Close(code StatusCode, reason string) error {
+	err := c.exportedClose(code, reason)
+	if err != nil {
+		return fmt.Errorf("failed to close websocket: %w", err)
+	}
+	return nil
+}
+
+func (c *Conn) exportedClose(code StatusCode, reason string) error {
 	if c.isClosed() {
 		return fmt.Errorf("already closed: %w", c.closeErr)
 	}
 
-	err := fmt.Errorf("sent close frame: %v", CloseError{
+	cerr := CloseError{
 		Code:   code,
 		Reason: reason,
-	})
-
-	err2 := c.ws.Close(int(code), reason)
-	if err2 != nil {
-		err = err2
 	}
-	c.close(err)
+	closeErr := fmt.Errorf("sent close frame: %v", cerr)
+	c.close(closeErr)
+	if !errors.Is(c.closeErr, closeErr) {
+		return c.closeErr
+	}
 
-	if !errors.Is(c.closeErr, err) {
-		return fmt.Errorf("failed to close websocket: %w", err)
+	// We're the only goroutine allowed to get this far.
+	// The only possible error from closing the connection here
+	// is that the connection is already closed in which case,
+	// we do not really care.
+	c.ws.Close(int(code), reason)
+
+	// Guaranteed for this channel receive to succeed since the above
+	// if statement means we are the goroutine that closed this connection.
+	ev := <-c.closeEventCh
+	if !ev.WasClean {
+		return fmt.Errorf("unclean connection close: %v", CloseError{
+			Code:   StatusCode(ev.Code),
+			Reason: ev.Reason,
+		})
 	}
 
 	return nil

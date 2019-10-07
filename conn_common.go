@@ -230,3 +230,7 @@ func (v *atomicInt64) String() string {
 func (v *atomicInt64) Increment(delta int64) int64 {
 	return atomic.AddInt64(&v.v, delta)
 }
+
+func (v *atomicInt64) CAS(old, new int64) (swapped bool) {
+	return atomic.CompareAndSwapInt64(&v.v, old, new)
+}

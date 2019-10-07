@@ -856,6 +856,15 @@ func TestConn(t *testing.T) {
 				return nil
 			},
 		},
+		{
+			name: "closeHandshake",
+			server: func(ctx context.Context, c *websocket.Conn) error {
+				return c.Close(websocket.StatusNormalClosure, "")
+			},
+			client: func(ctx context.Context, c *websocket.Conn) error {
+				return c.Close(websocket.StatusNormalClosure, "")
+			},
+		},
 	}
 	for _, tc := range testCases {
 		tc := tc
