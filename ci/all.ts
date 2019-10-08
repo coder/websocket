@@ -10,9 +10,5 @@ main(run)
 async function run(ctx: Promise<unknown>) {
   await gen(ctx)
 
-  await Promise.all([
-    fmt(ctx),
-    lint(ctx),
-    test(ctx),
-  ])
+  await Promise.all([fmt(ctx), lint(ctx), test(ctx)])
 }

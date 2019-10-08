@@ -11,11 +11,7 @@ if (require.main === module) {
 }
 
 export async function test(ctx: Promise<unknown>) {
-  const args = [
-    "-parallel=1024",
-    "-coverprofile=ci/out/coverage.prof",
-    "-coverpkg=./...",
-  ]
+  const args = ["-parallel=1024", "-coverprofile=ci/out/coverage.prof", "-coverpkg=./..."]
 
   if (process.env.CI) {
     args.push("-race")
@@ -36,16 +32,14 @@ export async function test(ctx: Promise<unknown>) {
 
   // Depending on the code tested, we may not have replaced anything so we do not
   // check whether anything was replaced.
-  await selectCtx(ctx, replaceInFile({
-    files: "./ci/out/coverage.prof",
-    from: [
-      /.+frame_stringer.go.+\n/g,
-      /.+wsjstest\/.+\n/g,
-      /.+wsecho\/.+\n/g,
-      /.+assert\/.+\n/g,
-    ],
-    to: "",
-  }))
+  await selectCtx(
+    ctx,
+    replaceInFile({
+      files: "./ci/out/coverage.prof",
+      from: [/.+frame_stringer.go.+\n/g, /.+wsjstest\/.+\n/g, /.+wsecho\/.+\n/g, /.+assert\/.+\n/g],
+      to: "",
+    }),
+  )
 
   let p: Promise<unknown> = exec(ctx, "go tool cover -html=ci/out/coverage.prof -o=ci/out/coverage.html")
 
@@ -55,7 +49,6 @@ export async function test(ctx: Promise<unknown>) {
 
   await p
 }
-
 
 async function wasmTest(ctx: Promise<unknown>) {
   await Promise.all([

@@ -11,12 +11,14 @@ if (require.main === module) {
 
 export async function fmt(ctx: Promise<unknown>) {
   await Promise.all([
-      exec(ctx, "go mod tidy"),
-      exec(ctx, "gofmt -w -s ."),
-      exec(ctx, `go run go.coder.com/go-tools/cmd/goimports -w "-local=$(go list -m)" .`),
-      exec(ctx, `npx prettier --write --print-width=120 --no-semi --trailing-comma=all --loglevel=silent $(git ls-files "*.yaml" "*.yml" "*.md")`),
-    ],
-  )
+    exec(ctx, "go mod tidy"),
+    exec(ctx, "gofmt -w -s ."),
+    exec(ctx, `go run go.coder.com/go-tools/cmd/goimports -w "-local=$(go list -m)" .`),
+    exec(
+      ctx,
+      `npx prettier --write --print-width=120 --no-semi --trailing-comma=all --loglevel=silent $(git ls-files "*.yaml" "*.yml" "*.md" "*.ts")`,
+    ),
+  ])
 
   if (process.env.CI) {
     const r = await exec(ctx, "git ls-files --other --modified --exclude-standard")

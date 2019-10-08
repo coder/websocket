@@ -2,13 +2,15 @@ import Timeout from "await-timeout"
 import cp from "child-process-promise"
 import { ExecOptions, SpawnOptions } from "child_process"
 
-export async function main(fn: (ctx: Promise<unknown>) => void, opts: {
-  timeout: number
-} = {
-  timeout: 3 * 60_000,
-}) {
-
-  const timer = new Timeout();
+export async function main(
+  fn: (ctx: Promise<unknown>) => void,
+  opts: {
+    timeout: number
+  } = {
+    timeout: 3 * 60_000,
+  },
+) {
+  const timer = new Timeout()
   let ctx: Promise<unknown> = timer.set(opts.timeout, "context timed out")
 
   const interrupted = new Promise((res, rej) => {
@@ -24,7 +26,7 @@ export async function main(fn: (ctx: Promise<unknown>) => void, opts: {
   })
 
   ctx = Promise.race([ctx, interrupted])
-  const {res, rej, p} = withCancel(ctx)
+  const { res, rej, p } = withCancel(ctx)
   ctx = p
 
   try {
@@ -82,14 +84,14 @@ async function init(ctx: Promise<unknown>) {
 }
 
 export async function selectCtx<T>(ctx: Promise<unknown>, p: Promise<T>): Promise<T> {
-  return await Promise.race([ctx, p]) as Promise<T>
+  return (await Promise.race([ctx, p])) as Promise<T>
 }
 
 const cancelSymbol = Symbol()
 
 export function withCancel<T>(p: Promise<T>) {
-  let rej: () => void;
-  let res: () => void;
+  let rej: () => void
+  let res: () => void
   const p2 = new Promise<T>((res2, rej2) => {
     res = res2
     rej = () => {
@@ -113,7 +115,6 @@ export function withCancel<T>(p: Promise<T>) {
     p: p,
   }
 }
-
 
 export const wasmEnv = {
   ...process.env,
