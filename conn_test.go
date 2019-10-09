@@ -1141,14 +1141,13 @@ func TestAutobahn(t *testing.T) {
 			err := c.PingWithPayload(ctx, string(p))
 			return assertCloseStatus(err, websocket.StatusProtocolError)
 		})
-		// See comment on the tenStreamedPings test.
-		// run(t, "streamPingPayload", func(ctx context.Context, c *websocket.Conn) error {
-		// 	err := assertStreamPing(ctx, c, 125)
-		// 	if err != nil {
-		// 		return err
-		// 	}
-		// 	return c.Close(websocket.StatusNormalClosure, "")
-		// })
+		run(t, "streamPingPayload", func(ctx context.Context, c *websocket.Conn) error {
+			err := assertStreamPing(ctx, c, 125)
+			if err != nil {
+				return err
+			}
+			return c.Close(websocket.StatusNormalClosure, "")
+		})
 		t.Run("unsolicitedPong", func(t *testing.T) {
 			t.Parallel()
 
@@ -1212,18 +1211,16 @@ func TestAutobahn(t *testing.T) {
 			return assertCloseStatus(err, websocket.StatusNormalClosure)
 		})
 
-		// Streamed pings tests are not useful with this implementation since we always
-		// use io.ReadFull. These tests cause failures when running with -race on my mac.
-		// run(t, "tenStreamedPings", func(ctx context.Context, c *websocket.Conn) error {
-		// 	for i := 0; i < 10; i++ {
-		// 		err := assertStreamPing(ctx, c, 125)
-		// 		if err != nil {
-		// 			return err
-		// 		}
-		// 	}
-		//
-		// 	return c.Close(websocket.StatusNormalClosure, "")
-		// })
+		run(t, "tenStreamedPings", func(ctx context.Context, c *websocket.Conn) error {
+			for i := 0; i < 10; i++ {
+				err := assertStreamPing(ctx, c, 125)
+				if err != nil {
+					return err
+				}
+			}
+
+			return c.Close(websocket.StatusNormalClosure, "")
+		})
 	})
 
 	// Section 3.
@@ -1964,10 +1961,16 @@ func assertStreamPing(ctx context.Context, c *websocket.Conn, l int) error {
 		if err != nil {
 			return fmt.Errorf("failed to write byte %d: %w", i, err)
 		}
-		err = c.BW().Flush()
-		if err != nil {
-			return fmt.Errorf("failed to flush byte %d: %w", i, err)
+		if i%32 == 0 {
+			err = c.BW().Flush()
+			if err != nil {
+				return fmt.Errorf("failed to flush at byte %d: %w", i, err)
+			}
 		}
+	}
+	err = c.BW().Flush()
+	if err != nil {
+		return fmt.Errorf("failed to flush: %v", err)
 	}
 	return assertReadFrame(ctx, c, websocket.OpPong, bytes.Repeat([]byte{0xFE}, l))
 }
