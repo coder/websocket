@@ -4,19 +4,19 @@ on: [push]
 jobs:
   fmt:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:f8b6e53a9fd256bcf6c90029276385b9ec730b76a0d7ccf3ff19084bce210c50
+    container: nhooyr/websocket-ci@sha256:13f9b8cc2f901e98c253595c4070254ece08543f6e100b4fa6682f87de4388eb
     steps:
       - uses: actions/checkout@v1
       - run: yarn --frozen-lockfile && yarn fmt
   lint:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:f8b6e53a9fd256bcf6c90029276385b9ec730b76a0d7ccf3ff19084bce210c50
+    container: nhooyr/websocket-ci@sha256:13f9b8cc2f901e98c253595c4070254ece08543f6e100b4fa6682f87de4388eb
     steps:
       - uses: actions/checkout@v1
       - run: yarn --frozen-lockfile && yarn lint
   test:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:f8b6e53a9fd256bcf6c90029276385b9ec730b76a0d7ccf3ff19084bce210c50
+    container: nhooyr/websocket-ci@sha256:13f9b8cc2f901e98c253595c4070254ece08543f6e100b4fa6682f87de4388eb
     steps:
       - uses: actions/checkout@v1
       - run: yarn --frozen-lockfile && yarn test

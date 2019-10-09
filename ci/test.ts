@@ -11,7 +11,7 @@ if (require.main === module) {
 }
 
 export async function test(ctx: Promise<unknown>) {
-  const args = ["-parallel=1024", "-coverprofile=ci/out/coverage.prof", "-coverpkg=./..."]
+  const args = ["-parallel=32", "-coverprofile=ci/out/coverage.prof", "-coverpkg=./..."]
 
   if (process.env.CI) {
     args.push("-race")
