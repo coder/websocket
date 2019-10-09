@@ -1,24 +1,34 @@
 FROM golang:1
 
-RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
-  echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list
-
-RUN curl -sL https://deb.nodesource.com/setup_12.x | bash -
-RUN apt-get install -y nodejs chromium yarn
-
-COPY ./ci/image/gitignore /etc/git/ignore
-RUN git config --system color.ui always
-# Need to set set this explicitly for the system since github uses HOME=/home/github.
-RUN git config --system core.excludesfile /etc/git/ignore
+RUN apt-get update
+RUN apt-get install -y chromium
+RUN apt-get install -y npm
+RUN apt-get install -y shellcheck
 
 ENV GOPATH=/root/gopath
 ENV PATH=$GOPATH/bin:$PATH
 ENV GOFLAGS="-mod=readonly"
 ENV PAGER=cat
 ENV CI=true
+ENV MAKEFLAGS="-j --output-sync target"
 
-# Cache go modules, build cache and yarn cache.
+COPY ./ci/image/gitignore /root/.config/git/ignore
+RUN git config --system color.ui always
+
+RUN npm install -g prettier
+RUN go get golang.org/x/tools/cmd/stringer
+RUN go get golang.org/x/tools/cmd/goimports
+RUN go get mvdan.cc/sh/cmd/shfmt
+RUN go get golang.org/x/lint/golint
+RUN go get github.com/agnivade/wasmbrowsertest
+
+# Cache go modules and build cache.
 COPY . /tmp/websocket
 RUN cd /tmp/websocket && \
-  yarn && CI= yarn ci && \
+  CI= make && \
   rm -rf /tmp/websocket
+
+# GitHub actions tries to override HOME to /github/home and then
+# mounts a temp directory into there. We do not want this behaviour.
+# I assume it is so that $HOME is preserved between steps in a job.
+ENTRYPOINT ["env", "HOME=/root"]

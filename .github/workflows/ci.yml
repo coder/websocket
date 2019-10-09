@@ -4,22 +4,22 @@ on: [push]
 jobs:
   fmt:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:13f9b8cc2f901e98c253595c4070254ece08543f6e100b4fa6682f87de4388eb
+    container: nhooyr/websocket-ci@sha256:54a12b52be98d2d1588a054cfce35d17705c9b45546478d8bcdbac2a89a90001
     steps:
       - uses: actions/checkout@v1
-      - run: yarn --frozen-lockfile && yarn fmt
+      - run: make fmt
   lint:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:13f9b8cc2f901e98c253595c4070254ece08543f6e100b4fa6682f87de4388eb
+    container: nhooyr/websocket-ci@sha256:54a12b52be98d2d1588a054cfce35d17705c9b45546478d8bcdbac2a89a90001
     steps:
       - uses: actions/checkout@v1
-      - run: yarn --frozen-lockfile && yarn lint
+      - run: make lint
   test:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:13f9b8cc2f901e98c253595c4070254ece08543f6e100b4fa6682f87de4388eb
+    container: nhooyr/websocket-ci@sha256:54a12b52be98d2d1588a054cfce35d17705c9b45546478d8bcdbac2a89a90001
     steps:
       - uses: actions/checkout@v1
-      - run: yarn --frozen-lockfile && yarn test
+      - run: make test
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       - name: Upload coverage.html

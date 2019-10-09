@@ -6,19 +6,60 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
-	"os/signal"
-	"strings"
-	"syscall"
+	"os/exec"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/wsecho"
 )
 
+func fork() net.Listener {
+	if os.Getenv("FORKED") != "" {
+		f := os.NewFile(3, "listener")
+		l, err := net.FileListener(f)
+		if err != nil {
+			log.Fatalf("failed to create listener from fd: %+v", err)
+		}
+		return l
+	}
+
+	l, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		log.Fatalf("failed to listen: %+v", err)
+	}
+	f, err := l.(*net.TCPListener).File()
+	if err != nil {
+		log.Fatalf("failed to get file from tcp listener: %+v", err)
+	}
+
+	cmd := exec.Command(os.Args[0])
+	cmd.Stderr = os.Stderr
+	cmd.Env = append(os.Environ(),
+		fmt.Sprintf("FORKED=true"),
+	)
+	cmd.ExtraFiles = append(cmd.ExtraFiles, f)
+	err = cmd.Start()
+	if err != nil {
+		log.Fatalf("failed to start command: %+v", err)
+	}
+
+	fmt.Printf("ws://%v\n", l.Addr().String())
+	os.Exit(0)
+
+	panic("unreachable")
+}
+
 func main() {
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	l := fork()
+
+	err := serve(l)
+	log.Fatalf("failed to serve: %+v", err)
+}
+
+func serve(l net.Listener) error {
+	return http.Serve(l, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 			Subprotocols:       []string{"echo"},
 			InsecureSkipVerify: true,
@@ -36,11 +77,4 @@ func main() {
 		}
 	}))
 
-	wsURL := strings.Replace(s.URL, "http", "ws", 1)
-	fmt.Printf("%v\n", wsURL)
-
-	sigs := make(chan os.Signal)
-	signal.Notify(sigs, syscall.SIGTERM)
-
-	<-sigs
 }
