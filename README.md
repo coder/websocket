@@ -24,6 +24,7 @@ go get nhooyr.io/websocket
 - Highly optimized by default
 - Concurrent writes out of the box
 - [Complete Wasm](https://godoc.org/nhooyr.io/websocket#hdr-Wasm) support
+- [Close handshake](https://godoc.org/nhooyr.io/websocket#Conn.Close)
 
 ## Roadmap
 
@@ -128,7 +129,9 @@ gorilla/websocket writes its handshakes to the underlying net.Conn.
 Thus it has to reinvent hooks for TLS and proxies and prevents support of HTTP/2.
 
 Some more advantages of nhooyr.io/websocket are that it supports concurrent writes and
-makes it very easy to close the connection with a status code and reason.
+makes it very easy to close the connection with a status code and reason. In fact,
+nhooyr.io/websocket even implements the complete WebSocket close handshake for you whereas
+with gorilla/websocket you have to perform it manually. See [gorilla/websocket#448](https://github.com/gorilla/websocket/issues/448).
 
 The ping API is also nicer. gorilla/websocket requires registering a pong handler on the Conn
 which results in awkward control flow. With nhooyr.io/websocket you use the Ping method on the Conn

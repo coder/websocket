@@ -23,11 +23,13 @@ type Conn struct {
 	// read limit for a message in bytes.
 	msgReadLimit *atomicInt64
 
-	isReadClosed *atomicInt64
-	closeOnce    sync.Once
-	closed       chan struct{}
-	closeErrOnce sync.Once
-	closeErr     error
+	closeMu       sync.Mutex
+	isReadClosed  *atomicInt64
+	closeOnce     sync.Once
+	closed        chan struct{}
+	closeErrOnce  sync.Once
+	closeErr      error
+	closeWasClean bool
 
 	releaseOnClose   func()
 	releaseOnMessage func()
@@ -35,16 +37,14 @@ type Conn struct {
 	readSignal chan struct{}
 	readBufMu  sync.Mutex
 	readBuf    []wsjs.MessageEvent
-
-	// Only used by tests
-	receivedCloseFrame chan struct{}
 }
 
-func (c *Conn) close(err error) {
+func (c *Conn) close(err error, wasClean bool) {
 	c.closeOnce.Do(func() {
 		runtime.SetFinalizer(c, nil)
 
 		c.setCloseErr(err)
+		c.closeWasClean = wasClean
 		close(c.closed)
 	})
 }
@@ -58,17 +58,15 @@ func (c *Conn) init() {
 
 	c.isReadClosed = &atomicInt64{}
 
-	c.receivedCloseFrame = make(chan struct{})
-
 	c.releaseOnClose = c.ws.OnClose(func(e wsjs.CloseEvent) {
-		close(c.receivedCloseFrame)
-
-		cerr := CloseError{
+		var err error = CloseError{
 			Code:   StatusCode(e.Code),
 			Reason: e.Reason,
 		}
-
-		c.close(fmt.Errorf("received close frame: %w", cerr))
+		if !e.WasClean {
+			err = fmt.Errorf("connection close was not clean: %w", err)
+		}
+		c.close(err, e.WasClean)
 
 		c.releaseOnClose()
 		c.releaseOnMessage()
@@ -109,8 +107,9 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 		return 0, nil, fmt.Errorf("failed to read: %w", err)
 	}
 	if int64(len(p)) > c.msgReadLimit.Load() {
-		c.Close(StatusMessageTooBig, fmt.Sprintf("read limited at %v bytes", c.msgReadLimit))
-		return 0, nil, c.closeErr
+		err := fmt.Errorf("read limited at %v bytes", c.msgReadLimit)
+		c.Close(StatusMessageTooBig, err.Error())
+		return 0, nil, err
 	}
 	return typ, p, nil
 }
@@ -193,26 +192,34 @@ func (c *Conn) isClosed() bool {
 }
 
 // Close closes the websocket with the given code and reason.
+// It will wait until the peer responds with a close frame
+// or the connection is closed.
+// It thus performs the full WebSocket close handshake.
 func (c *Conn) Close(code StatusCode, reason string) error {
+	err := c.exportedClose(code, reason)
+	if err != nil {
+		return fmt.Errorf("failed to close websocket: %w", err)
+	}
+	return nil
+}
+
+func (c *Conn) exportedClose(code StatusCode, reason string) error {
+	c.closeMu.Lock()
+	defer c.closeMu.Unlock()
+
 	if c.isClosed() {
 		return fmt.Errorf("already closed: %w", c.closeErr)
 	}
 
-	err := fmt.Errorf("sent close frame: %v", CloseError{
-		Code:   code,
-		Reason: reason,
-	})
-
-	err2 := c.ws.Close(int(code), reason)
-	if err2 != nil {
-		err = err2
-	}
-	c.close(err)
-
-	if !errors.Is(c.closeErr, err) {
-		return fmt.Errorf("failed to close websocket: %w", err)
+	err := c.ws.Close(int(code), reason)
+	if err != nil {
+		return err
 	}
 
+	<-c.closed
+	if !c.closeWasClean {
+		return c.closeErr
+	}
 	return nil
 }
 
@@ -285,7 +292,7 @@ func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 }
 
 // Only implemented for use by *Conn.CloseRead in netconn.go
-func (c *Conn) reader(ctx context.Context) {
+func (c *Conn) reader(ctx context.Context, _ bool) {
 	c.read(ctx)
 }
 

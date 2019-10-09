@@ -67,8 +67,6 @@ func Example_echo() {
 // It ensures the client speaks the echo subprotocol and
 // only allows one message every 100ms with a 10 message burst.
 func echoServer(w http.ResponseWriter, r *http.Request) error {
-	log.Printf("serving %v", r.RemoteAddr)
-
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		Subprotocols: []string{"echo"},
 	})
@@ -85,6 +83,9 @@ func echoServer(w http.ResponseWriter, r *http.Request) error {
 	l := rate.NewLimiter(rate.Every(time.Millisecond*100), 10)
 	for {
 		err = echo(r.Context(), c, l)
+		if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
+			return nil
+		}
 		if err != nil {
 			return fmt.Errorf("failed to echo with %v: %w", r.RemoteAddr, err)
 		}

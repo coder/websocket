@@ -49,9 +49,4 @@ func TestConn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	err = c.WaitCloseFrame(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
 }

@@ -22,6 +22,10 @@ const (
 	OpContinuation = OpCode(opContinuation)
 )
 
+func (c *Conn) SetLogf(fn func(format string, v ...interface{})) {
+	c.logf = fn
+}
+
 func (c *Conn) ReadFrame(ctx context.Context) (OpCode, []byte, error) {
 	h, err := c.readFrameHeader(ctx)
 	if err != nil {
