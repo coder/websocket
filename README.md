@@ -24,7 +24,7 @@ go get nhooyr.io/websocket
 - Highly optimized by default
 - Concurrent writes out of the box
 - [Complete Wasm](https://godoc.org/nhooyr.io/websocket#hdr-Wasm) support
-- [WebSocket close handshake](https://godoc.org/nhooyr.io/websocket#Conn.Close)
+- [Close handshake](https://godoc.org/nhooyr.io/websocket#Conn.Close)
 
 ## Roadmap
 

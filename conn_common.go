@@ -112,8 +112,9 @@ func (c *netConn) Read(p []byte) (int, error) {
 			return 0, err
 		}
 		if typ != c.msgType {
-			c.c.Close(StatusUnsupportedData, fmt.Sprintf("unexpected frame type read (expected %v): %v", c.msgType, typ))
-			return 0, c.c.closeErr
+			err := fmt.Errorf("unexpected frame type read (expected %v): %v", c.msgType, typ)
+			c.c.Close(StatusUnsupportedData, err.Error())
+			return 0, err
 		}
 		c.reader = r
 	}
@@ -184,7 +185,7 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 	go func() {
 		defer cancel()
 		// We use the unexported reader method so that we don't get the read closed error.
-		c.reader(ctx)
+		c.reader(ctx, true)
 		// Either the connection is already closed since there was a read error
 		// or the context was cancelled or a message was read and we should close
 		// the connection.

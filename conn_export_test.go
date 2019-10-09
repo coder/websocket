@@ -22,13 +22,17 @@ const (
 	OpContinuation = OpCode(opContinuation)
 )
 
+func (c *Conn) SetLogf(fn func(format string, v ...interface{})) {
+	c.logf = fn
+}
+
 func (c *Conn) ReadFrame(ctx context.Context) (OpCode, []byte, error) {
-	h, err := c.readFrameHeader(ctx, true)
+	h, err := c.readFrameHeader(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
 	b := make([]byte, h.payloadLength)
-	_, err = c.readFramePayload(ctx, b, true)
+	_, err = c.readFramePayload(ctx, b)
 	if err != nil {
 		return 0, nil, err
 	}

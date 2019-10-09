@@ -46,6 +46,7 @@ type Conn struct {
 	closeErrOnce sync.Once
 	closeErr     error
 	closed       chan struct{}
+	closing      *atomicInt64
 
 	// messageWriter state.
 	// writeMsgLock is acquired to write a data message.
@@ -73,12 +74,14 @@ type Conn struct {
 	isReadClosed      *atomicInt64
 	readHeaderBuf     []byte
 	controlPayloadBuf []byte
+	readLock          chan struct{}
 
 	// messageReader state.
-	readerMsgCtx    context.Context
-	readerMsgHeader header
-	readerFrameEOF  bool
-	readerMaskPos   int
+	readerMsgCtx     context.Context
+	readerMsgHeader  header
+	readerFrameEOF   bool
+	readerMaskPos    int
+	readerShouldLock bool
 
 	setReadTimeout  chan context.Context
 	setWriteTimeout chan context.Context
@@ -86,10 +89,13 @@ type Conn struct {
 	pingCounter   *atomicInt64
 	activePingsMu sync.Mutex
 	activePings   map[string]chan<- struct{}
+
+	logf func(format string, v ...interface{})
 }
 
 func (c *Conn) init() {
 	c.closed = make(chan struct{})
+	c.closing = &atomicInt64{}
 
 	c.msgReadLimit = &atomicInt64{}
 	c.msgReadLimit.Store(32768)
@@ -98,6 +104,7 @@ func (c *Conn) init() {
 	c.writeFrameLock = make(chan struct{}, 1)
 
 	c.readFrameLock = make(chan struct{}, 1)
+	c.readLock = make(chan struct{}, 1)
 
 	c.setReadTimeout = make(chan context.Context)
 	c.setWriteTimeout = make(chan context.Context)
@@ -114,6 +121,8 @@ func (c *Conn) init() {
 	runtime.SetFinalizer(c, func(c *Conn) {
 		c.close(errors.New("connection garbage collected"))
 	})
+
+	c.logf = log.Printf
 
 	go c.timeoutLoop()
 }
@@ -165,9 +174,14 @@ func (c *Conn) timeoutLoop() {
 		case readCtx = <-c.setReadTimeout:
 
 		case <-readCtx.Done():
-			c.close(fmt.Errorf("read timed out: %w", readCtx.Err()))
+			c.setCloseErr(fmt.Errorf("read timed out: %w", readCtx.Err()))
+			// Guaranteed to eventually close the connection since it will not try and read
+			// but only write.
+			go c.exportedClose(StatusPolicyViolation, "read timed out", false)
+			readCtx = context.Background()
 		case <-writeCtx.Done():
 			c.close(fmt.Errorf("write timed out: %w", writeCtx.Err()))
+			return
 		}
 	}
 }
@@ -179,7 +193,7 @@ func (c *Conn) acquireLock(ctx context.Context, lock chan struct{}) error {
 		switch lock {
 		case c.writeFrameLock, c.writeMsgLock:
 			err = fmt.Errorf("could not acquire write lock: %v", ctx.Err())
-		case c.readFrameLock:
+		case c.readFrameLock, c.readLock:
 			err = fmt.Errorf("could not acquire read lock: %v", ctx.Err())
 		default:
 			panic(fmt.Sprintf("websocket: failed to acquire unknown lock: %v", ctx.Err()))
@@ -201,22 +215,23 @@ func (c *Conn) releaseLock(lock chan struct{}) {
 	}
 }
 
-func (c *Conn) readTillMsg(ctx context.Context, lock bool) (header, error) {
+func (c *Conn) readTillMsg(ctx context.Context) (header, error) {
 	for {
-		h, err := c.readFrameHeader(ctx, lock)
+		h, err := c.readFrameHeader(ctx)
 		if err != nil {
 			return header{}, err
 		}
 
 		if h.rsv1 || h.rsv2 || h.rsv3 {
-			c.writeClose(StatusProtocolError, fmt.Sprintf("received header with rsv bits set: %v:%v:%v", h.rsv1, h.rsv2, h.rsv3), false)
-			return header{}, c.closeErr
+			err := fmt.Errorf("received header with rsv bits set: %v:%v:%v", h.rsv1, h.rsv2, h.rsv3)
+			c.exportedClose(StatusProtocolError, err.Error(), false)
+			return header{}, err
 		}
 
 		if h.opcode.controlOp() {
-			err = c.handleControl(ctx, h, lock)
+			err = c.handleControl(ctx, h)
 			if err != nil {
-				return header{}, fmt.Errorf("failed to handle control frame: %w", err)
+				return header{}, fmt.Errorf("failed to handle control frame %v: %w", h.opcode, err)
 			}
 			continue
 		}
@@ -225,20 +240,28 @@ func (c *Conn) readTillMsg(ctx context.Context, lock bool) (header, error) {
 		case opBinary, opText, opContinuation:
 			return h, nil
 		default:
-			c.writeClose(StatusProtocolError, fmt.Sprintf("received unknown opcode %v", h.opcode), false)
-			return header{}, c.closeErr
+			err := fmt.Errorf("received unknown opcode %v", h.opcode)
+			c.exportedClose(StatusProtocolError, err.Error(), false)
+			return header{}, err
 		}
 	}
 }
 
-func (c *Conn) readFrameHeader(ctx context.Context, lock bool) (header, error) {
-	if lock {
-		err := c.acquireLock(ctx, c.readFrameLock)
-		if err != nil {
-			return header{}, err
-		}
-		defer c.releaseLock(c.readFrameLock)
+func (c *Conn) readFrameHeader(ctx context.Context) (_ header, err error) {
+	wrap := func(err error) error {
+		return fmt.Errorf("failed to read frame header: %w", err)
 	}
+	defer func() {
+		if err != nil {
+			err = wrap(err)
+		}
+	}()
+
+	err = c.acquireLock(ctx, c.readFrameLock)
+	if err != nil {
+		return header{}, err
+	}
+	defer c.releaseLock(c.readFrameLock)
 
 	select {
 	case <-c.closed:
@@ -255,9 +278,8 @@ func (c *Conn) readFrameHeader(ctx context.Context, lock bool) (header, error) {
 			err = ctx.Err()
 		default:
 		}
-		err := fmt.Errorf("failed to read header: %w", err)
 		c.releaseLock(c.readFrameLock)
-		c.close(err)
+		c.close(wrap(err))
 		return header{}, err
 	}
 
@@ -270,22 +292,24 @@ func (c *Conn) readFrameHeader(ctx context.Context, lock bool) (header, error) {
 	return h, nil
 }
 
-func (c *Conn) handleControl(ctx context.Context, h header, lock bool) error {
+func (c *Conn) handleControl(ctx context.Context, h header) error {
 	if h.payloadLength > maxControlFramePayload {
-		c.writeClose(StatusProtocolError, fmt.Sprintf("control frame too large at %v bytes", h.payloadLength), false)
-		return c.closeErr
+		err := fmt.Errorf("received too big control frame at %v bytes", h.payloadLength)
+		c.exportedClose(StatusProtocolError, err.Error(), false)
+		return err
 	}
 
 	if !h.fin {
-		c.writeClose(StatusProtocolError, "received fragmented control frame", false)
-		return c.closeErr
+		err := errors.New("received fragmented control frame")
+		c.exportedClose(StatusProtocolError, err.Error(), false)
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
 	defer cancel()
 
 	b := c.controlPayloadBuf[:h.payloadLength]
-	_, err := c.readFramePayload(ctx, b, lock)
+	_, err := c.readFramePayload(ctx, b)
 	if err != nil {
 		return err
 	}
@@ -296,7 +320,7 @@ func (c *Conn) handleControl(ctx context.Context, h header, lock bool) error {
 
 	switch h.opcode {
 	case opPing:
-		return c.writePong(b)
+		return c.writeControl(ctx, opPong, b)
 	case opPong:
 		c.activePingsMu.Lock()
 		pong, ok := c.activePings[string(b)]
@@ -309,27 +333,13 @@ func (c *Conn) handleControl(ctx context.Context, h header, lock bool) error {
 		ce, err := parseClosePayload(b)
 		if err != nil {
 			err = fmt.Errorf("received invalid close payload: %w", err)
-			c.writeClose(StatusProtocolError, err.Error(), false)
-			return c.closeErr
+			c.exportedClose(StatusProtocolError, err.Error(), false)
+			return err
 		}
 
-		// This ensures the closeErr of the Conn is always the received CloseError
-		// in case the echo close frame write fails.
-		// See https://github.com/nhooyr/websocket/issues/109
-		c.setCloseErr(ce)
-
-		func() {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-			defer cancel()
-			c.writeControl(ctx, opClose, b)
-		}()
-
-		if !lock {
-			c.releaseLock(c.readFrameLock)
-		}
-		// We close with nil since the error is already set above.
-		c.close(nil)
-		return c.closeErr
+		err = fmt.Errorf("received close: %w", ce)
+		c.writeClose(b, err, false)
+		return err
 	default:
 		panic(fmt.Sprintf("websocket: unexpected control opcode: %#v", h))
 	}
@@ -363,14 +373,22 @@ func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 		return 0, nil, errors.New("websocket connection read closed")
 	}
 
-	typ, r, err := c.reader(ctx)
+	typ, r, err := c.reader(ctx, true)
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to get reader: %w", err)
 	}
 	return typ, r, nil
 }
 
-func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err error) {
+func (c *Conn) reader(ctx context.Context, lock bool) (MessageType, io.Reader, error) {
+	if lock {
+		err := c.acquireLock(ctx, c.readLock)
+		if err != nil {
+			return 0, nil, err
+		}
+		defer c.releaseLock(c.readLock)
+	}
+
 	if c.activeReader != nil && !c.readerFrameEOF {
 		// The only way we know for sure the previous reader is not yet complete is
 		// if there is an active frame not yet fully read.
@@ -379,15 +397,16 @@ func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err erro
 		return 0, nil, errors.New("previous message not read to completion")
 	}
 
-	h, err := c.readTillMsg(ctx, true)
+	h, err := c.readTillMsg(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
 
 	if c.activeReader != nil && !c.activeReader.eof() {
 		if h.opcode != opContinuation {
-			c.writeClose(StatusProtocolError, "received new data message without finishing the previous message", false)
-			return 0, nil, c.closeErr
+			err := errors.New("received new data message without finishing the previous message")
+			c.exportedClose(StatusProtocolError, err.Error(), false)
+			return 0, nil, err
 		}
 
 		if !h.fin || h.payloadLength > 0 {
@@ -396,13 +415,14 @@ func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err erro
 
 		c.activeReader = nil
 
-		h, err = c.readTillMsg(ctx, true)
+		h, err = c.readTillMsg(ctx)
 		if err != nil {
 			return 0, nil, err
 		}
 	} else if h.opcode == opContinuation {
-		c.writeClose(StatusProtocolError, "received continuation frame not after data or text frame", false)
-		return 0, nil, c.closeErr
+		err := errors.New("received continuation frame not after data or text frame")
+		c.exportedClose(StatusProtocolError, err.Error(), false)
+		return 0, nil, err
 	}
 
 	c.readerMsgCtx = ctx
@@ -410,6 +430,7 @@ func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err erro
 	c.readerFrameEOF = false
 	c.readerMaskPos = 0
 	c.readMsgLeft = c.msgReadLimit.Load()
+	c.readerShouldLock = lock
 
 	r := &messageReader{
 		c: c,
@@ -442,13 +463,22 @@ func (r *messageReader) Read(p []byte) (int, error) {
 }
 
 func (r *messageReader) read(p []byte) (int, error) {
+	if r.c.readerShouldLock {
+		err := r.c.acquireLock(r.c.readerMsgCtx, r.c.readLock)
+		if err != nil {
+			return 0, err
+		}
+		defer r.c.releaseLock(r.c.readLock)
+	}
+
 	if r.eof() {
 		return 0, fmt.Errorf("cannot use EOFed reader")
 	}
 
 	if r.c.readMsgLeft <= 0 {
-		r.c.writeClose(StatusMessageTooBig, fmt.Sprintf("read limited at %v bytes", r.c.msgReadLimit), false)
-		return 0, r.c.closeErr
+		err := fmt.Errorf("read limited at %v bytes", r.c.msgReadLimit)
+		r.c.exportedClose(StatusMessageTooBig, err.Error(), false)
+		return 0, err
 	}
 
 	if int64(len(p)) > r.c.readMsgLeft {
@@ -456,14 +486,15 @@ func (r *messageReader) read(p []byte) (int, error) {
 	}
 
 	if r.c.readerFrameEOF {
-		h, err := r.c.readTillMsg(r.c.readerMsgCtx, true)
+		h, err := r.c.readTillMsg(r.c.readerMsgCtx)
 		if err != nil {
 			return 0, err
 		}
 
 		if h.opcode != opContinuation {
-			r.c.writeClose(StatusProtocolError, "received new data message without finishing the previous message", false)
-			return 0, r.c.closeErr
+			err := errors.New("received new data message without finishing the previous message")
+			r.c.exportedClose(StatusProtocolError, err.Error(), false)
+			return 0, err
 		}
 
 		r.c.readerMsgHeader = h
@@ -476,7 +507,7 @@ func (r *messageReader) read(p []byte) (int, error) {
 		p = p[:h.payloadLength]
 	}
 
-	n, err := r.c.readFramePayload(r.c.readerMsgCtx, p, true)
+	n, err := r.c.readFramePayload(r.c.readerMsgCtx, p)
 
 	h.payloadLength -= int64(n)
 	r.c.readMsgLeft -= int64(n)
@@ -501,14 +532,21 @@ func (r *messageReader) read(p []byte) (int, error) {
 	return n, nil
 }
 
-func (c *Conn) readFramePayload(ctx context.Context, p []byte, lock bool) (int, error) {
-	if lock {
-		err := c.acquireLock(ctx, c.readFrameLock)
-		if err != nil {
-			return 0, err
-		}
-		defer c.releaseLock(c.readFrameLock)
+func (c *Conn) readFramePayload(ctx context.Context, p []byte) (_ int, err error) {
+	wrap := func(err error) error {
+		return fmt.Errorf("failed to read frame payload: %w", err)
 	}
+	defer func() {
+		if err != nil {
+			err = wrap(err)
+		}
+	}()
+
+	err = c.acquireLock(ctx, c.readFrameLock)
+	if err != nil {
+		return 0, err
+	}
+	defer c.releaseLock(c.readFrameLock)
 
 	select {
 	case <-c.closed:
@@ -525,9 +563,8 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte, lock bool) (int, 
 			err = ctx.Err()
 		default:
 		}
-		err = fmt.Errorf("failed to read frame payload: %w", err)
 		c.releaseLock(c.readFrameLock)
-		c.close(err)
+		c.close(wrap(err))
 		return n, err
 	}
 
@@ -661,9 +698,12 @@ func (w *messageWriter) close() error {
 }
 
 func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
+
 	_, err := c.writeFrame(ctx, true, opcode, p)
 	if err != nil {
-		return fmt.Errorf("failed to write control frame: %w", err)
+		return fmt.Errorf("failed to write control frame %v: %w", opcode, err)
 	}
 	return nil
 }
@@ -780,19 +820,13 @@ func (c *Conn) realWriteFrame(ctx context.Context, h header, p []byte) (n int, e
 	return n, nil
 }
 
-func (c *Conn) writePong(p []byte) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()
-
-	err := c.writeControl(ctx, opPong, p)
-	return err
-}
-
 // Close closes the WebSocket connection with the given status code and reason.
 //
-// It will write a WebSocket close frame and then wait for the peer to respond
-// with its own close frame. The entire process must complete within 10 seconds.
+// It will write a WebSocket close frame with a timeout of 5s and then wait 5s for
+// the peer to send a close frame.
 // Thus, it implements the full WebSocket close handshake.
+// All data messages received from the peer during the close handshake
+// will be discarded.
 //
 // The connection can only be closed once. Additional calls to Close
 // are no-ops.
@@ -804,14 +838,14 @@ func (c *Conn) writePong(p []byte) error {
 // Close will unblock all goroutines interacting with the connection once
 // complete.
 func (c *Conn) Close(code StatusCode, reason string) error {
-	err := c.writeClose(code, reason, true)
+	err := c.exportedClose(code, reason, true)
 	if err != nil {
 		return fmt.Errorf("failed to close websocket connection: %w", err)
 	}
 	return nil
 }
 
-func (c *Conn) writeClose(code StatusCode, reason string, handshake bool) error {
+func (c *Conn) exportedClose(code StatusCode, reason string, handshake bool) error {
 	ce := CloseError{
 		Code:   code,
 		Reason: reason,
@@ -822,65 +856,72 @@ func (c *Conn) writeClose(code StatusCode, reason string, handshake bool) error 
 	// Definitely worth seeing what popular browsers do later.
 	p, err := ce.bytes()
 	if err != nil {
-		log.Printf("websocket: failed to marshal close frame: %+v", err)
+		c.logf("websocket: failed to marshal close frame: %+v", err)
 		ce = CloseError{
 			Code: StatusInternalError,
 		}
 		p, _ = ce.bytes()
 	}
 
-	// Give the handshake 10 seconds.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
+	return c.writeClose(p, fmt.Errorf("sent close: %w", ce), handshake)
+}
 
-	err = c.writeControl(ctx, opClose, p)
-	if err != nil {
-		return err
+func (c *Conn) writeClose(p []byte, ce error, handshake bool) error {
+	select {
+	case <-c.closed:
+		return fmt.Errorf("tried to close with %v but connection already closed: %w", ce, c.closeErr)
+	default:
 	}
+
+	if !c.closing.CAS(0, 1) {
+		return fmt.Errorf("another goroutine is closing")
+	}
+
+	// No matter what happens next, close error should be set.
 	c.setCloseErr(ce)
 	defer c.close(nil)
 
+	err := c.writeControl(context.Background(), opClose, p)
+	if err != nil {
+		return err
+	}
+
 	if handshake {
-		// Try to wait for close frame peer but don't complain
-		// if one is not received since we already decided the
-		// close status of the connection above.
-		c.waitClose(ctx)
+		err = c.waitClose()
+		if CloseStatus(err) == -1 {
+			// waitClose exited not due to receiving a close frame.
+			return fmt.Errorf("failed to wait for peer close frame: %w", err)
+		}
 	}
 
 	return nil
 }
 
-func (c *Conn) waitClose(ctx context.Context) error {
-	err := c.acquireLock(ctx, c.readFrameLock)
+func (c *Conn) waitClose() error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	err := c.acquireLock(ctx, c.readLock)
 	if err != nil {
 		return err
 	}
-	defer c.releaseLock(c.readFrameLock)
+	defer c.releaseLock(c.readLock)
+	c.readerShouldLock = false
 
 	b := bpool.Get()
+	buf := b.Bytes()
+	buf = buf[:cap(buf)]
 	defer bpool.Put(b)
 
-	var h header
-	if c.activeReader != nil && !c.readerFrameEOF {
-		h = c.readerMsgHeader
-	}
-
 	for {
-		for h.payloadLength > 0 {
-			buf := b.Bytes()
-			if int64(cap(buf)) > h.payloadLength {
-				buf = buf[:h.payloadLength]
-			} else {
-				buf = buf[:cap(buf)]
-			}
-			n, err := c.readFramePayload(ctx, buf, false)
+		if c.activeReader == nil || c.readerFrameEOF {
+			_, _, err := c.reader(ctx, false)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to get reader: %w", err)
 			}
-			h.payloadLength -= int64(n)
 		}
 
-		h, err = c.readTillMsg(ctx, false)
+		_, err = io.CopyBuffer(ioutil.Discard, c.activeReader, buf)
 		if err != nil {
 			return err
 		}

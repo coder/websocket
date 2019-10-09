@@ -23,6 +23,7 @@ type Conn struct {
 	// read limit for a message in bytes.
 	msgReadLimit *atomicInt64
 
+	closeMu       sync.Mutex
 	isReadClosed  *atomicInt64
 	closeOnce     sync.Once
 	closed        chan struct{}
@@ -106,8 +107,9 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 		return 0, nil, fmt.Errorf("failed to read: %w", err)
 	}
 	if int64(len(p)) > c.msgReadLimit.Load() {
-		c.Close(StatusMessageTooBig, fmt.Sprintf("read limited at %v bytes", c.msgReadLimit))
-		return 0, nil, c.closeErr
+		err := fmt.Errorf("read limited at %v bytes", c.msgReadLimit)
+		c.Close(StatusMessageTooBig, err.Error())
+		return 0, nil, err
 	}
 	return typ, p, nil
 }
@@ -202,14 +204,17 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 }
 
 func (c *Conn) exportedClose(code StatusCode, reason string) error {
+	c.closeMu.Lock()
+	defer c.closeMu.Unlock()
+
 	if c.isClosed() {
 		return fmt.Errorf("already closed: %w", c.closeErr)
 	}
 
-	// The only possible error from closing the connection here
-	// is that the connection is already closed in which case,
-	// we do not really care since c.closed will immediately return.
-	c.ws.Close(int(code), reason)
+	err := c.ws.Close(int(code), reason)
+	if err != nil {
+		return err
+	}
 
 	<-c.closed
 	if !c.closeWasClean {
@@ -287,7 +292,7 @@ func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 }
 
 // Only implemented for use by *Conn.CloseRead in netconn.go
-func (c *Conn) reader(ctx context.Context) {
+func (c *Conn) reader(ctx context.Context, _ bool) {
 	c.read(ctx)
 }
 
