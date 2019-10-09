@@ -291,7 +291,7 @@ func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 	return typ, bytes.NewReader(p), nil
 }
 
-// Only implemented for use by *Conn.CloseRead in netconn.go
+// Only implemented for use by *Conn.CloseRead in conn_common.go
 func (c *Conn) reader(ctx context.Context, _ bool) {
 	c.read(ctx)
 }
