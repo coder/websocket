@@ -4,7 +4,7 @@ set -euo pipefail
 
 wsjstestOut="$(mktemp -d)/wsjstestOut"
 mkfifo "$wsjstestOut"
-timeout 15s wsjstest > "$wsjstestOut" &
+timeout 45s wsjstest > "$wsjstestOut" &
 wsjstestPID="$!"
 
 WS_ECHO_SERVER_URL="$(head -n 1 "$wsjstestOut")"

@@ -242,7 +242,7 @@ type DialOptions struct {
 func Dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Response, error) {
 	c, resp, err := dial(ctx, url, opts)
 	if err != nil {
-		return nil, resp, fmt.Errorf("failed to websocket dial: %w", err)
+		return nil, resp, fmt.Errorf("failed to websocket dial %q: %w", url, err)
 	}
 	return c, resp, nil
 }

@@ -10,7 +10,7 @@ ENV PATH=$GOPATH/bin:$PATH
 ENV GOFLAGS="-mod=readonly"
 ENV PAGER=cat
 ENV CI=true
-ENV MAKEFLAGS="-j --output-sync target"
+ENV MAKEFLAGS="--jobs=8 --output-sync=target"
 
 COPY ./ci/image/gitignore /root/.config/git/ignore
 RUN git config --system color.ui always
