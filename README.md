@@ -36,7 +36,7 @@ For a production quality example that shows off the full API, see the [echo exam
 
 Use the [errors.As](https://golang.org/pkg/errors/#As) function [new in Go 1.13](https://golang.org/doc/go1.13#error_wrapping) to check for [websocket.CloseError](https://godoc.org/nhooyr.io/websocket#CloseError).
 There is also [websocket.CloseStatus](https://godoc.org/nhooyr.io/websocket#CloseStatus) to quickly grab the close status code out of a [websocket.CloseError](https://godoc.org/nhooyr.io/websocket#CloseError).
-See the [CloseError godoc example](https://godoc.org/nhooyr.io/websocket#example-CloseError).
+See the [CloseStatus godoc example](https://godoc.org/nhooyr.io/websocket#example-CloseStatus).
 
 ### Server
 

@@ -22,7 +22,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -34,6 +33,7 @@ import (
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/assert"
 	"nhooyr.io/websocket/internal/wsecho"
+	"nhooyr.io/websocket/internal/wsgrace"
 	"nhooyr.io/websocket/wsjson"
 	"nhooyr.io/websocket/wspb"
 )
@@ -927,16 +927,7 @@ func TestConn(t *testing.T) {
 }
 
 func testServer(tb testing.TB, fn func(w http.ResponseWriter, r *http.Request) error, tls bool) (s *httptest.Server, closeFn func()) {
-	var conns int64
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt64(&conns, 1)
-		defer atomic.AddInt64(&conns, -1)
-
-		ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
-		defer cancel()
-
-		r = r.WithContext(ctx)
-
 		err := fn(w, r)
 		if err != nil {
 			tb.Errorf("server failed: %+v", err)
@@ -947,18 +938,12 @@ func testServer(tb testing.TB, fn func(w http.ResponseWriter, r *http.Request) e
 	} else {
 		s = httptest.NewServer(h)
 	}
+	closeFn2 := wsgrace.Grace(s.Config)
 	return s, func() {
-		s.Close()
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
-
-		for atomic.LoadInt64(&conns) > 0 {
-			if ctx.Err() != nil {
-				tb.Fatalf("waiting for server to come down timed out: %v", ctx.Err())
-			}
+		err := closeFn2()
+		if err != nil {
+			tb.Fatal(err)
 		}
-
 	}
 }
 

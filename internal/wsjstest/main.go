@@ -8,14 +8,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"runtime"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/wsecho"
+	"nhooyr.io/websocket/internal/wsgrace"
 )
 
 func main() {
+	log.SetPrefix("wsecho")
+
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 			Subprotocols:       []string{"echo"},
@@ -30,11 +34,20 @@ func main() {
 		if websocket.CloseStatus(err) != websocket.StatusNormalClosure {
 			log.Fatalf("unexpected echo loop error: %+v", err)
 		}
-
-		os.Exit(0)
 	}))
+	closeFn := wsgrace.Grace(s.Config)
+	defer func() {
+		err := closeFn()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	wsURL := strings.Replace(s.URL, "http", "ws", 1)
 	fmt.Printf("%v\n", wsURL)
-	runtime.Goexit()
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGTERM)
+
+	<-sigs
 }
