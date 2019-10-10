@@ -12,11 +12,12 @@ codecov: _gotest
 	curl -s https://codecov.io/bash | bash -s -- -Z -f ci/out/coverage.prof
 
 _gotest:
-	echo "--- gotest" && go test -parallel=32 -coverprofile=ci/out/coverage.prof -coverpkg=./... ./...
+	echo "--- gotest" && go test -parallel=32 -coverprofile=ci/out/coverage.prof -coverpkg=./... $$TESTFLAGS ./...
 	sed -i '/_stringer\.go/d' ci/out/coverage.prof
 	sed -i '/wsjstest\/main\.go/d' ci/out/coverage.prof
 	sed -i '/wsecho\.go/d' ci/out/coverage.prof
 	sed -i '/assert\.go/d' ci/out/coverage.prof
+	sed -i '/wsgrace\.go/d' ci/out/coverage.prof
 
 gotest-wasm: wsjstest
 	echo "--- wsjstest" && ./ci/wasmtest.sh

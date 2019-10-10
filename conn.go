@@ -175,9 +175,14 @@ func (c *Conn) timeoutLoop() {
 
 		case <-readCtx.Done():
 			c.setCloseErr(fmt.Errorf("read timed out: %w", readCtx.Err()))
-			// Guaranteed to eventually close the connection since it will not try and read
-			// but only write.
-			go c.exportedClose(StatusPolicyViolation, "read timed out", false)
+			// Guaranteed to eventually close the connection since we can only ever send
+			// one close frame.
+			go func() {
+				c.exportedClose(StatusPolicyViolation, "read timed out", true)
+				// Ensure the connection closes, i.e if we already sent a close frame and timed out
+				// to read the peer's close frame.
+				c.close(nil)
+			}()
 			readCtx = context.Background()
 		case <-writeCtx.Done():
 			c.close(fmt.Errorf("write timed out: %w", writeCtx.Err()))
@@ -339,6 +344,13 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 
 		err = fmt.Errorf("received close: %w", ce)
 		c.writeClose(b, err, false)
+
+		if ctx.Err() != nil {
+			// The above close probably has been returned by the peer in response
+			// to our read timing out so we have to return the read timed out error instead.
+			return fmt.Errorf("read timed out: %w", ctx.Err())
+		}
+
 		return err
 	default:
 		panic(fmt.Sprintf("websocket: unexpected control opcode: %#v", h))

@@ -64,7 +64,7 @@ func ExampleDial() {
 
 // This example dials a server and then expects to be disconnected with status code
 // websocket.StatusNormalClosure.
-func ExampleCloseError() {
+func ExampleCloseStatus() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
