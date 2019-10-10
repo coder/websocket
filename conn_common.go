@@ -5,7 +5,6 @@ package websocket
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -104,8 +103,8 @@ func (c *netConn) Read(p []byte) (int, error) {
 	if c.reader == nil {
 		typ, r, err := c.c.Reader(c.readContext)
 		if err != nil {
-			var ce CloseError
-			if errors.As(err, &ce) && (ce.Code == StatusNormalClosure) || (ce.Code == StatusGoingAway) {
+			switch CloseStatus(err) {
+			case StatusNormalClosure, StatusGoingAway:
 				c.eofed = true
 				return 0, io.EOF
 			}

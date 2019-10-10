@@ -589,11 +589,7 @@ func TestConn(t *testing.T) {
 					return err
 				}
 				_, _, err = c.Read(ctx)
-				var cerr websocket.CloseError
-				if !errors.As(err, &cerr) || cerr.Code != websocket.StatusProtocolError {
-					return fmt.Errorf("expected close error with StatusProtocolError: %+v", err)
-				}
-				return nil
+				return assertCloseStatus(err, websocket.StatusProtocolError)
 			},
 			client: func(ctx context.Context, c *websocket.Conn) error {
 				_, _, err := c.Read(ctx)

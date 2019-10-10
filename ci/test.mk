@@ -13,10 +13,10 @@ codecov: _gotest
 
 _gotest:
 	echo "--- gotest" && go test -parallel=32 -coverprofile=ci/out/coverage.prof -coverpkg=./... ./...
-	sed -i '/_stringer.go/d' ci/out/coverage.prof
-	sed -i '/wsjstest\/main.go/d' ci/out/coverage.prof
-	sed -i '/wsecho.go/d' ci/out/coverage.prof
-	sed -i '/assert.go/d' ci/out/coverage.prof
+	sed -i '/_stringer\.go/d' ci/out/coverage.prof
+	sed -i '/wsjstest\/main\.go/d' ci/out/coverage.prof
+	sed -i '/wsecho\.go/d' ci/out/coverage.prof
+	sed -i '/assert\.go/d' ci/out/coverage.prof
 
 gotest-wasm: wsjstest
 	echo "--- wsjstest" && ./ci/wasmtest.sh
