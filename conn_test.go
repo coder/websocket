@@ -602,7 +602,11 @@ func TestConn(t *testing.T) {
 		{
 			name: "largeControlFrame",
 			server: func(ctx context.Context, c *websocket.Conn) error {
-				_, err := c.WriteFrame(ctx, true, websocket.OpClose, []byte(strings.Repeat("x", 4096)))
+				err := c.WriteHeader(ctx, websocket.Header{
+					Fin:           true,
+					OpCode:        websocket.OpClose,
+					PayloadLength: 4096,
+				})
 				if err != nil {
 					return err
 				}

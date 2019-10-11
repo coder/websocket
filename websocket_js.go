@@ -23,7 +23,7 @@ type Conn struct {
 	// read limit for a message in bytes.
 	msgReadLimit *atomicInt64
 
-	closeMu       sync.Mutex
+	closingMu     sync.Mutex
 	isReadClosed  *atomicInt64
 	closeOnce     sync.Once
 	closed        chan struct{}
@@ -43,6 +43,9 @@ func (c *Conn) close(err error, wasClean bool) {
 	c.closeOnce.Do(func() {
 		runtime.SetFinalizer(c, nil)
 
+		if !wasClean {
+			err = fmt.Errorf("unclean connection close: %w", err)
+		}
 		c.setCloseErr(err)
 		c.closeWasClean = wasClean
 		close(c.closed)
@@ -59,14 +62,11 @@ func (c *Conn) init() {
 	c.isReadClosed = &atomicInt64{}
 
 	c.releaseOnClose = c.ws.OnClose(func(e wsjs.CloseEvent) {
-		var err error = CloseError{
+		err := CloseError{
 			Code:   StatusCode(e.Code),
 			Reason: e.Reason,
 		}
-		if !e.WasClean {
-			err = fmt.Errorf("connection close was not clean: %w", err)
-		}
-		c.close(err, e.WasClean)
+		c.close(fmt.Errorf("received close: %w", err), e.WasClean)
 
 		c.releaseOnClose()
 		c.releaseOnMessage()
@@ -182,15 +182,6 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) error {
 	}
 }
 
-func (c *Conn) isClosed() bool {
-	select {
-	case <-c.closed:
-		return true
-	default:
-		return false
-	}
-}
-
 // Close closes the websocket with the given code and reason.
 // It will wait until the peer responds with a close frame
 // or the connection is closed.
@@ -204,13 +195,19 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 }
 
 func (c *Conn) exportedClose(code StatusCode, reason string) error {
-	c.closeMu.Lock()
-	defer c.closeMu.Unlock()
+	c.closingMu.Lock()
+	defer c.closingMu.Unlock()
+
+	ce := fmt.Errorf("sent close: %w", CloseError{
+		Code:   code,
+		Reason: reason,
+	})
 
 	if c.isClosed() {
-		return fmt.Errorf("already closed: %w", c.closeErr)
+		return fmt.Errorf("tried to close with %q but connection already closed: %w", ce, c.closeErr)
 	}
 
+	c.setCloseErr(ce)
 	err := c.ws.Close(int(code), reason)
 	if err != nil {
 		return err

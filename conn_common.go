@@ -234,3 +234,12 @@ func (v *atomicInt64) Increment(delta int64) int64 {
 func (v *atomicInt64) CAS(old, new int64) (swapped bool) {
 	return atomic.CompareAndSwapInt64(&v.v, old, new)
 }
+
+func (c *Conn) isClosed() bool {
+	select {
+	case <-c.closed:
+		return true
+	default:
+		return false
+	}
+}

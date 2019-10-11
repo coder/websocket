@@ -851,6 +851,13 @@ func (c *Conn) realWriteFrame(ctx context.Context, h header, p []byte) (n int, e
 // complete.
 func (c *Conn) Close(code StatusCode, reason string) error {
 	err := c.exportedClose(code, reason, true)
+	var ec errClosing
+	if errors.As(err, &ec) {
+		<-c.closed
+		// We wait until the connection closes.
+		// We use writeClose and not exportedClose to avoid a second failed to marshal close frame error.
+		err = c.writeClose(nil, ec.ce, true)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to close websocket connection: %w", err)
 	}
@@ -878,15 +885,31 @@ func (c *Conn) exportedClose(code StatusCode, reason string, handshake bool) err
 	return c.writeClose(p, fmt.Errorf("sent close: %w", ce), handshake)
 }
 
+type errClosing struct {
+	ce error
+}
+
+func (e errClosing) Error() string {
+	return "already closing connection"
+}
+
 func (c *Conn) writeClose(p []byte, ce error, handshake bool) error {
-	select {
-	case <-c.closed:
-		return fmt.Errorf("tried to close with %v but connection already closed: %w", ce, c.closeErr)
-	default:
+	if c.isClosed() {
+		return fmt.Errorf("tried to close with %q but connection already closed: %w", ce, c.closeErr)
 	}
 
 	if !c.closing.CAS(0, 1) {
-		return fmt.Errorf("another goroutine is closing")
+		// Normally, we would want to wait until the connection is closed,
+		// at least for when a user calls into Close, so we handle that case in
+		// the exported Close function.
+		//
+		// But for internal library usage, we always want to return early, e.g.
+		// if we are performing a close handshake and the peer sends their close frame,
+		// we do not want to block here waiting for c.closed to close because it won't,
+		// at least not until we return since the gorouine that will close it is this one.
+		return errClosing{
+			ce: ce,
+		}
 	}
 
 	// No matter what happens next, close error should be set.
