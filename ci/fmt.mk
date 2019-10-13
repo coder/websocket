@@ -1,4 +1,4 @@
-fmt: modtidy gofmt goimports prettier
+fmt: modtidy gofmt goimports prettier shfmt
 ifdef CI
 	./ci/fmtcheck.sh
 endif
