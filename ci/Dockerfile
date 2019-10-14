@@ -3,7 +3,7 @@ FROM golang:1
 RUN apt-get update
 RUN apt-get install -y chromium
 RUN apt-get install -y npm
-RUN apt-get install -y shellcheck
+RUN apt-get install -y jq
 
 ENV GOPATH=/root/gopath
 ENV PATH=$GOPATH/bin:$PATH
@@ -12,15 +12,12 @@ ENV PAGER=cat
 ENV CI=true
 ENV MAKEFLAGS="--jobs=8 --output-sync=target"
 
-COPY ./ci/image/gitignore /root/.config/git/ignore
-RUN git config --system color.ui always
-
 RUN npm install -g prettier
 RUN go get golang.org/x/tools/cmd/stringer
 RUN go get golang.org/x/tools/cmd/goimports
-RUN go get mvdan.cc/sh/cmd/shfmt
 RUN go get golang.org/x/lint/golint
 RUN go get github.com/agnivade/wasmbrowsertest
+RUN go get github.com/mattn/goveralls
 
 # Cache go modules and build cache.
 COPY . /tmp/websocket

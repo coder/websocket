@@ -1,4 +1,4 @@
-lint: govet golint govet-wasm golint-wasm shellcheck
+lint: govet golint govet-wasm golint-wasm
 
 govet:
 	go vet ./...
@@ -11,6 +11,3 @@ golint:
 
 golint-wasm:
 	GOOS=js GOARCH=wasm golint -set_exit_status ./...
-
-shellcheck:
-	shellcheck -x $$(git ls-files "*.sh")

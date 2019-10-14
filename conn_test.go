@@ -1023,14 +1023,7 @@ func TestAutobahn(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			t.Run("server", func(t *testing.T) {
-				t.Parallel()
-				run2(t, false)
-			})
-			t.Run("client", func(t *testing.T) {
-				t.Parallel()
-				run2(t, true)
-			})
+			run2(t, true)
 		})
 	}
 
