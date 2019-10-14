@@ -1,6 +1,12 @@
-fmt: modtidy gofmt goimports prettier shfmt
+fmt: modtidy gofmt goimports prettier
 ifdef CI
-	./ci/fmtcheck.sh
+	if [[ $$(git ls-files --other --modified --exclude-standard) != "" ]]; then
+	  echo "Files need generation or are formatted incorrectly:"
+	  git -c color.ui=always status | grep --color=no '\e\[31m'
+	  echo "Please run the following locally:"
+	  echo "  make fmt"
+	  exit 1
+	fi
 endif
 
 modtidy: gen
@@ -12,11 +18,8 @@ gofmt: gen
 goimports: gen
 	goimports -w "-local=$$(go list -m)" .
 
-prettier: gen
-	prettier --write --print-width=120 --no-semi --trailing-comma=all --loglevel=warn $$(git ls-files "*.yaml" "*.yml" "*.md" "*.ts")
-
-shfmt: gen
-	shfmt -i 2 -w -s -sr .
+prettier:
+	prettier --write --print-width=120 --no-semi --trailing-comma=all --loglevel=warn $$(git ls-files "*.yml" "*.md")
 
 gen:
 	go generate ./...

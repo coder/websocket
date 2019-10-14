@@ -28,7 +28,7 @@ CI must pass on your changes for them to be merged.
 ### CI
 
 CI will ensure your code is formatted, lints and passes tests.
-It will collect coverage and report it to [codecov](https://codecov.io/gh/nhooyr/websocket)
+It will collect coverage and report it to [coveralls](https://coveralls.io/github/nhooyr/websocket)
 and also upload a html `coverage` artifact that you can download to browse coverage.
 
 You can run CI locally.
@@ -42,7 +42,4 @@ See [ci/image/Dockerfile](../ci/image/Dockerfile) for the installation of the CI
 
 For coverage details locally, see `ci/out/coverage.html` after running `make test`.
 
-You can also run tests normally with `go test`. `make test` just passes a default set of flags to
-`go test` to collect coverage and runs the WASM tests.
-
-Coverage percentage from codecov and the CI scripts will be different because they are calculated differently.
+You can run tests normally with `go test`. `make test` wraps around `go test` to collect coverage.

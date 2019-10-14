@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v1
       - run: make test
         env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+          COVERALLS_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
       - name: Upload coverage.html
         uses: actions/upload-artifact@master
         with:

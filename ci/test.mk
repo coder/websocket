@@ -1,18 +1,17 @@
-test: gotest
-
-gotest: _gotest htmlcov
+test: gotest ci/out/coverage.html
 ifdef CI
-gotest: codecov
+test: coveralls
 endif
 
-htmlcov: _gotest
+ci/out/coverage.html: gotest
 	go tool cover -html=ci/out/coverage.prof -o=ci/out/coverage.html
 
-codecov: _gotest
-	curl -s https://codecov.io/bash | bash -s -- -Z -f ci/out/coverage.prof
+coveralls: gotest
+	echo "--- coveralls"
+	goveralls -coverprofile=ci/out/coverage.prof -service=github-actions
 
-_gotest:
-	go test -parallel=32 -coverprofile=ci/out/coverage.prof -coverpkg=./... $$TESTFLAGS ./...
+gotest:
+	go test -parallel=32 -covermode=count -coverprofile=ci/out/coverage.prof -coverpkg=./... $${TESTFLAGS-} ./...
 	sed -i '/_stringer\.go/d' ci/out/coverage.prof
 	sed -i '/wsecho\.go/d' ci/out/coverage.prof
 	sed -i '/assert\.go/d' ci/out/coverage.prof
