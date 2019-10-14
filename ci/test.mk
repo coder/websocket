@@ -11,7 +11,7 @@ coveralls: gotest
 	goveralls -coverprofile=ci/out/coverage.prof -service=github-actions
 
 gotest:
-	go test -parallel=32 -covermode=count -coverprofile=ci/out/coverage.prof -coverpkg=./... $${TESTFLAGS-} ./...
+	go test -covermode=count -coverprofile=ci/out/coverage.prof -coverpkg=./... $${GOTESTFLAGS-} ./...
 	sed -i '/_stringer\.go/d' ci/out/coverage.prof
 	sed -i '/wsecho\.go/d' ci/out/coverage.prof
 	sed -i '/assert\.go/d' ci/out/coverage.prof
