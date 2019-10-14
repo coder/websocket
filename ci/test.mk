@@ -16,6 +16,7 @@ coveralls: gotest
 	  BUILD_NUMBER="$$BUILD_NUMBER-PR-$$CI_PULL_REQUEST"
 	fi
 	goveralls -coverprofile=ci/out/coverage.prof -service=github
+
 gotest:
 	go test -covermode=count -coverprofile=ci/out/coverage.prof -coverpkg=./... $${GOTESTFLAGS-} ./...
 	sed -i '/_stringer\.go/d' ci/out/coverage.prof
