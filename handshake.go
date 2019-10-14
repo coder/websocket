@@ -45,6 +45,11 @@ type AcceptOptions struct {
 	// If you do, remember that if you store secure data in cookies, you wil need to verify the
 	// Origin header yourself otherwise you are exposing yourself to a CSRF attack.
 	InsecureSkipVerify bool
+
+	// Compression sets the compression options.
+	// By default, compression is disabled.
+	// See docs on the CompressionOptions type.
+	Compression *CompressionOptions
 }
 
 func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
@@ -240,6 +245,49 @@ type DialOptions struct {
 
 	// Subprotocols lists the subprotocols to negotiate with the server.
 	Subprotocols []string
+
+	// Compression sets the compression options.
+	// By default, compression is disabled.
+	// See docs on the CompressionOptions type.
+	Compression CompressionOptions
+}
+
+// CompressionOptions describes the available compression options.
+//
+// See https://tools.ietf.org/html/rfc7692
+//
+// Enabling compression may spike memory usage as each flate.Writer takes up 1.2 MB.
+// See https://github.com/gorilla/websocket/issues/203
+// Benchmark before enabling in production.
+//
+// This API is experimental and subject to change.
+type CompressionOptions struct {
+	// ContextTakeover controls whether context takeover is enabled.
+	//
+	// If ContextTakeover == false, then a flate.Writer will be grabbed
+	// from the pool as needed for every message written to the connection.
+	//
+	// If ContextTakeover == true, then a flate.Writer will be allocated for each connection.
+	// This allows more efficient compression as the sliding window from previous
+	// messages will be used instead of resetting in between every message.
+	// The downside is that for every connection there will be a fixed allocation
+	// for the flate.Writer.
+	//
+	// See https://www.igvita.com/2013/11/27/configuring-and-optimizing-websocket-compression.
+	ContextTakeover bool
+
+	// Level controls the compression level negotiated.
+	// Defaults to flate.BestSpeed.
+	Level int
+
+	// Threshold controls the minimum message size in bytes before compression is used.
+	// In the case of ContextTakeover == false, a flate.Writer will not be grabbed
+	// from the pool until the message exceeds this threshold.
+	//
+	// Must not be greater than 4096 as that is the write buffer's size.
+	//
+	// Defaults to 512.
+	Threshold int
 }
 
 // Dial performs a WebSocket handshake on the given url with the given options.
