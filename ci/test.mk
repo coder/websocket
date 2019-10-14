@@ -8,6 +8,8 @@ ci/out/coverage.html: gotest
 
 coveralls: gotest
 	echo "--- coveralls"
+	export GIT_BRANCH=$${GITHUB_REF}
+	export BUILD_NUMBER=$${GITHUB_ACTION}
 	goveralls -coverprofile=ci/out/coverage.prof -service=github-actions
 
 gotest:

@@ -11,8 +11,6 @@ ENV PAGER=cat
 ENV CI=true
 ENV MAKEFLAGS="--jobs=8 --output-sync=target"
 
-COPY ./ci/image/gitignore /root/.config/git/ignore
-
 RUN npm install -g prettier
 RUN go get golang.org/x/tools/cmd/stringer
 RUN go get golang.org/x/tools/cmd/goimports

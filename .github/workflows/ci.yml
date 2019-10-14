@@ -4,19 +4,19 @@ on: [push]
 jobs:
   fmt:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:ea94e078d2d589d654a2c759d952bf4199c754d80dadb20696dc3902359027cb
+    container: nhooyr/websocket-ci@sha256:046cd02e79dcbf81dc06eb6fd333fa8643f2503f437ddd46a4c1af9132078a2c
     steps:
       - uses: actions/checkout@v1
       - run: make fmt
   lint:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:ea94e078d2d589d654a2c759d952bf4199c754d80dadb20696dc3902359027cb
+    container: nhooyr/websocket-ci@sha256:046cd02e79dcbf81dc06eb6fd333fa8643f2503f437ddd46a4c1af9132078a2c
     steps:
       - uses: actions/checkout@v1
       - run: make lint
   test:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:ea94e078d2d589d654a2c759d952bf4199c754d80dadb20696dc3902359027cb
+    container: nhooyr/websocket-ci@sha256:046cd02e79dcbf81dc06eb6fd333fa8643f2503f437ddd46a4c1af9132078a2c
     steps:
       - uses: actions/checkout@v1
       - run: make test
