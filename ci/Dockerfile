@@ -3,6 +3,7 @@ FROM golang:1
 RUN apt-get update
 RUN apt-get install -y chromium
 RUN apt-get install -y npm
+RUN apt-get install -y jq
 
 ENV GOPATH=/root/gopath
 ENV PATH=$GOPATH/bin:$PATH

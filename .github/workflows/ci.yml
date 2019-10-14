@@ -1,27 +1,27 @@
 name: ci
-on: [push]
+on: [push, pull_request]
 
 jobs:
   fmt:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:046cd02e79dcbf81dc06eb6fd333fa8643f2503f437ddd46a4c1af9132078a2c
+    container: nhooyr/websocket-ci@sha256:8a8fd73fdea33585d50a33619c4936adfd016246a2ed6bbfbf06def24b518a6a
     steps:
       - uses: actions/checkout@v1
       - run: make fmt
   lint:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:046cd02e79dcbf81dc06eb6fd333fa8643f2503f437ddd46a4c1af9132078a2c
+    container: nhooyr/websocket-ci@sha256:8a8fd73fdea33585d50a33619c4936adfd016246a2ed6bbfbf06def24b518a6a
     steps:
       - uses: actions/checkout@v1
       - run: make lint
   test:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:046cd02e79dcbf81dc06eb6fd333fa8643f2503f437ddd46a4c1af9132078a2c
+    container: nhooyr/websocket-ci@sha256:8a8fd73fdea33585d50a33619c4936adfd016246a2ed6bbfbf06def24b518a6a
     steps:
       - uses: actions/checkout@v1
       - run: make test
         env:
-          COVERALLS_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
+          COVERALLS_TOKEN: ${{ secrets.github_token }}
       - name: Upload coverage.html
         uses: actions/upload-artifact@master
         with:
