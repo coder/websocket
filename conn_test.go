@@ -2377,7 +2377,7 @@ func TestWASM(t *testing.T) {
 
 	wsURL := strings.Replace(s.URL, "http", "ws", 1)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "go", "test", "-exec=wasmbrowsertest", "./...")
