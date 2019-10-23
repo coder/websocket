@@ -868,6 +868,29 @@ func TestConn(t *testing.T) {
 				return c.Close(websocket.StatusNormalClosure, "")
 			},
 		},
+		{
+			// Issue #164
+			name: "closeHandshake_concurrentRead",
+			server: func(ctx context.Context, c *websocket.Conn) error {
+				_, _, err := c.Read(ctx)
+				return assertCloseStatus(err, websocket.StatusNormalClosure)
+			},
+			client: func(ctx context.Context, c *websocket.Conn) error {
+				errc := make(chan error, 1)
+				go func() {
+					_, _, err := c.Read(ctx)
+					errc <- err
+				}()
+
+				err := c.Close(websocket.StatusNormalClosure, "")
+				if err != nil {
+					return err
+				}
+
+				err = <-errc
+				return assertCloseStatus(err, websocket.StatusNormalClosure)
+			},
+		},
 	}
 	for _, tc := range testCases {
 		tc := tc
