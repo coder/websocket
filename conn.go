@@ -42,11 +42,12 @@ type Conn struct {
 	closer   io.Closer
 	client   bool
 
-	closeOnce    sync.Once
-	closeErrOnce sync.Once
-	closeErr     error
-	closed       chan struct{}
-	closing      *atomicInt64
+	closeOnce     sync.Once
+	closeErrOnce  sync.Once
+	closeErr      error
+	closed        chan struct{}
+	closing       *atomicInt64
+	closeReceived error
 
 	// messageWriter state.
 	// writeMsgLock is acquired to write a data message.
@@ -339,10 +340,12 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 		if err != nil {
 			err = fmt.Errorf("received invalid close payload: %w", err)
 			c.exportedClose(StatusProtocolError, err.Error(), false)
+			c.closeReceived = err
 			return err
 		}
 
 		err = fmt.Errorf("received close: %w", ce)
+		c.closeReceived = err
 		c.writeClose(b, err, false)
 
 		if ctx.Err() != nil {
@@ -941,6 +944,12 @@ func (c *Conn) waitClose() error {
 		return err
 	}
 	defer c.releaseLock(c.readLock)
+
+	if c.closeReceived != nil {
+		// goroutine reading just received the close.
+		return c.closeReceived
+	}
+
 	c.readerShouldLock = false
 
 	b := bpool.Get()
