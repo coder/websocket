@@ -141,6 +141,13 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 
 	w.WriteHeader(http.StatusSwitchingProtocols)
 
+	// Fix for gin, see #166
+	if w, ok := w.(interface {
+		WriteHeaderNow()
+	}); ok {
+		w.WriteHeaderNow()
+	}
+
 	netConn, brw, err := hj.Hijack()
 	if err != nil {
 		err = fmt.Errorf("failed to hijack connection: %w", err)
