@@ -236,6 +236,10 @@ func (c *Conn) readTillMsg(ctx context.Context) (header, error) {
 		if h.opcode.controlOp() {
 			err = c.handleControl(ctx, h)
 			if err != nil {
+				// Pass through CloseErrors when receiving a close frame.
+				if h.opcode == opClose && CloseStatus(err) != -1 {
+					return header{}, err
+				}
 				return header{}, fmt.Errorf("failed to handle control frame %v: %w", h.opcode, err)
 			}
 			continue
