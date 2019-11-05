@@ -28,7 +28,8 @@ go get nhooyr.io/websocket
 
 ## Roadmap
 
-- [ ] WebSockets over HTTP/2 [#4](https://github.com/nhooyr/websocket/issues/4)
+- [ ] Compression Extensions [#163](https://github.com/nhooyr/websocket/pull/163)
+- [ ] HTTP/2 [#4](https://github.com/nhooyr/websocket/issues/4)
 
 ## Examples
 
@@ -65,9 +66,6 @@ http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
 
 ### Client
 
-The client side of this library requires at least Go 1.12 as it uses a [new feature
-in net/http](https://github.com/golang/go/issues/26937#issuecomment-415855861) to perform WebSocket handshakes.
-
 ```go
 ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 defer cancel()
@@ -94,9 +92,6 @@ c.Close(websocket.StatusNormalClosure, "")
 - net.Conn is never exposed as WebSocket over HTTP/2 will not have a net.Conn.
 - Using net/http's Client for dialing means we do not have to reinvent dialing hooks
   and configurations like other WebSocket libraries
-- We do not support the deflate compression extension because Go's compress/flate library
-  is very memory intensive and browsers do not handle WebSocket compression intelligently.
-  See [#5](https://github.com/nhooyr/websocket/issues/5)
 
 ## Comparison
 
