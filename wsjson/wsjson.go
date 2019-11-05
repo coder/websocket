@@ -15,7 +15,7 @@ import (
 func Read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 	err := read(ctx, c, v)
 	if err != nil {
-		return fmt.Errorf("failed to read json: %w", err)
+		return err
 	}
 	return nil
 }
@@ -53,7 +53,7 @@ func read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 func Write(ctx context.Context, c *websocket.Conn, v interface{}) error {
 	err := write(ctx, c, v)
 	if err != nil {
-		return fmt.Errorf("failed to write json: %w", err)
+		return err
 	}
 	return nil
 }
