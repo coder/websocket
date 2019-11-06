@@ -322,7 +322,7 @@ func (ce CloseError) bytes() ([]byte, error) {
 	return buf, nil
 }
 
-// fastXOR applies the WebSocket masking algorithm to p
+// fastMask applies the WebSocket masking algorithm to p
 // with the given key.
 // See https://tools.ietf.org/html/rfc6455#section-5.3
 //
@@ -331,7 +331,9 @@ func (ce CloseError) bytes() ([]byte, error) {
 //
 // It is optimized for LittleEndian and expects the key
 // to be in little endian.
-func fastXOR(key uint32, b []byte) uint32 {
+//
+// See https://github.com/golang/go/issues/31586
+func mask(key uint32, b []byte) uint32 {
 	if len(b) >= 8 {
 		key64 := uint64(key)<<32 | uint64(key)
 

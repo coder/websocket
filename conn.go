@@ -325,7 +325,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 	}
 
 	if h.masked {
-		fastXOR(h.maskKey, b)
+		mask(h.maskKey, b)
 	}
 
 	switch h.opcode {
@@ -446,8 +446,8 @@ func (c *Conn) reader(ctx context.Context, lock bool) (MessageType, io.Reader, e
 
 	c.readerMsgCtx = ctx
 	c.readerMsgHeader = h
-	c.readerMaskKey = h.maskKey
 	c.readerFrameEOF = false
+	c.readerMaskKey = h.maskKey
 	c.readMsgLeft = c.msgReadLimit.Load()
 
 	r := &messageReader{
@@ -546,7 +546,7 @@ func (r *messageReader) read(p []byte, lock bool) (int, error) {
 	h.payloadLength -= int64(n)
 	r.c.readMsgLeft -= int64(n)
 	if h.masked {
-		r.c.readerMaskKey = fastXOR(r.c.readerMaskKey, p)
+		r.c.readerMaskKey = mask(r.c.readerMaskKey, p)
 	}
 	r.c.readerMsgHeader = h
 
@@ -762,7 +762,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 	c.writeHeader.payloadLength = int64(len(p))
 
 	if c.client {
-		err = binary.Read(rand.Reader, binary.BigEndian, &c.writeHeader.maskKey)
+		err = binary.Read(rand.Reader, binary.LittleEndian, &c.writeHeader.maskKey)
 		if err != nil {
 			return 0, fmt.Errorf("failed to generate masking key: %w", err)
 		}
@@ -832,7 +832,7 @@ func (c *Conn) realWriteFrame(ctx context.Context, h header, p []byte) (n int, e
 				return n, err
 			}
 
-			maskKey = fastXOR(maskKey, c.writeBuf[i:i+n2])
+			maskKey = mask(maskKey, c.writeBuf[i:i+n2])
 
 			p = p[n2:]
 			n += n2

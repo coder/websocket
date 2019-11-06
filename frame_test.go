@@ -308,13 +308,13 @@ func Test_validWireCloseCode(t *testing.T) {
 	}
 }
 
-func Test_xor(t *testing.T) {
+func Test_mask(t *testing.T) {
 	t.Parallel()
 
 	key := []byte{0xa, 0xb, 0xc, 0xff}
 	key32 := binary.LittleEndian.Uint32(key)
 	p := []byte{0xa, 0xb, 0xc, 0xf2, 0xc}
-	gotKey32 := fastXOR(key32, p)
+	gotKey32 := mask(key32, p)
 
 	if exp := []byte{0, 0, 0, 0x0d, 0x6}; !cmp.Equal(exp, p) {
 		t.Fatalf("unexpected mask: %v", cmp.Diff(exp, p))
@@ -325,7 +325,7 @@ func Test_xor(t *testing.T) {
 	}
 }
 
-func basixXOR(maskKey [4]byte, pos int, b []byte) int {
+func basixMask(maskKey [4]byte, pos int, b []byte) int {
 	for i := range b {
 		b[i] ^= maskKey[pos&3]
 		pos++
@@ -333,7 +333,7 @@ func basixXOR(maskKey [4]byte, pos int, b []byte) int {
 	return pos & 3
 }
 
-func BenchmarkXOR(b *testing.B) {
+func Benchmark_mask(b *testing.B) {
 	sizes := []int{
 		2,
 		3,
@@ -355,18 +355,18 @@ func BenchmarkXOR(b *testing.B) {
 			name: "basic",
 			fn: func(b *testing.B, key [4]byte, p []byte) {
 				for i := 0; i < b.N; i++ {
-					basixXOR(key, 0, p)
+					basixMask(key, 0, p)
 				}
 			},
 		},
 		{
 			name: "fast",
 			fn: func(b *testing.B, key [4]byte, p []byte) {
-				key32 := binary.BigEndian.Uint32(key[:])
+				key32 := binary.LittleEndian.Uint32(key[:])
 				b.ResetTimer()
 
 				for i := 0; i < b.N; i++ {
-					fastXOR(key32, p)
+					mask(key32, p)
 				}
 			},
 		},
@@ -384,7 +384,6 @@ func BenchmarkXOR(b *testing.B) {
 		b.Run(strconv.Itoa(size), func(b *testing.B) {
 			for _, fn := range fns {
 				b.Run(fn.name, func(b *testing.B) {
-					b.ReportAllocs()
 					b.SetBytes(int64(size))
 
 					fn.fn(b, key, p)
