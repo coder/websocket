@@ -37,7 +37,7 @@ func (c *Conn) ReadFrame(ctx context.Context) (OpCode, []byte, error) {
 		return 0, nil, err
 	}
 	if h.masked {
-		fastXOR(h.maskKey, 0, b)
+		fastXOR(h.maskKey, b)
 	}
 	return OpCode(h.opcode), b, nil
 }
