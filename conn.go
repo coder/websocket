@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -81,7 +82,7 @@ type Conn struct {
 	readerMsgCtx    context.Context
 	readerMsgHeader header
 	readerFrameEOF  bool
-	readerMaskPos   int
+	readerMaskKey   uint32
 
 	setReadTimeout  chan context.Context
 	setWriteTimeout chan context.Context
@@ -324,7 +325,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 	}
 
 	if h.masked {
-		fastXOR(h.maskKey, 0, b)
+		mask(h.maskKey, b)
 	}
 
 	switch h.opcode {
@@ -446,7 +447,7 @@ func (c *Conn) reader(ctx context.Context, lock bool) (MessageType, io.Reader, e
 	c.readerMsgCtx = ctx
 	c.readerMsgHeader = h
 	c.readerFrameEOF = false
-	c.readerMaskPos = 0
+	c.readerMaskKey = h.maskKey
 	c.readMsgLeft = c.msgReadLimit.Load()
 
 	r := &messageReader{
@@ -532,7 +533,7 @@ func (r *messageReader) read(p []byte, lock bool) (int, error) {
 
 		r.c.readerMsgHeader = h
 		r.c.readerFrameEOF = false
-		r.c.readerMaskPos = 0
+		r.c.readerMaskKey = h.maskKey
 	}
 
 	h := r.c.readerMsgHeader
@@ -545,7 +546,7 @@ func (r *messageReader) read(p []byte, lock bool) (int, error) {
 	h.payloadLength -= int64(n)
 	r.c.readMsgLeft -= int64(n)
 	if h.masked {
-		r.c.readerMaskPos = fastXOR(h.maskKey, r.c.readerMaskPos, p)
+		r.c.readerMaskKey = mask(r.c.readerMaskKey, p)
 	}
 	r.c.readerMsgHeader = h
 
@@ -761,7 +762,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 	c.writeHeader.payloadLength = int64(len(p))
 
 	if c.client {
-		_, err := io.ReadFull(rand.Reader, c.writeHeader.maskKey[:])
+		err = binary.Read(rand.Reader, binary.LittleEndian, &c.writeHeader.maskKey)
 		if err != nil {
 			return 0, fmt.Errorf("failed to generate masking key: %w", err)
 		}
@@ -809,7 +810,7 @@ func (c *Conn) realWriteFrame(ctx context.Context, h header, p []byte) (n int, e
 	}
 
 	if c.client {
-		var keypos int
+		maskKey := h.maskKey
 		for len(p) > 0 {
 			if c.bw.Available() == 0 {
 				err = c.bw.Flush()
@@ -831,7 +832,7 @@ func (c *Conn) realWriteFrame(ctx context.Context, h header, p []byte) (n int, e
 				return n, err
 			}
 
-			keypos = fastXOR(h.maskKey, keypos, c.writeBuf[i:i+n2])
+			maskKey = mask(maskKey, c.writeBuf[i:i+n2])
 
 			p = p[n2:]
 			n += n2
