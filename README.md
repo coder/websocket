@@ -138,8 +138,8 @@ In terms of performance, the differences mostly depend on your application code.
 reuses message buffers out of the box if you use the wsjson and wspb subpackages.
 As mentioned above, nhooyr.io/websocket also supports concurrent writers.
 
-The WebSocket masking algorithm used by this package is also [1.75x](https://github.com/nhooyr/websocket/releases/tag/v1.7.4) faster
-on average than gorilla/websocket or gobwas/ws while using pure safe Go.
+The WebSocket masking algorithm used by this package is also [1.75x](https://github.com/nhooyr/websocket/releases/tag/v1.7.4)
+faster than gorilla/websocket or gobwas/ws while using only pure safe Go.
 
 The only performance con to nhooyr.io/websocket is that it uses one extra goroutine to support
 cancellation with context.Context. This costs 2 KB of memory which is cheap compared to
