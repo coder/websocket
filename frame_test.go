@@ -13,8 +13,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+	_ "unsafe"
 
+	"github.com/gobwas/ws"
 	"github.com/google/go-cmp/cmp"
+	_ "github.com/gorilla/websocket"
 
 	"nhooyr.io/websocket/internal/assert"
 )
@@ -325,13 +328,16 @@ func Test_mask(t *testing.T) {
 	}
 }
 
-func basixMask(maskKey [4]byte, pos int, b []byte) int {
+func basicMask(maskKey [4]byte, pos int, b []byte) int {
 	for i := range b {
 		b[i] ^= maskKey[pos&3]
 		pos++
 	}
 	return pos & 3
 }
+
+//go:linkname gorillaMaskBytes github.com/gorilla/websocket.maskBytes
+func gorillaMaskBytes(key [4]byte, pos int, b []byte) int
 
 func Benchmark_mask(b *testing.B) {
 	sizes := []int{
@@ -355,18 +361,35 @@ func Benchmark_mask(b *testing.B) {
 			name: "basic",
 			fn: func(b *testing.B, key [4]byte, p []byte) {
 				for i := 0; i < b.N; i++ {
-					basixMask(key, 0, p)
+					basicMask(key, 0, p)
 				}
 			},
 		},
+
 		{
-			name: "fast",
+			name: "nhooyr",
 			fn: func(b *testing.B, key [4]byte, p []byte) {
 				key32 := binary.LittleEndian.Uint32(key[:])
 				b.ResetTimer()
 
 				for i := 0; i < b.N; i++ {
 					mask(key32, p)
+				}
+			},
+		},
+		{
+			name: "gorilla",
+			fn: func(b *testing.B, key [4]byte, p []byte) {
+				for i := 0; i < b.N; i++ {
+					gorillaMaskBytes(key, 0, p)
+				}
+			},
+		},
+		{
+			name: "gobwas",
+			fn: func(b *testing.B, key [4]byte, p []byte) {
+				for i := 0; i < b.N; i++ {
+					ws.Cipher(p, key, 0)
 				}
 			},
 		},
