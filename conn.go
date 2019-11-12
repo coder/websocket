@@ -4,6 +4,7 @@ package websocket
 
 import (
 	"bufio"
+	"compress/flate"
 	"context"
 	"crypto/rand"
 	"encoding/binary"
@@ -1062,4 +1063,56 @@ func (c *Conn) extractBufioWriterBuf(w io.Writer) {
 	c.bw.Flush()
 
 	c.bw.Reset(w)
+}
+
+var flateWriterPoolsMu sync.Mutex
+var flateWriterPools = make(map[int]*sync.Pool)
+
+func getFlateWriterPool(level int) *sync.Pool {
+	flateWriterPoolsMu.Lock()
+	defer flateWriterPoolsMu.Unlock()
+
+	p, ok := flateWriterPools[level]
+	if !ok {
+		p = &sync.Pool{
+			New: func() interface{} {
+				w, err := flate.NewWriter(nil, level)
+				if err != nil {
+					panic("websocket: unexpected error from flate.NewWriter: " + err.Error())
+				}
+				return w
+			},
+		}
+		flateWriterPools[level] = p
+	}
+
+	return p
+}
+
+func getFlateWriter(w io.Writer, level int) *flate.Writer {
+	p := getFlateWriterPool(level)
+	fw := p.Get().(*flate.Writer)
+	fw.Reset(w)
+	return fw
+}
+
+func putFlateWriter(w *flate.Writer, level int) {
+	p := getFlateWriterPool(level)
+	p.Put(w)
+}
+
+var flateReaderPool = &sync.Pool{
+	New: func() interface{} {
+		return flate.NewReader(nil)
+	},
+}
+
+func getFlateReader(r flate.Reader) io.ReadCloser {
+	fr := flateReaderPool.Get().(io.ReadCloser)
+	fr.(flate.Resetter).Reset(r, nil)
+	return fr
+}
+
+func putFlateReader(fr io.ReadCloser) {
+	flateReaderPool.Put(fr)
 }
