@@ -377,7 +377,7 @@ func Test_verifyServerHandshake(t *testing.T) {
 				resp.Header.Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
 			}
 
-			err = verifyServerResponse(r, resp)
+			_, err = verifyServerResponse(r, resp, &DialOptions{})
 			if (err == nil) != tc.success {
 				t.Fatalf("unexpected error: %+v", err)
 			}

@@ -42,6 +42,7 @@ type Conn struct {
 	writeBuf []byte
 	closer   io.Closer
 	client   bool
+	copts    *CompressionOptions
 
 	closeOnce     sync.Once
 	closeErrOnce  sync.Once

@@ -31,6 +31,7 @@
 //  - Accept and AcceptOptions
 //  - Conn.Ping
 //  - HTTPClient and HTTPHeader fields in DialOptions
+//  - CompressionOptions
 //
 // The *http.Response returned by Dial will always either be nil or &http.Response{} as
 // we do not have access to the handshake response in the browser.
