@@ -1,6 +1,6 @@
 // +build !js
 
-// Package websocket is a minimal and idiomatic implementation of the WebSocket protocol.
+// Package websocket implements the RFC 6455 WebSocket protocol.
 //
 // https://tools.ietf.org/html/rfc6455
 //

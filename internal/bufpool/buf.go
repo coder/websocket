@@ -1,4 +1,4 @@
-package bpool
+package bufpool
 
 import (
 	"bytes"

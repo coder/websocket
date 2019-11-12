@@ -5,9 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
 	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/internal/bpool"
+	"nhooyr.io/websocket/internal/bufpool"
 )
 
 // Read reads a json message from c into v.
@@ -31,8 +30,8 @@ func read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 		return fmt.Errorf("unexpected frame type for json (expected %v): %v", websocket.MessageText, typ)
 	}
 
-	b := bpool.Get()
-	defer bpool.Put(b)
+	b := bufpool.Get()
+	defer bufpool.Put(b)
 
 	_, err = b.ReadFrom(r)
 	if err != nil {

@@ -13,13 +13,28 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"nhooyr.io/websocket/internal/atomicint"
+	"nhooyr.io/websocket/internal/wsframe"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"nhooyr.io/websocket/internal/bpool"
+	"nhooyr.io/websocket/internal/bufpool"
+)
+
+// MessageType represents the type of a WebSocket message.
+// See https://tools.ietf.org/html/rfc6455#section-5.6
+type MessageType int
+
+// MessageType constants.
+const (
+	// MessageText is for UTF-8 encoded text messages like JSON.
+	MessageText MessageType = iota + 1
+	// MessageBinary is for binary messages like Protobufs.
+	MessageBinary
 )
 
 // Conn represents a WebSocket connection.
@@ -36,20 +51,20 @@ import (
 // This applies to the Read methods in the wsjson/wspb subpackages as well.
 type Conn struct {
 	subprotocol string
-	br          *bufio.Reader
+	fw          *flate.Writer
 	bw          *bufio.Writer
 	// writeBuf is used for masking, its the buffer in bufio.Writer.
 	// Only used by the client for masking the bytes in the buffer.
 	writeBuf []byte
 	closer   io.Closer
 	client   bool
-	copts    *CompressionOptions
+	copts    *compressionOptions
 
 	closeOnce     sync.Once
 	closeErrOnce  sync.Once
 	closeErr      error
 	closed        chan struct{}
-	closing       *atomicInt64
+	closing       *atomicint.Int64
 	closeReceived error
 
 	// messageWriter state.
@@ -61,35 +76,18 @@ type Conn struct {
 	writeHeaderBuf []byte
 	writeHeader    *header
 	// read limit for a message in bytes.
-	msgReadLimit *atomicInt64
+	msgReadLimit *atomicint.Int64
 
 	// Used to ensure a previous writer is not used after being closed.
 	activeWriter atomic.Value
 	// messageWriter state.
 	writeMsgOpcode opcode
 	writeMsgCtx    context.Context
-	readMsgLeft    int64
-
-	// Used to ensure the previous reader is read till EOF before allowing
-	// a new one.
-	activeReader *messageReader
-	// readFrameLock is acquired to read from bw.
-	readFrameLock     chan struct{}
-	isReadClosed      *atomicInt64
-	readHeaderBuf     []byte
-	controlPayloadBuf []byte
-	readLock          chan struct{}
-
-	// messageReader state.
-	readerMsgCtx    context.Context
-	readerMsgHeader header
-	readerFrameEOF  bool
-	readerMaskKey   uint32
 
 	setReadTimeout  chan context.Context
 	setWriteTimeout chan context.Context
 
-	pingCounter   *atomicInt64
+	pingCounter   *atomicint.Int64
 	activePingsMu sync.Mutex
 	activePings   map[string]chan<- struct{}
 
@@ -98,9 +96,9 @@ type Conn struct {
 
 func (c *Conn) init() {
 	c.closed = make(chan struct{})
-	c.closing = &atomicInt64{}
+	c.closing = &atomicint.Int64{}
 
-	c.msgReadLimit = &atomicInt64{}
+	c.msgReadLimit = &atomicint.Int64{}
 	c.msgReadLimit.Store(32768)
 
 	c.writeMsgLock = make(chan struct{}, 1)
@@ -108,17 +106,18 @@ func (c *Conn) init() {
 
 	c.readFrameLock = make(chan struct{}, 1)
 	c.readLock = make(chan struct{}, 1)
+	c.payloadReader = framePayloadReader{c}
 
 	c.setReadTimeout = make(chan context.Context)
 	c.setWriteTimeout = make(chan context.Context)
 
-	c.pingCounter = &atomicInt64{}
+	c.pingCounter = &atomicint.Int64{}
 	c.activePings = make(map[string]chan<- struct{})
 
 	c.writeHeaderBuf = makeWriteHeaderBuf()
 	c.writeHeader = &header{}
 	c.readHeaderBuf = makeReadHeaderBuf()
-	c.isReadClosed = &atomicInt64{}
+	c.isReadClosed = &atomicint.Int64{}
 	c.controlPayloadBuf = make([]byte, maxControlFramePayload)
 
 	runtime.SetFinalizer(c, func(c *Conn) {
@@ -126,6 +125,15 @@ func (c *Conn) init() {
 	})
 
 	c.logf = log.Printf
+
+	if c.copts != nil {
+		if !c.readNoContextTakeOver() {
+			c.fr = getFlateReader(c.payloadReader)
+		}
+		if !c.writeNoContextTakeOver() {
+			c.fw = getFlateWriter(c.bw)
+		}
+	}
 
 	go c.timeoutLoop()
 }
@@ -148,18 +156,25 @@ func (c *Conn) close(err error) {
 		// closeErr.
 		c.closer.Close()
 
-		// See comment on bufioReaderPool in handshake.go
+		// By acquiring the locks, we ensure no goroutine will touch the bufio reader or writer
+		// and we can safely return them.
+		// Whenever a caller holds this lock and calls close, it ensures to release the lock to prevent
+		// a deadlock.
+		// As of now, this is in writeFrame, readFramePayload and readHeader.
+		c.readFrameLock <- struct{}{}
 		if c.client {
-			// By acquiring the locks, we ensure no goroutine will touch the bufio reader or writer
-			// and we can safely return them.
-			// Whenever a caller holds this lock and calls close, it ensures to release the lock to prevent
-			// a deadlock.
-			// As of now, this is in writeFrame, readFramePayload and readHeader.
-			c.readFrameLock <- struct{}{}
 			returnBufioReader(c.br)
+		}
+		if c.fr != nil {
+			putFlateReader(c.fr)
+		}
 
-			c.writeFrameLock <- struct{}{}
+		c.writeFrameLock <- struct{}{}
+		if c.client {
 			returnBufioWriter(c.bw)
+		}
+		if c.fw != nil {
+			putFlateWriter(c.fw)
 		}
 	})
 }
@@ -230,7 +245,7 @@ func (c *Conn) readTillMsg(ctx context.Context) (header, error) {
 			return header{}, err
 		}
 
-		if h.rsv1 || h.rsv2 || h.rsv3 {
+		if (h.rsv1 && (c.copts == nil || h.opcode.controlOp() || h.opcode == opContinuation)) || h.rsv2 || h.rsv3 {
 			err := fmt.Errorf("received header with rsv bits set: %v:%v:%v", h.rsv1, h.rsv2, h.rsv3)
 			c.exportedClose(StatusProtocolError, err.Error(), false)
 			return header{}, err
@@ -448,6 +463,13 @@ func (c *Conn) reader(ctx context.Context, lock bool) (MessageType, io.Reader, e
 
 	c.readerMsgCtx = ctx
 	c.readerMsgHeader = h
+
+	c.readerPayloadCompressed = h.rsv1
+
+	if c.readerPayloadCompressed {
+		c.readerCompressTail.Reset(deflateMessageTail)
+	}
+
 	c.readerFrameEOF = false
 	c.readerMaskKey = h.maskKey
 	c.readMsgLeft = c.msgReadLimit.Load()
@@ -456,7 +478,65 @@ func (c *Conn) reader(ctx context.Context, lock bool) (MessageType, io.Reader, e
 		c: c,
 	}
 	c.activeReader = r
+	if c.readerPayloadCompressed && c.readNoContextTakeOver() {
+		c.fr = getFlateReader(c.payloadReader)
+	}
 	return MessageType(h.opcode), r, nil
+}
+
+type framePayloadReader struct {
+	c *Conn
+}
+
+func (r framePayloadReader) Read(p []byte) (int, error) {
+	if r.c.readerFrameEOF {
+		if r.c.readerPayloadCompressed && r.c.readerMsgHeader.fin {
+			n, _ := r.c.readerCompressTail.Read(p)
+			return n, nil
+		}
+
+		h, err := r.c.readTillMsg(r.c.readerMsgCtx)
+		if err != nil {
+			return 0, err
+		}
+
+		if h.opcode != opContinuation {
+			err := errors.New("received new data message without finishing the previous message")
+			r.c.exportedClose(StatusProtocolError, err.Error(), false)
+			return 0, err
+		}
+
+		r.c.readerMsgHeader = h
+		r.c.readerFrameEOF = false
+		r.c.readerMaskKey = h.maskKey
+	}
+
+	h := r.c.readerMsgHeader
+	if int64(len(p)) > h.payloadLength {
+		p = p[:h.payloadLength]
+	}
+
+	n, err := r.c.readFramePayload(r.c.readerMsgCtx, p)
+
+	h.payloadLength -= int64(n)
+	if h.masked {
+		r.c.readerMaskKey = mask(r.c.readerMaskKey, p)
+	}
+	r.c.readerMsgHeader = h
+
+	if err != nil {
+		return n, err
+	}
+
+	if h.payloadLength == 0 {
+		r.c.readerFrameEOF = true
+
+		if h.fin && !r.c.readerPayloadCompressed {
+			return n, io.EOF
+		}
+	}
+
+	return n, nil
 }
 
 // messageReader enables reading a data frame from the WebSocket connection.
@@ -521,51 +601,27 @@ func (r *messageReader) read(p []byte, lock bool) (int, error) {
 		p = p[:r.c.readMsgLeft]
 	}
 
-	if r.c.readerFrameEOF {
-		h, err := r.c.readTillMsg(r.c.readerMsgCtx)
-		if err != nil {
-			return 0, err
-		}
-
-		if h.opcode != opContinuation {
-			err := errors.New("received new data message without finishing the previous message")
-			r.c.exportedClose(StatusProtocolError, err.Error(), false)
-			return 0, err
-		}
-
-		r.c.readerMsgHeader = h
-		r.c.readerFrameEOF = false
-		r.c.readerMaskKey = h.maskKey
+	pr := io.Reader(r.c.payloadReader)
+	if r.c.readerPayloadCompressed {
+		pr = r.c.fr
 	}
 
-	h := r.c.readerMsgHeader
-	if int64(len(p)) > h.payloadLength {
-		p = p[:h.payloadLength]
-	}
+	n, err := pr.Read(p)
 
-	n, err := r.c.readFramePayload(r.c.readerMsgCtx, p)
-
-	h.payloadLength -= int64(n)
 	r.c.readMsgLeft -= int64(n)
-	if h.masked {
-		r.c.readerMaskKey = mask(r.c.readerMaskKey, p)
-	}
-	r.c.readerMsgHeader = h
 
-	if err != nil {
-		return n, err
-	}
-
-	if h.payloadLength == 0 {
-		r.c.readerFrameEOF = true
-
-		if h.fin {
-			r.c.activeReader = nil
-			return n, io.EOF
+	if r.c.readerFrameEOF && r.c.readerMsgHeader.fin {
+		if r.c.readerPayloadCompressed && r.c.readNoContextTakeOver() {
+			putFlateReader(r.c.fr)
+			r.c.fr = nil
+		}
+		r.c.activeReader = nil
+		if err == nil {
+			err = io.EOF
 		}
 	}
 
-	return n, nil
+	return n, err
 }
 
 func (c *Conn) readFramePayload(ctx context.Context, p []byte) (_ int, err error) {
@@ -971,10 +1027,10 @@ func (c *Conn) waitClose() error {
 		return c.closeReceived
 	}
 
-	b := bpool.Get()
+	b := bufpool.Get()
 	buf := b.Bytes()
 	buf = buf[:cap(buf)]
-	defer bpool.Put(b)
+	defer bufpool.Put(b)
 
 	for {
 		if c.activeReader == nil || c.readerFrameEOF {
@@ -1065,40 +1121,21 @@ func (c *Conn) extractBufioWriterBuf(w io.Writer) {
 	c.bw.Reset(w)
 }
 
-var flateWriterPoolsMu sync.Mutex
-var flateWriterPools = make(map[int]*sync.Pool)
-
-func getFlateWriterPool(level int) *sync.Pool {
-	flateWriterPoolsMu.Lock()
-	defer flateWriterPoolsMu.Unlock()
-
-	p, ok := flateWriterPools[level]
-	if !ok {
-		p = &sync.Pool{
-			New: func() interface{} {
-				w, err := flate.NewWriter(nil, level)
-				if err != nil {
-					panic("websocket: unexpected error from flate.NewWriter: " + err.Error())
-				}
-				return w
-			},
-		}
-		flateWriterPools[level] = p
-	}
-
-	return p
+var flateWriterPool = &sync.Pool{
+	New: func() interface{} {
+		w, _ := flate.NewWriter(nil, flate.BestSpeed)
+		return w
+	},
 }
 
-func getFlateWriter(w io.Writer, level int) *flate.Writer {
-	p := getFlateWriterPool(level)
-	fw := p.Get().(*flate.Writer)
+func getFlateWriter(w io.Writer) *flate.Writer {
+	fw := flateWriterPool.Get().(*flate.Writer)
 	fw.Reset(w)
 	return fw
 }
 
-func putFlateWriter(w *flate.Writer, level int) {
-	p := getFlateWriterPool(level)
-	p.Put(w)
+func putFlateWriter(w *flate.Writer) {
+	flateWriterPool.Put(w)
 }
 
 var flateReaderPool = &sync.Pool{
@@ -1107,12 +1144,60 @@ var flateReaderPool = &sync.Pool{
 	},
 }
 
-func getFlateReader(r flate.Reader) io.ReadCloser {
-	fr := flateReaderPool.Get().(io.ReadCloser)
+func getFlateReader(r io.Reader) io.Reader {
+	fr := flateReaderPool.Get().(io.Reader)
 	fr.(flate.Resetter).Reset(r, nil)
 	return fr
 }
 
-func putFlateReader(fr io.ReadCloser) {
+func putFlateReader(fr io.Reader) {
 	flateReaderPool.Put(fr)
+}
+
+func (c *Conn) writeNoContextTakeOver() bool {
+	return c.client && c.copts.clientNoContextTakeover || !c.client && c.copts.serverNoContextTakeover
+}
+
+func (c *Conn) readNoContextTakeOver() bool {
+	return !c.client && c.copts.clientNoContextTakeover || c.client && c.copts.serverNoContextTakeover
+}
+
+type trimLastFourBytesWriter struct {
+	w    io.Writer
+	tail []byte
+}
+
+func (w *trimLastFourBytesWriter) Write(p []byte) (int, error) {
+	extra := len(w.tail) + len(p) - 4
+
+	if extra <= 0 {
+		w.tail = append(w.tail, p...)
+		return len(p), nil
+	}
+
+	// Now we need to write as many extra bytes as we can from the previous tail.
+	if extra > len(w.tail) {
+		extra = len(w.tail)
+	}
+	if extra > 0 {
+		_, err := w.Write(w.tail[:extra])
+		if err != nil {
+			return 0, err
+		}
+		w.tail = w.tail[extra:]
+	}
+
+	// If p is less than or equal to 4 bytes,
+	// all of it is is part of the tail.
+	if len(p) <= 4 {
+		w.tail = append(w.tail, p...)
+		return len(p), nil
+	}
+
+	// Otherwise, only the last 4 bytes are.
+	w.tail = append(w.tail, p[len(p)-4:]...)
+
+	p = p[:len(p)-4]
+	n, err := w.w.Write(p)
+	return n + 4, err
 }

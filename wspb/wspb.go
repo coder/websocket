@@ -9,7 +9,7 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/internal/bpool"
+	"nhooyr.io/websocket/internal/bufpool"
 )
 
 // Read reads a protobuf message from c into v.
@@ -33,8 +33,8 @@ func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 		return fmt.Errorf("unexpected frame type for protobuf (expected %v): %v", websocket.MessageBinary, typ)
 	}
 
-	b := bpool.Get()
-	defer bpool.Put(b)
+	b := bufpool.Get()
+	defer bufpool.Put(b)
 
 	_, err = b.ReadFrom(r)
 	if err != nil {
@@ -61,10 +61,10 @@ func Write(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 }
 
 func write(ctx context.Context, c *websocket.Conn, v proto.Message) error {
-	b := bpool.Get()
+	b := bufpool.Get()
 	pb := proto.NewBuffer(b.Bytes())
 	defer func() {
-		bpool.Put(bytes.NewBuffer(pb.Bytes()))
+		bufpool.Put(bytes.NewBuffer(pb.Bytes()))
 	}()
 
 	err := pb.Marshal(v)

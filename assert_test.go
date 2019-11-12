@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/rand"
 	"strings"
+	"testing"
 	"time"
 
 	"nhooyr.io/websocket"
@@ -15,36 +16,30 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-func assertJSONEcho(ctx context.Context, c *websocket.Conn, n int) error {
-	exp := randString(n)
-	err := wsjson.Write(ctx, c, exp)
-	if err != nil {
-		return err
-	}
-
-	var act interface{}
-	err = wsjson.Read(ctx, c, &act)
-	if err != nil {
-		return err
-	}
-
-	return assert.Equalf(exp, act, "unexpected JSON")
-}
-
-func assertJSONRead(ctx context.Context, c *websocket.Conn, exp interface{}) error {
-	var act interface{}
-	err := wsjson.Read(ctx, c, &act)
-	if err != nil {
-		return err
-	}
-
-	return assert.Equalf(exp, act, "unexpected JSON")
-}
-
 func randBytes(n int) []byte {
 	b := make([]byte, n)
 	rand.Read(b)
 	return b
+}
+
+func assertJSONEcho(t *testing.T, ctx context.Context, c *websocket.Conn, n int) {
+	exp := randString(n)
+	err := wsjson.Write(ctx, c, exp)
+	assert.Success(t, err)
+
+	var act interface{}
+	err = wsjson.Read(ctx, c, &act)
+	assert.Success(t, err)
+
+	assert.Equalf(t, exp, act, "unexpected JSON")
+}
+
+func assertJSONRead(t *testing.T, ctx context.Context, c *websocket.Conn, exp interface{}) {
+	var act interface{}
+	err := wsjson.Read(ctx, c, &act)
+	assert.Success(t, err)
+
+	assert.Equalf(t, exp, act, "unexpected JSON")
 }
 
 func randString(n int) string {
@@ -60,23 +55,18 @@ func randString(n int) string {
 	return s
 }
 
-func assertEcho(ctx context.Context, c *websocket.Conn, typ websocket.MessageType, n int) error {
+func assertEcho(t *testing.T, ctx context.Context, c *websocket.Conn, typ websocket.MessageType, n int) {
 	p := randBytes(n)
 	err := c.Write(ctx, typ, p)
-	if err != nil {
-		return err
-	}
+	assert.Success(t, err)
+
 	typ2, p2, err := c.Read(ctx)
-	if err != nil {
-		return err
-	}
-	err = assert.Equalf(typ, typ2, "unexpected data type")
-	if err != nil {
-		return err
-	}
-	return assert.Equalf(p, p2, "unexpected payload")
+	assert.Success(t, err)
+
+	assert.Equalf(t, typ, typ2, "unexpected data type")
+	assert.Equalf(t, p, p2, "unexpected payload")
 }
 
-func assertSubprotocol(c *websocket.Conn, exp string) error {
-	return assert.Equalf(exp, c.Subprotocol(), "unexpected subprotocol")
+func assertSubprotocol(t *testing.T, c *websocket.Conn, exp string) {
+	assert.Equalf(t, exp, c.Subprotocol(), "unexpected subprotocol")
 }

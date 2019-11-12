@@ -1,3 +1,5 @@
+// +build js
+
 package websocket // import "nhooyr.io/websocket"
 
 import (
@@ -7,12 +9,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nhooyr.io/websocket/internal/atomicint"
 	"reflect"
 	"runtime"
 	"sync"
 	"syscall/js"
 
-	"nhooyr.io/websocket/internal/bpool"
+	"nhooyr.io/websocket/internal/bufpool"
 	"nhooyr.io/websocket/internal/wsjs"
 )
 
@@ -21,10 +24,10 @@ type Conn struct {
 	ws wsjs.WebSocket
 
 	// read limit for a message in bytes.
-	msgReadLimit *atomicInt64
+	msgReadLimit *atomicint.Int64
 
 	closingMu     sync.Mutex
-	isReadClosed  *atomicInt64
+	isReadClosed  *atomicint.Int64
 	closeOnce     sync.Once
 	closed        chan struct{}
 	closeErrOnce  sync.Once
@@ -56,17 +59,20 @@ func (c *Conn) init() {
 	c.closed = make(chan struct{})
 	c.readSignal = make(chan struct{}, 1)
 
-	c.msgReadLimit = &atomicInt64{}
+	c.msgReadLimit = &atomicint.Int64{}
 	c.msgReadLimit.Store(32768)
 
-	c.isReadClosed = &atomicInt64{}
+	c.isReadClosed = &atomicint.Int64{}
 
 	c.releaseOnClose = c.ws.OnClose(func(e wsjs.CloseEvent) {
 		err := CloseError{
 			Code:   StatusCode(e.Code),
 			Reason: e.Reason,
 		}
-		c.close(fmt.Errorf("received close: %w", err), e.WasClean)
+		// We do not know if we sent or received this close as
+		// its possible the browser triggered it without us
+		// explicitly sending it.
+		c.close(err, e.WasClean)
 
 		c.releaseOnClose()
 		c.releaseOnMessage()
@@ -288,11 +294,6 @@ func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 	return typ, bytes.NewReader(p), nil
 }
 
-// Only implemented for use by *Conn.CloseRead in conn_common.go
-func (c *Conn) reader(ctx context.Context, _ bool) {
-	c.read(ctx)
-}
-
 // Writer returns a writer to write a WebSocket data message to the connection.
 // It buffers the entire message in memory and then sends it when the writer
 // is closed.
@@ -301,7 +302,7 @@ func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 		c:   c,
 		ctx: ctx,
 		typ: typ,
-		b:   bpool.Get(),
+		b:   bufpool.Get(),
 	}, nil
 }
 
@@ -331,11 +332,42 @@ func (w writer) Close() error {
 		return errors.New("cannot close closed writer")
 	}
 	w.closed = true
-	defer bpool.Put(w.b)
+	defer bufpool.Put(w.b)
 
 	err := w.c.Write(w.ctx, w.typ, w.b.Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to close writer: %w", err)
 	}
 	return nil
+}
+
+func (c *Conn) CloseRead(ctx context.Context) context.Context {
+	c.isReadClosed.Store(1)
+
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		defer cancel()
+		c.read(ctx)
+		c.Close(StatusPolicyViolation, "unexpected data message")
+	}()
+	return ctx
+}
+
+func (c *Conn) SetReadLimit(n int64) {
+	c.msgReadLimit.Store(n)
+}
+
+func (c *Conn) setCloseErr(err error) {
+	c.closeErrOnce.Do(func() {
+		c.closeErr = fmt.Errorf("websocket closed: %w", err)
+	})
+}
+
+func (c *Conn) isClosed() bool {
+	select {
+	case <-c.closed:
+		return true
+	default:
+		return false
+	}
 }

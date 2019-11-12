@@ -1,8 +1,8 @@
 package assert
 
 import (
-	"fmt"
 	"reflect"
+	"testing"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -53,11 +53,15 @@ func structTypes(v reflect.Value, m map[reflect.Type]struct{}) {
 	}
 }
 
-// Equalf compares exp to act and if they are not equal, returns
-// an error describing an error.
-func Equalf(exp, act interface{}, f string, v ...interface{}) error {
-	if diff := cmpDiff(exp, act); diff != "" {
-		return fmt.Errorf(f+": %v", append(v, diff)...)
+func Equalf(t *testing.T, exp, act interface{}, f string, v ...interface{}) {
+	t.Helper()
+	diff := cmpDiff(exp, act)
+	if diff != "" {
+		t.Fatalf(f+": %v", append(v, diff)...)
 	}
-	return nil
+}
+
+func Success(t *testing.T, err error) {
+	t.Helper()
+	Equalf(t, error(nil), err, "unexpected failure")
 }

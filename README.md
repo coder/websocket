@@ -22,13 +22,14 @@ go get nhooyr.io/websocket
 - [Zero dependencies](https://godoc.org/nhooyr.io/websocket?imports)
 - JSON and ProtoBuf helpers in the [wsjson](https://godoc.org/nhooyr.io/websocket/wsjson) and [wspb](https://godoc.org/nhooyr.io/websocket/wspb) subpackages
 - Highly optimized by default
+  - Zero alloc reads and writes
 - Concurrent writes out of the box
 - [Complete Wasm](https://godoc.org/nhooyr.io/websocket#hdr-Wasm) support
 - [Close handshake](https://godoc.org/nhooyr.io/websocket#Conn.Close)
+- Full support of [RFC 7692](https://tools.ietf.org/html/rfc7692) permessage-deflate compression extension
 
 ## Roadmap
 
-- [ ] Compression Extensions [#163](https://github.com/nhooyr/websocket/pull/163)
 - [ ] HTTP/2 [#4](https://github.com/nhooyr/websocket/issues/4)
 
 ## Examples
@@ -84,22 +85,12 @@ if err != nil {
 c.Close(websocket.StatusNormalClosure, "")
 ```
 
-## Design justifications
-
-- A minimal API is easier to maintain due to less docs, tests and bugs
-- A minimal API is also easier to use and learn
-- Context based cancellation is more ergonomic and robust than setting deadlines
-- net.Conn is never exposed as WebSocket over HTTP/2 will not have a net.Conn.
-- Using net/http's Client for dialing means we do not have to reinvent dialing hooks
-  and configurations like other WebSocket libraries
-
 ## Comparison
 
-Before the comparison, I want to point out that both gorilla/websocket and gobwas/ws were
-extremely useful in implementing the WebSocket protocol correctly so _big thanks_ to the
-authors of both. In particular, I made sure to go through the issue tracker of gorilla/websocket
-to ensure I implemented details correctly and understood how people were using WebSockets in
-production.
+Before the comparison, I want to point out that gorilla/websocket was extremely useful in implementing the
+WebSocket protocol correctly so _big thanks_ to its authors. In particular, I made sure to go through the
+issue tracker of gorilla/websocket to ensure I implemented details correctly and understood how people were
+using WebSockets in production.
 
 ### gorilla/websocket
 
@@ -121,7 +112,7 @@ more code to test, more code to document and more surface area for bugs.
 Moreover, nhooyr.io/websocket supports newer Go idioms such as context.Context.
 It also uses net/http's Client and ResponseWriter directly for WebSocket handshakes.
 gorilla/websocket writes its handshakes to the underlying net.Conn.
-Thus it has to reinvent hooks for TLS and proxies and prevents support of HTTP/2.
+Thus it has to reinvent hooks for TLS and proxies and prevents easy support of HTTP/2.
 
 Some more advantages of nhooyr.io/websocket are that it supports concurrent writes and
 makes it very easy to close the connection with a status code and reason. In fact,
@@ -138,10 +129,14 @@ In terms of performance, the differences mostly depend on your application code.
 reuses message buffers out of the box if you use the wsjson and wspb subpackages.
 As mentioned above, nhooyr.io/websocket also supports concurrent writers.
 
-The WebSocket masking algorithm used by this package is also [1.75x](https://github.com/nhooyr/websocket/releases/tag/v1.7.4)
-faster than gorilla/websocket or gobwas/ws while using only pure safe Go.
+The WebSocket masking algorithm used by this package is [1.75x](https://github.com/nhooyr/websocket/releases/tag/v1.7.4)
+faster than gorilla/websocket while using only pure safe Go.
 
-The only performance con to nhooyr.io/websocket is that it uses one extra goroutine to support
+The [permessage-deflate compression extension](https://tools.ietf.org/html/rfc7692) is fully supported by this library
+whereas gorilla only supports no context takeover mode. See our godoc for the differences. This will make a big
+difference on bandwidth used in most use cases.
+
+The only performance con to nhooyr.io/websocket is that it uses a goroutine to support
 cancellation with context.Context. This costs 2 KB of memory which is cheap compared to
 the benefits.
 
@@ -160,14 +155,15 @@ https://github.com/gobwas/ws
 This library has an extremely flexible API but that comes at the cost of usability
 and clarity.
 
-This library is fantastic in terms of performance. The author put in significant
-effort to ensure its speed and I have applied as many of its optimizations as
-I could into nhooyr.io/websocket. Definitely check out his fantastic [blog post](https://medium.freecodecamp.org/million-websockets-and-go-cc58418460bb)
-about performant WebSocket servers.
+Due to its flexibility, it can be used in a event driven style for performance.
+Definitely check out his fantastic [blog post](https://medium.freecodecamp.org/million-websockets-and-go-cc58418460bb) about performant WebSocket servers.
 
 If you want a library that gives you absolute control over everything, this is the library.
-But for 99.9% of use cases, nhooyr.io/websocket will fit better. It's nearly as performant
-but much easier to use.
+But for 99.9% of use cases, nhooyr.io/websocket will fit better as it is both easier and
+faster for normal idiomatic Go. The masking implementation is [1.75x](https://github.com/nhooyr/websocket/releases/tag/v1.7.4)
+faster, the compression extensions are fully supported and as much as possible is reused by default.
+
+See the gorilla/websocket comparison for more performance details.
 
 ## Contributing
 
