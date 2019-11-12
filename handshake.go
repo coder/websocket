@@ -152,7 +152,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 			return nil, err
 		}
 		if copts != nil {
-			copts.setHeader(w.Header())
+			copts.setHeader(w.Header(), false)
 		}
 	}
 
@@ -190,7 +190,7 @@ func headerContainsToken(h http.Header, key, token string) bool {
 	}
 
 	for _, v := range h[key] {
-		if searchHeaderTokens(v, match) != "" {
+		if searchHeaderTokens(v, match) {
 			return true
 		}
 	}
@@ -198,36 +198,54 @@ func headerContainsToken(h http.Header, key, token string) bool {
 	return false
 }
 
-func headerTokenHasPrefix(h http.Header, key, prefix string) string {
-	key = textproto.CanonicalMIMEHeaderKey(key)
-
-	prefix = strings.ToLower(prefix)
+// readCompressionExtensionHeader extracts compression extension info from h.
+// The standard says we should support multiple compression extension configurations
+// from the client but we don't need to as there is only a single deflate extension
+// and we support every configuration without error so we only need to check the first
+// and thus preferred configuration.
+func readCompressionExtensionHeader(h http.Header) (xWebkitDeflateFrame bool, params []string, ok bool) {
 	match := func(t string) bool {
-		return strings.HasPrefix(t, prefix)
+		vals := strings.Split(t, ";")
+		for i := range vals {
+			vals[i] = strings.TrimSpace(vals[i])
+		}
+		params = vals[1:]
+
+		if vals[0] == "permessage-deflate" {
+			return true
+		}
+
+		// See https://bugs.webkit.org/show_bug.cgi?id=115504
+		if vals[0] == "x-webkit-deflate-frame" {
+			xWebkitDeflateFrame = true
+			return true
+		}
+
+		return false
 	}
 
+	key := textproto.CanonicalMIMEHeaderKey("Sec-WebSocket-Extensions")
 	for _, v := range h[key] {
-		found := searchHeaderTokens(v, match)
-		if found != "" {
-			return found
+		if searchHeaderTokens(v, match) {
+			return xWebkitDeflateFrame, params, true
 		}
 	}
 
-	return ""
+	return false, nil, false
 }
 
-func searchHeaderTokens(v string, match func(val string) bool) string {
+func searchHeaderTokens(v string, match func(val string) bool) bool {
+	v = strings.ToLower(v)
 	v = strings.TrimSpace(v)
 
 	for _, v2 := range strings.Split(v, ",") {
 		v2 = strings.TrimSpace(v2)
-		v2 = strings.ToLower(v2)
 		if match(v2) {
-			return v2
+			return true
 		}
 	}
 
-	return ""
+	return false
 }
 
 func selectSubprotocol(r *http.Request, subprotocols []string) string {
@@ -332,6 +350,10 @@ type CompressionOptions struct {
 	//
 	// Defaults to 256.
 	Threshold int
+
+	// This is used for supporting Safari as it still uses x-webkit-deflate-frame.
+	// See negotiateCompression.
+	xWebkitDeflateFrame bool
 }
 
 // Dial performs a WebSocket handshake on the given url with the given options.
@@ -407,7 +429,7 @@ func dial(ctx context.Context, u string, opts *DialOptions) (_ *Conn, _ *http.Re
 		req.Header.Set("Sec-WebSocket-Protocol", strings.Join(opts.Subprotocols, ","))
 	}
 	if opts.Compression != nil {
-		opts.Compression.setHeader(req.Header)
+		opts.Compression.setHeader(req.Header, true)
 	}
 
 	resp, err := opts.HTTPClient.Do(req)
@@ -529,24 +551,30 @@ func makeSecWebSocketKey() (string, error) {
 }
 
 func negotiateCompression(h http.Header, copts *CompressionOptions) (*CompressionOptions, error) {
-	deflate := headerTokenHasPrefix(h, "Sec-WebSocket-Extensions", "permessage-deflate")
-	if deflate == "" {
+	xWebkitDeflateFrame, params, ok := readCompressionExtensionHeader(h)
+	if !ok {
 		return nil, nil
 	}
 
 	// Ensures our changes do not modify the real compression options.
 	copts = &*copts
+	copts.xWebkitDeflateFrame = xWebkitDeflateFrame
 
-	params := strings.Split(deflate, ";")
-	for i := range params {
-		params[i] = strings.TrimSpace(params[i])
+	// We are the client if the header contains the accept header, meaning its from the server.
+	client := h.Get("Sec-WebSocket-Accept") == ""
+
+	if copts.xWebkitDeflateFrame {
+		// The other endpoint dictates whether or not we can
+		// use context takeover on our side. We cannot force it.
+		// Likewise, we tell the other side so we can force that.
+		if client {
+			copts.ClientNoContextTakeover = false
+		} else {
+			copts.ServerNoContextTakeover = false
+		}
 	}
 
-	if params[0] != "permessage-deflate" {
-		return nil, fmt.Errorf("unexpected header format for permessage-deflate extension: %q", deflate)
-	}
-
-	for _, p := range params[1:] {
+	for _, p := range params {
 		switch p {
 		case "client_no_context_takeover":
 			copts.ClientNoContextTakeover = true
@@ -555,27 +583,55 @@ func negotiateCompression(h http.Header, copts *CompressionOptions) (*Compressio
 			copts.ServerNoContextTakeover = true
 			continue
 		case "client_max_window_bits", "server-max-window-bits":
-			server := h.Get("Sec-WebSocket-Key") != ""
-			if server {
+			if !client {
 				// If we are the server, we are allowed to ignore these parameters.
 				// However, if we are the client, we must obey them but because of
 				// https://github.com/golang/go/issues/3155 we cannot.
 				continue
 			}
+		case "no_context_takeover":
+			if copts.xWebkitDeflateFrame {
+				if client {
+					copts.ClientNoContextTakeover = true
+				} else {
+					copts.ServerNoContextTakeover = true
+				}
+				continue
+			}
+
+			// We explicitly fail on x-webkit-deflate-frame's max_window_bits parameter instead
+			// of ignoring it as the draft spec is unclear. It says the server can ignore it
+			// but the server has no way of signalling to the client it was ignored as parameters
+			// are set one way.
+			// Thus us ignoring it would make the client think we understood it which would cause issues.
+			// See https://tools.ietf.org/html/draft-tyoshino-hybi-websocket-perframe-deflate-06#section-4.1
+			//
+			// Either way, we're only implementing this for webkit which never sends the max_window_bits
+			// parameter so we don't need to worry about it.
 		}
-		return nil, fmt.Errorf("unsupported permessage-deflate parameter %q in header: %q", p, deflate)
+
+		return nil, fmt.Errorf("unsupported permessage-deflate parameter: %q", p)
 	}
 
 	return copts, nil
 }
 
-func (copts *CompressionOptions) setHeader(h http.Header) {
-	s := "permessage-deflate"
-	if copts.ClientNoContextTakeover {
-		s += "; client_no_context_takeover"
-	}
-	if copts.ServerNoContextTakeover {
-		s += "; server_no_context_takeover"
+func (copts *CompressionOptions) setHeader(h http.Header, client bool) {
+	var s string
+	if !copts.xWebkitDeflateFrame {
+		s := "permessage-deflate"
+		if copts.ClientNoContextTakeover {
+			s += "; client_no_context_takeover"
+		}
+		if copts.ServerNoContextTakeover {
+			s += "; server_no_context_takeover"
+		}
+	} else {
+		s = "x-webkit-deflate-frame"
+		// We can only set no context takeover for the peer.
+		if client && copts.ServerNoContextTakeover || !client && copts.ClientNoContextTakeover {
+			s += "; no_context_takeover"
+		}
 	}
 	h.Set("Sec-WebSocket-Extensions", s)
 }
