@@ -249,34 +249,45 @@ type DialOptions struct {
 	// Compression sets the compression options.
 	// By default, compression is disabled.
 	// See docs on the CompressionOptions type.
-	Compression CompressionOptions
+	Compression *CompressionOptions
 }
 
 // CompressionOptions describes the available compression options.
 //
 // See https://tools.ietf.org/html/rfc7692
 //
-// Enabling compression may spike memory usage as each flate.Writer takes up 1.2 MB.
+// The NoContextTakeover variables control whether a flate.Writer or flate.Reader is allocated
+// for every connection (context takeover) versus shared from a pool (no context takeover).
+//
+// The advantage to context takeover is more efficient compression as the sliding window from previous
+// messages will be used instead of being reset between every message.
+//
+// The advantage to no context takeover is that the flate structures are allocated as needed
+// and shared between connections instead of giving each connection a fixed flate.Writer and
+// flate.Reader.
+//
+// See https://www.igvita.com/2013/11/27/configuring-and-optimizing-websocket-compression.
+//
+// Enabling compression will increase memory and CPU usage.
+// Thus it is not ideal for every use case and disabled by default.
 // See https://github.com/gorilla/websocket/issues/203
-// Benchmark before enabling in production.
+// Profile before enabling in production.
 //
 // This API is experimental and subject to change.
 type CompressionOptions struct {
-	// ContextTakeover controls whether context takeover is enabled.
+	// ServerNoContextTakeover controls whether the server should use context takeover.
+	// See docs on CompressionOptions for discussion regarding context takeover.
 	//
-	// If ContextTakeover == false, then a flate.Writer will be grabbed
-	// from the pool as needed for every message written to the connection.
-	//
-	// If ContextTakeover == true, then a flate.Writer will be allocated for each connection.
-	// This allows more efficient compression as the sliding window from previous
-	// messages will be used instead of resetting in between every message.
-	// The downside is that for every connection there will be a fixed allocation
-	// for the flate.Writer.
-	//
-	// See https://www.igvita.com/2013/11/27/configuring-and-optimizing-websocket-compression.
-	ContextTakeover bool
+	// If set by the client, will guarantee that the server does not use context takeover.
+	ServerNoContextTakeover bool
 
-	// Level controls the compression level negotiated.
+	// ClientNoContextTakeover controls whether the client should use context takeover.
+	// See docs on CompressionOptions for discussion regarding context takeover.
+	//
+	// If set by the server, will guarantee that the client does not use context takeover.
+	ClientNoContextTakeover bool
+
+	// Level controls the compression level used.
 	// Defaults to flate.BestSpeed.
 	Level int
 
@@ -354,6 +365,9 @@ func dial(ctx context.Context, u string, opts *DialOptions) (_ *Conn, _ *http.Re
 	req.Header.Set("Sec-WebSocket-Key", secWebSocketKey)
 	if len(opts.Subprotocols) > 0 {
 		req.Header.Set("Sec-WebSocket-Protocol", strings.Join(opts.Subprotocols, ","))
+	}
+	if opts.Compression != nil {
+		req.Header.Set("Sec-WebSocket-Extensions", "permessage-deflate; server_no_context_takeover; client_no_context_takeover")
 	}
 
 	resp, err := opts.HTTPClient.Do(req)
