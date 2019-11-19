@@ -5,7 +5,6 @@ import (
 	"io"
 	"math"
 	"nhooyr.io/websocket/internal/assert"
-	"nhooyr.io/websocket/internal/wsframe"
 	"strings"
 	"testing"
 )
@@ -22,7 +21,7 @@ func TestCloseError(t *testing.T) {
 			name: "normal",
 			ce: CloseError{
 				Code:   StatusNormalClosure,
-				Reason: strings.Repeat("x", wsframe.MaxControlFramePayload-2),
+				Reason: strings.Repeat("x", maxCloseReason),
 			},
 			success: true,
 		},
@@ -30,7 +29,7 @@ func TestCloseError(t *testing.T) {
 			name: "bigReason",
 			ce: CloseError{
 				Code:   StatusNormalClosure,
-				Reason: strings.Repeat("x", wsframe.MaxControlFramePayload-1),
+				Reason: strings.Repeat("x", maxCloseReason+1),
 			},
 			success: false,
 		},
@@ -38,7 +37,7 @@ func TestCloseError(t *testing.T) {
 			name: "bigCode",
 			ce: CloseError{
 				Code:   math.MaxUint16,
-				Reason: strings.Repeat("x", wsframe.MaxControlFramePayload-2),
+				Reason: strings.Repeat("x", maxCloseReason),
 			},
 			success: false,
 		},
@@ -49,7 +48,7 @@ func TestCloseError(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := tc.ce.bytes()
+			_, err := tc.ce.bytesErr()
 			if (err == nil) != tc.success {
 				t.Fatalf("unexpected error value: %+v", err)
 			}

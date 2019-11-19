@@ -5,7 +5,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"nhooyr.io/websocket/internal/wsframe"
+	"log"
+	"nhooyr.io/websocket/internal/bufpool"
+	"time"
 )
 
 // StatusCode represents a WebSocket status code.
@@ -74,6 +76,87 @@ func CloseStatus(err error) StatusCode {
 	return -1
 }
 
+// Close closes the WebSocket connection with the given status code and reason.
+//
+// It will write a WebSocket close frame with a timeout of 5s and then wait 5s for
+// the peer to send a close frame.
+// Thus, it implements the full WebSocket close handshake.
+// All data messages received from the peer during the close handshake
+// will be discarded.
+//
+// The connection can only be closed once. Additional calls to Close
+// are no-ops.
+//
+// The maximum length of reason must be 125 bytes otherwise an internal
+// error will be sent to the peer. For this reason, you should avoid
+// sending a dynamic reason.
+//
+// Close will unblock all goroutines interacting with the connection once
+// complete.
+func (c *Conn) Close(code StatusCode, reason string) error {
+	err := c.closeHandshake(code, reason)
+	if err != nil {
+		return fmt.Errorf("failed to close websocket: %w", err)
+	}
+	return nil
+}
+
+func (c *Conn) closeHandshake(code StatusCode, reason string) error {
+	err := c.cw.sendClose(code, reason)
+	if err != nil {
+		return err
+	}
+
+	return c.cr.waitClose()
+}
+
+func (cw *connWriter) error(code StatusCode, err error) {
+	cw.c.setCloseErr(err)
+	cw.sendClose(code, err.Error())
+	cw.c.close(nil)
+}
+
+func (cw *connWriter) sendClose(code StatusCode, reason string) error {
+	ce := CloseError{
+		Code:   code,
+		Reason: reason,
+	}
+
+	cw.c.setCloseErr(fmt.Errorf("sent close frame: %w", ce))
+
+	var p []byte
+	if ce.Code != StatusNoStatusRcvd {
+		p = ce.bytes()
+	}
+
+	return cw.control(context.Background(), opClose, p)
+}
+
+func (cr *connReader) waitClose() error {
+	defer cr.c.close(nil)
+
+	return nil
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	err := cr.mu.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer cr.mu.Unlock()
+
+	b := bufpool.Get()
+	buf := b.Bytes()
+	buf = buf[:cap(buf)]
+	defer bufpool.Put(b)
+
+	for {
+		// TODO
+		return nil
+	}
+}
+
 func parseClosePayload(p []byte) (CloseError, error) {
 	if len(p) == 0 {
 		return CloseError{
@@ -81,14 +164,13 @@ func parseClosePayload(p []byte) (CloseError, error) {
 		}, nil
 	}
 
-	code, reason, err := wsframe.ParseClosePayload(p)
-	if err != nil {
-		return CloseError{}, err
+	if len(p) < 2 {
+		return CloseError{}, fmt.Errorf("close payload %q too small, cannot even contain the 2 byte status code", p)
 	}
 
 	ce := CloseError{
-		Code:   StatusCode(code),
-		Reason: reason,
+		Code:   StatusCode(binary.BigEndian.Uint16(p)),
+		Reason: string(p[2:]),
 	}
 
 	if !validWireCloseCode(ce.Code) {
@@ -116,11 +198,25 @@ func validWireCloseCode(code StatusCode) bool {
 	return false
 }
 
-func (ce CloseError) bytes() ([]byte, error) {
-	// TODO move check into frame write
-	if len(ce.Reason) > wsframe.MaxControlFramePayload-2 {
-		return nil, fmt.Errorf("reason string max is %v but got %q with length %v", wsframe.MaxControlFramePayload-2, ce.Reason, len(ce.Reason))
+func (ce CloseError) bytes() []byte {
+	p, err := ce.bytesErr()
+	if err != nil {
+		log.Printf("websocket: failed to marshal close frame: %+v", err)
+		ce = CloseError{
+			Code: StatusInternalError,
+		}
+		p, _ = ce.bytesErr()
 	}
+	return p
+}
+
+const maxCloseReason = maxControlPayload - 2
+
+func (ce CloseError) bytesErr() ([]byte, error) {
+	if len(ce.Reason) > maxCloseReason {
+		return nil, fmt.Errorf("reason string max is %v but got %q with length %v", maxCloseReason, ce.Reason, len(ce.Reason))
+	}
+
 	if !validWireCloseCode(ce.Code) {
 		return nil, fmt.Errorf("status code %v cannot be set", ce.Code)
 	}
@@ -131,44 +227,16 @@ func (ce CloseError) bytes() ([]byte, error) {
 	return buf, nil
 }
 
-// CloseRead will start a goroutine to read from the connection until it is closed or a data message
-// is received. If a data message is received, the connection will be closed with StatusPolicyViolation.
-// Since CloseRead reads from the connection, it will respond to ping, pong and close frames.
-// After calling this method, you cannot read any data messages from the connection.
-// The returned context will be cancelled when the connection is closed.
-//
-// Use this when you do not want to read data messages from the connection anymore but will
-// want to write messages to it.
-func (c *Conn) CloseRead(ctx context.Context) context.Context {
-	c.isReadClosed.Store(1)
-
-	ctx, cancel := context.WithCancel(ctx)
-	go func() {
-		defer cancel()
-		// We use the unexported reader method so that we don't get the read closed error.
-		c.reader(ctx, true)
-		// Either the connection is already closed since there was a read error
-		// or the context was cancelled or a message was read and we should close
-		// the connection.
-		c.Close(StatusPolicyViolation, "unexpected data message")
-	}()
-	return ctx
-}
-
-// SetReadLimit sets the max number of bytes to read for a single message.
-// It applies to the Reader and Read methods.
-//
-// By default, the connection has a message read limit of 32768 bytes.
-//
-// When the limit is hit, the connection will be closed with StatusMessageTooBig.
-func (c *Conn) SetReadLimit(n int64) {
-	c.msgReadLimit.Store(n)
-}
-
 func (c *Conn) setCloseErr(err error) {
-	c.closeErrOnce.Do(func() {
+	c.closeMu.Lock()
+	c.setCloseErrNoLock(err)
+	c.closeMu.Unlock()
+}
+
+func (c *Conn) setCloseErrNoLock(err error) {
+	if c.closeErr == nil {
 		c.closeErr = fmt.Errorf("websocket closed: %w", err)
-	})
+	}
 }
 
 func (c *Conn) isClosed() bool {

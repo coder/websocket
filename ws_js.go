@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"nhooyr.io/websocket/internal/atomicint"
+	"nhooyr.io/websocket/internal/wssync"
 	"reflect"
 	"runtime"
 	"sync"
@@ -24,10 +24,10 @@ type Conn struct {
 	ws wsjs.WebSocket
 
 	// read limit for a message in bytes.
-	msgReadLimit *atomicint.Int64
+	msgReadLimit *wssync.Int64
 
 	closingMu     sync.Mutex
-	isReadClosed  *atomicint.Int64
+	isReadClosed  *wssync.Int64
 	closeOnce     sync.Once
 	closed        chan struct{}
 	closeErrOnce  sync.Once
@@ -59,10 +59,10 @@ func (c *Conn) init() {
 	c.closed = make(chan struct{})
 	c.readSignal = make(chan struct{}, 1)
 
-	c.msgReadLimit = &atomicint.Int64{}
+	c.msgReadLimit = &wssync.Int64{}
 	c.msgReadLimit.Store(32768)
 
-	c.isReadClosed = &atomicint.Int64{}
+	c.isReadClosed = &wssync.Int64{}
 
 	c.releaseOnClose = c.ws.OnClose(func(e wsjs.CloseEvent) {
 		err := CloseError{
@@ -105,7 +105,7 @@ func (c *Conn) closeWithInternal() {
 // The maximum time spent waiting is bounded by the context.
 func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 	if c.isReadClosed.Load() == 1 {
-		return 0, nil, fmt.Errorf("websocket connection read closed")
+		return 0, nil, errors.New("websocket connection read closed")
 	}
 
 	typ, p, err := c.read(ctx)

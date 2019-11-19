@@ -60,10 +60,15 @@ func Accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 	return c, nil
 }
 
-func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn, error) {
+func (opts *AcceptOptions) ensure() *AcceptOptions {
 	if opts == nil {
-		opts = &AcceptOptions{}
+		return &AcceptOptions{}
 	}
+	return opts
+}
+
+func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn, error) {
+	opts = opts.ensure()
 
 	err := verifyClientRequest(w, r)
 	if err != nil {
@@ -114,31 +119,14 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 	b, _ := brw.Reader.Peek(brw.Reader.Buffered())
 	brw.Reader.Reset(io.MultiReader(bytes.NewReader(b), netConn))
 
-	c := &Conn{
+	return newConn(connConfig{
 		subprotocol: w.Header().Get("Sec-WebSocket-Protocol"),
+		rwc:         netConn,
+		client:      false,
+		copts:       copts,
 		br:          brw.Reader,
 		bw:          brw.Writer,
-		closer:      netConn,
-		copts:       copts,
-	}
-	c.init()
-
-	return c, nil
-}
-
-func authenticateOrigin(r *http.Request) error {
-	origin := r.Header.Get("Origin")
-	if origin == "" {
-		return nil
-	}
-	u, err := url.Parse(origin)
-	if err != nil {
-		return fmt.Errorf("failed to parse Origin header %q: %w", origin, err)
-	}
-	if !strings.EqualFold(u.Host, r.Host) {
-		return fmt.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host)
-	}
-	return nil
+	}), nil
 }
 
 func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
@@ -181,15 +169,37 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+func authenticateOrigin(r *http.Request) error {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return nil
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return fmt.Errorf("failed to parse Origin header %q: %w", origin, err)
+	}
+	if !strings.EqualFold(u.Host, r.Host) {
+		return fmt.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host)
+	}
+	return nil
+}
+
 func handleSecWebSocketKey(w http.ResponseWriter, r *http.Request) {
 	key := r.Header.Get("Sec-WebSocket-Key")
 	w.Header().Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
 }
 
 func selectSubprotocol(r *http.Request, subprotocols []string) string {
+	cps := headerTokens(r.Header, "Sec-WebSocket-Protocol")
+	if len(cps) == 0 {
+		return ""
+	}
+
 	for _, sp := range subprotocols {
-		if headerContainsToken(r.Header, "Sec-WebSocket-Protocol", sp) {
-			return sp
+		for _, cp := range cps {
+			if strings.EqualFold(sp, cp) {
+				return cp
+			}
 		}
 	}
 	return ""
@@ -265,7 +275,6 @@ func acceptWebkitDeflate(w http.ResponseWriter, ext websocketExtension, mode Com
 
 	return copts, nil
 }
-
 
 func headerContainsToken(h http.Header, key, token string) bool {
 	token = strings.ToLower(token)

@@ -1,17 +1,19 @@
 package websocket
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"nhooyr.io/websocket/internal/bufpool"
 	"strings"
+	"sync"
 )
 
 // DialOptions represents the options available to pass to Dial.
@@ -50,7 +52,7 @@ func Dial(ctx context.Context, u string, opts *DialOptions) (*Conn, *http.Respon
 	return c, r, nil
 }
 
-func (opts *DialOptions) fill() (*DialOptions, error) {
+func (opts *DialOptions) ensure() *DialOptions {
 	if opts == nil {
 		opts = &DialOptions{}
 	} else {
@@ -60,20 +62,18 @@ func (opts *DialOptions) fill() (*DialOptions, error) {
 	if opts.HTTPClient == nil {
 		opts.HTTPClient = http.DefaultClient
 	}
-	if opts.HTTPClient.Timeout > 0 {
-		return nil, fmt.Errorf("use context for cancellation instead of http.Client.Timeout; see https://github.com/nhooyr/websocket/issues/67")
-	}
 	if opts.HTTPHeader == nil {
 		opts.HTTPHeader = http.Header{}
 	}
 
-	return opts, nil
+	return opts
 }
 
 func dial(ctx context.Context, u string, opts *DialOptions) (_ *Conn, _ *http.Response, err error) {
-	opts, err = opts.fill()
-	if err != nil {
-		return nil, nil, err
+	opts = opts.ensure()
+
+	if opts.HTTPClient.Timeout > 0 {
+		return nil, nil, errors.New("use context for cancellation instead of http.Client.Timeout; see https://github.com/nhooyr/websocket/issues/67")
 	}
 
 	parsedURL, err := url.Parse(u)
@@ -104,8 +104,10 @@ func dial(ctx context.Context, u string, opts *DialOptions) (_ *Conn, _ *http.Re
 	if len(opts.Subprotocols) > 0 {
 		req.Header.Set("Sec-WebSocket-Protocol", strings.Join(opts.Subprotocols, ","))
 	}
-	copts := opts.CompressionMode.opts()
-	copts.setHeader(req.Header)
+	if opts.CompressionMode != CompressionDisabled {
+		copts := opts.CompressionMode.opts()
+		copts.setHeader(req.Header)
+	}
 
 	resp, err := opts.HTTPClient.Do(req)
 	if err != nil {
@@ -121,7 +123,7 @@ func dial(ctx context.Context, u string, opts *DialOptions) (_ *Conn, _ *http.Re
 		}
 	}()
 
-	copts, err = verifyServerResponse(req, resp, opts)
+	copts, err := verifyServerResponse(req, resp)
 	if err != nil {
 		return nil, resp, err
 	}
@@ -131,18 +133,14 @@ func dial(ctx context.Context, u string, opts *DialOptions) (_ *Conn, _ *http.Re
 		return nil, resp, fmt.Errorf("response body is not a io.ReadWriteCloser: %T", rwc)
 	}
 
-	c := &Conn{
+	return newConn(connConfig{
 		subprotocol: resp.Header.Get("Sec-WebSocket-Protocol"),
-		br:          bufpool.GetReader(rwc),
-		bw:          bufpool.GetWriter(rwc),
-		closer:      rwc,
+		rwc:         rwc,
 		client:      true,
 		copts:       copts,
-	}
-	c.extractBufioWriterBuf(rwc)
-	c.init()
-
-	return c, resp, nil
+		br:          getBufioReader(rwc),
+		bw:          getBufioWriter(rwc),
+	}), resp, nil
 }
 
 func secWebSocketKey() (string, error) {
@@ -154,7 +152,7 @@ func secWebSocketKey() (string, error) {
 	return base64.StdEncoding.EncodeToString(b), nil
 }
 
-func verifyServerResponse(r *http.Request, resp *http.Response, opts *DialOptions) (*compressionOptions, error) {
+func verifyServerResponse(r *http.Request, resp *http.Response) (*compressionOptions, error) {
 	if resp.StatusCode != http.StatusSwitchingProtocols {
 		return nil, fmt.Errorf("expected handshake response status code %v but got %v", http.StatusSwitchingProtocols, resp.StatusCode)
 	}
@@ -178,7 +176,7 @@ func verifyServerResponse(r *http.Request, resp *http.Response, opts *DialOption
 		return nil, fmt.Errorf("websocket protocol violation: unexpected Sec-WebSocket-Protocol from server: %q", proto)
 	}
 
-	copts, err := verifyServerExtensions(resp.Header, opts.CompressionMode)
+	copts, err := verifyServerExtensions(resp.Header)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +184,7 @@ func verifyServerResponse(r *http.Request, resp *http.Response, opts *DialOption
 	return copts, nil
 }
 
-func verifyServerExtensions(h http.Header, mode CompressionMode) (*compressionOptions, error) {
+func verifyServerExtensions(h http.Header) (*compressionOptions, error) {
 	exts := websocketExtensions(h)
 	if len(exts) == 0 {
 		return nil, nil
@@ -201,7 +199,7 @@ func verifyServerExtensions(h http.Header, mode CompressionMode) (*compressionOp
 		return nil, fmt.Errorf("unexpected extra extensions from server: %+v", exts[1:])
 	}
 
-	copts := mode.opts()
+	copts := &compressionOptions{}
 	for _, p := range ext.params {
 		switch p {
 		case "client_no_context_takeover":
@@ -216,4 +214,34 @@ func verifyServerExtensions(h http.Header, mode CompressionMode) (*compressionOp
 	}
 
 	return copts, nil
+}
+
+var readerPool sync.Pool
+
+func getBufioReader(r io.Reader) *bufio.Reader {
+	br, ok := readerPool.Get().(*bufio.Reader)
+	if !ok {
+		return bufio.NewReader(r)
+	}
+	br.Reset(r)
+	return br
+}
+
+func putBufioReader(br *bufio.Reader) {
+	readerPool.Put(br)
+}
+
+var writerPool sync.Pool
+
+func getBufioWriter(w io.Writer) *bufio.Writer {
+	bw, ok := writerPool.Get().(*bufio.Writer)
+	if !ok {
+		return bufio.NewWriter(w)
+	}
+	bw.Reset(w)
+	return bw
+}
+
+func putBufioWriter(bw *bufio.Writer) {
+	writerPool.Put(bw)
 }

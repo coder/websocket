@@ -1,16 +1,97 @@
-package wsframe_test
+// +build !js
+
+package websocket
 
 import (
-	"crypto/rand"
+	"bufio"
+	"bytes"
 	"encoding/binary"
-	"github.com/gobwas/ws"
-	"github.com/google/go-cmp/cmp"
 	"math/bits"
-	"nhooyr.io/websocket/internal/wsframe"
+	"nhooyr.io/websocket/internal/assert"
 	"strconv"
 	"testing"
+	"time"
 	_ "unsafe"
+
+	"github.com/gobwas/ws"
+	_ "github.com/gorilla/websocket"
+	"math/rand"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
+func TestHeader(t *testing.T) {
+	t.Parallel()
+
+	t.Run("lengths", func(t *testing.T) {
+		t.Parallel()
+
+		lengths := []int{
+			124,
+			125,
+			126,
+			127,
+
+			65534,
+			65535,
+			65536,
+			65537,
+		}
+
+		for _, n := range lengths {
+			n := n
+			t.Run(strconv.Itoa(n), func(t *testing.T) {
+				t.Parallel()
+
+				testHeader(t, header{
+					payloadLength: int64(n),
+				})
+			})
+		}
+	})
+
+	t.Run("fuzz", func(t *testing.T) {
+		t.Parallel()
+
+		randBool := func() bool {
+			return rand.Intn(1) == 0
+		}
+
+		for i := 0; i < 10000; i++ {
+			h := header{
+				fin:    randBool(),
+				rsv1:   randBool(),
+				rsv2:   randBool(),
+				rsv3:   randBool(),
+				opcode: opcode(rand.Intn(16)),
+
+				masked:        randBool(),
+				maskKey:       rand.Uint32(),
+				payloadLength: rand.Int63(),
+			}
+
+			testHeader(t, h)
+		}
+	})
+}
+
+func testHeader(t *testing.T, h header) {
+	b := &bytes.Buffer{}
+	w := bufio.NewWriter(b)
+	r := bufio.NewReader(b)
+
+	err := writeFrameHeader(h, w)
+	assert.Success(t, err)
+	err = w.Flush()
+	assert.Success(t, err)
+
+	h2, err := readFrameHeader(r)
+	assert.Success(t, err)
+
+	assert.Equalf(t, h, h2, "written and read headers differ")
+}
 
 func Test_mask(t *testing.T) {
 	t.Parallel()
@@ -18,15 +99,10 @@ func Test_mask(t *testing.T) {
 	key := []byte{0xa, 0xb, 0xc, 0xff}
 	key32 := binary.LittleEndian.Uint32(key)
 	p := []byte{0xa, 0xb, 0xc, 0xf2, 0xc}
-	gotKey32 := wsframe.Mask(key32, p)
+	gotKey32 := mask(key32, p)
 
-	if exp := []byte{0, 0, 0, 0x0d, 0x6}; !cmp.Equal(exp, p) {
-		t.Fatalf("unexpected mask: %v", cmp.Diff(exp, p))
-	}
-
-	if exp := bits.RotateLeft32(key32, -8); !cmp.Equal(exp, gotKey32) {
-		t.Fatalf("unexpected mask key: %v", cmp.Diff(exp, gotKey32))
-	}
+	assert.Equalf(t, []byte{0, 0, 0, 0x0d, 0x6}, p, "unexpected mask")
+	assert.Equalf(t, bits.RotateLeft32(key32, -8), gotKey32, "unexpected mask key")
 }
 
 func basicMask(maskKey [4]byte, pos int, b []byte) int {
@@ -74,7 +150,7 @@ func Benchmark_mask(b *testing.B) {
 				b.ResetTimer()
 
 				for i := 0; i < b.N; i++ {
-					wsframe.Mask(key32, p)
+					mask(key32, p)
 				}
 			},
 		},
@@ -98,9 +174,7 @@ func Benchmark_mask(b *testing.B) {
 
 	var key [4]byte
 	_, err := rand.Read(key[:])
-	if err != nil {
-		b.Fatalf("failed to populate mask key: %v", err)
-	}
+	assert.Success(b, err)
 
 	for _, size := range sizes {
 		p := make([]byte, size)

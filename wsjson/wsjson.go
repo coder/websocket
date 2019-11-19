@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/bufpool"
 )
@@ -41,6 +42,7 @@ func read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 	err = json.Unmarshal(b.Bytes(), v)
 	if err != nil {
 		c.Close(websocket.StatusInvalidFramePayloadData, "failed to unmarshal JSON")
+		log.Printf("%X", b.Bytes())
 		return fmt.Errorf("failed to unmarshal json: %w", err)
 	}
 

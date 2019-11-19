@@ -2,6 +2,7 @@ package assert
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -53,7 +54,7 @@ func structTypes(v reflect.Value, m map[reflect.Type]struct{}) {
 	}
 }
 
-func Equalf(t *testing.T, exp, act interface{}, f string, v ...interface{}) {
+func Equalf(t testing.TB, exp, act interface{}, f string, v ...interface{}) {
 	t.Helper()
 	diff := cmpDiff(exp, act)
 	if diff != "" {
@@ -61,7 +62,40 @@ func Equalf(t *testing.T, exp, act interface{}, f string, v ...interface{}) {
 	}
 }
 
-func Success(t *testing.T, err error) {
+func NotEqualf(t testing.TB, exp, act interface{}, f string, v ...interface{}) {
 	t.Helper()
-	Equalf(t, error(nil), err, "unexpected failure")
+	diff := cmpDiff(exp, act)
+	if diff == "" {
+		t.Fatalf(f+": %v", append(v, diff)...)
+	}
+}
+
+func Success(t testing.TB, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("unexpected error: %+v", err)
+	}
+}
+
+func Error(t testing.TB, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func ErrorContains(t testing.TB, err error, sub string) {
+	t.Helper()
+	Error(t, err)
+	errs := err.Error()
+	if !strings.Contains(errs, sub) {
+		t.Fatalf("error string %q does not contain %q", errs, sub)
+	}
+}
+
+func Panicf(t testing.TB, f string, v ...interface{}) {
+	r := recover()
+	if r == nil {
+		t.Fatalf(f, v...)
+	}
 }

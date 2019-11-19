@@ -4,6 +4,7 @@ package websocket_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -77,7 +78,7 @@ func echoServer(w http.ResponseWriter, r *http.Request) error {
 
 	if c.Subprotocol() != "echo" {
 		c.Close(websocket.StatusPolicyViolation, "client must speak the echo subprotocol")
-		return fmt.Errorf("client does not speak echo sub protocol")
+		return errors.New("client does not speak echo sub protocol")
 	}
 
 	l := rate.NewLimiter(rate.Every(time.Millisecond*100), 10)

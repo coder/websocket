@@ -23,6 +23,8 @@ func randBytes(n int) []byte {
 }
 
 func assertJSONEcho(t *testing.T, ctx context.Context, c *websocket.Conn, n int) {
+	t.Helper()
+
 	exp := randString(n)
 	err := wsjson.Write(ctx, c, exp)
 	assert.Success(t, err)
@@ -35,6 +37,8 @@ func assertJSONEcho(t *testing.T, ctx context.Context, c *websocket.Conn, n int)
 }
 
 func assertJSONRead(t *testing.T, ctx context.Context, c *websocket.Conn, exp interface{}) {
+	t.Helper()
+
 	var act interface{}
 	err := wsjson.Read(ctx, c, &act)
 	assert.Success(t, err)
@@ -56,6 +60,8 @@ func randString(n int) string {
 }
 
 func assertEcho(t *testing.T, ctx context.Context, c *websocket.Conn, typ websocket.MessageType, n int) {
+	t.Helper()
+
 	p := randBytes(n)
 	err := c.Write(ctx, typ, p)
 	assert.Success(t, err)
@@ -68,5 +74,13 @@ func assertEcho(t *testing.T, ctx context.Context, c *websocket.Conn, typ websoc
 }
 
 func assertSubprotocol(t *testing.T, c *websocket.Conn, exp string) {
+	t.Helper()
+
 	assert.Equalf(t, exp, c.Subprotocol(), "unexpected subprotocol")
+}
+
+func assertCloseStatus(t *testing.T, exp websocket.StatusCode, err error) {
+	t.Helper()
+
+	assert.Equalf(t, exp, websocket.CloseStatus(err), "unexpected status code")
 }
