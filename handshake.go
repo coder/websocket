@@ -329,7 +329,7 @@ func dial(ctx context.Context, u string, opts *DialOptions) (_ *Conn, _ *http.Re
 
 	rwc, ok := resp.Body.(io.ReadWriteCloser)
 	if !ok {
-		return nil, resp, fmt.Errorf("response body is not a io.ReadWriteCloser: %T", rwc)
+		return nil, resp, fmt.Errorf("response body is not a io.ReadWriteCloser: %T", resp.Body)
 	}
 
 	c := &Conn{
