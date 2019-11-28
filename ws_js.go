@@ -105,7 +105,7 @@ func (c *Conn) closeWithInternal() {
 // The maximum time spent waiting is bounded by the context.
 func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 	if c.isReadClosed.Load() == 1 {
-		return 0, nil, errors.New("websocket connection read closed")
+		return 0, nil, errors.New("WebSocket connection read closed")
 	}
 
 	typ, p, err := c.read(ctx)
@@ -188,14 +188,14 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) error {
 	}
 }
 
-// Close closes the websocket with the given code and reason.
+// Close closes the WebSocket with the given code and reason.
 // It will wait until the peer responds with a close frame
 // or the connection is closed.
 // It thus performs the full WebSocket close handshake.
 func (c *Conn) Close(code StatusCode, reason string) error {
 	err := c.exportedClose(code, reason)
 	if err != nil {
-		return fmt.Errorf("failed to close websocket: %w", err)
+		return fmt.Errorf("failed to close WebSocket: %w", err)
 	}
 	return nil
 }
@@ -245,7 +245,7 @@ type DialOptions struct {
 func Dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Response, error) {
 	c, resp, err := dial(ctx, url, opts)
 	if err != nil {
-		return nil, resp, fmt.Errorf("failed to websocket dial %q: %w", url, err)
+		return nil, resp, fmt.Errorf("failed to WebSocket dial %q: %w", url, err)
 	}
 	return c, resp, nil
 }
@@ -359,7 +359,7 @@ func (c *Conn) SetReadLimit(n int64) {
 
 func (c *Conn) setCloseErr(err error) {
 	c.closeErrOnce.Do(func() {
-		c.closeErr = fmt.Errorf("websocket closed: %w", err)
+		c.closeErr = fmt.Errorf("WebSocket closed: %w", err)
 	})
 }
 

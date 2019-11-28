@@ -10,68 +10,56 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"nhooyr.io/websocket/internal/errd"
 	"strings"
 )
 
 // AcceptOptions represents the options available to pass to Accept.
 type AcceptOptions struct {
-	// Subprotocols lists the websocket subprotocols that Accept will negotiate with a client.
+	// Subprotocols lists the WebSocket subprotocols that Accept will negotiate with the client.
 	// The empty subprotocol will always be negotiated as per RFC 6455. If you would like to
-	// reject it, close the connection if c.Subprotocol() == "".
+	// reject it, close the connection when c.Subprotocol() == "".
 	Subprotocols []string
 
-	// InsecureSkipVerify disables Accept's origin verification
-	// behaviour. By default Accept only allows the handshake to
-	// succeed if the javascript that is initiating the handshake
-	// is on the same domain as the server. This is to prevent CSRF
-	// attacks when secure data is stored in a cookie as there is no same
-	// origin policy for WebSockets. In other words, javascript from
-	// any domain can perform a WebSocket dial on an arbitrary server.
-	// This dial will include cookies which means the arbitrary javascript
-	// can perform actions as the authenticated user.
+	// InsecureSkipVerify disables Accept's origin verification behaviour. By default,
+	// the connection will only be accepted if the request origin is equal to the request
+	// host.
+	//
+	// This is only required if you want javascript served from a different domain
+	// to access your WebSocket server.
 	//
 	// See https://stackoverflow.com/a/37837709/4283659
 	//
-	// The only time you need this is if your javascript is running on a different domain
-	// than your WebSocket server.
-	// Think carefully about whether you really need this option before you use it.
-	// If you do, remember that if you store secure data in cookies, you wil need to verify the
-	// Origin header yourself otherwise you are exposing yourself to a CSRF attack.
+	// Please ensure you understand the ramifications of enabling this.
+	// If used incorrectly your WebSocket server will be open to CSRF attacks.
 	InsecureSkipVerify bool
 
 	// CompressionMode sets the compression mode.
-	// See docs on the CompressionMode type and defined constants.
+	// See docs on the CompressionMode type.
 	CompressionMode CompressionMode
 }
 
-// Accept accepts a WebSocket HTTP handshake from a client and upgrades the
+// Accept accepts a WebSocket handshake from a client and upgrades the
 // the connection to a WebSocket.
 //
-// Accept will reject the handshake if the Origin domain is not the same as the Host unless
-// the InsecureSkipVerify option is set. In other words, by default it does not allow
-// cross origin requests.
+// Accept will not allow cross origin requests by default.
+// See the InsecureSkipVerify option to allow cross origin requests.
 //
-// If an error occurs, Accept will write a response with a safe error message to w.
+// Accept will write a response to w on all errors.
 func Accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn, error) {
-	c, err := accept(w, r, opts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to accept websocket connection: %w", err)
-	}
-	return c, nil
+	return accept(w, r, opts)
 }
 
-func (opts *AcceptOptions) ensure() *AcceptOptions {
+func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Conn, err error) {
+	defer errd.Wrap(&err, "failed to accept WebSocket connection")
+
 	if opts == nil {
-		return &AcceptOptions{}
+		opts = &AcceptOptions{}
 	}
-	return opts
-}
 
-func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn, error) {
-	opts = opts.ensure()
-
-	err := verifyClientRequest(w, r)
+	err = verifyClientRequest(r)
 	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return nil, err
 	}
 
@@ -85,7 +73,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 
 	hj, ok := w.(http.Hijacker)
 	if !ok {
-		err = errors.New("passed ResponseWriter does not implement http.Hijacker")
+		err = errors.New("http.ResponseWriter does not implement http.Hijacker")
 		http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 		return nil, err
 	}
@@ -93,7 +81,8 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 	w.Header().Set("Upgrade", "websocket")
 	w.Header().Set("Connection", "Upgrade")
 
-	handleSecWebSocketKey(w, r)
+	key := r.Header.Get("Sec-WebSocket-Key")
+	w.Header().Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
 
 	subproto := selectSubprotocol(r, opts.Subprotocols)
 	if subproto != "" {
@@ -102,7 +91,6 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 
 	copts, err := acceptCompression(r, w, opts.CompressionMode)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
 		return nil, err
 	}
 
@@ -129,41 +117,29 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 	}), nil
 }
 
-func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
+func verifyClientRequest(r *http.Request) error {
 	if !r.ProtoAtLeast(1, 1) {
-		err := fmt.Errorf("websocket protocol violation: handshake request must be at least HTTP/1.1: %q", r.Proto)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return err
+		return fmt.Errorf("WebSocket protocol violation: handshake request must be at least HTTP/1.1: %q", r.Proto)
 	}
 
 	if !headerContainsToken(r.Header, "Connection", "Upgrade") {
-		err := fmt.Errorf("websocket protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return err
+		return fmt.Errorf("WebSocket protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
 	}
 
-	if !headerContainsToken(r.Header, "Upgrade", "WebSocket") {
-		err := fmt.Errorf("websocket protocol violation: Upgrade header %q does not contain websocket", r.Header.Get("Upgrade"))
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return err
+	if !headerContainsToken(r.Header, "Upgrade", "websocket") {
+		return fmt.Errorf("WebSocket protocol violation: Upgrade header %q does not contain websocket", r.Header.Get("Upgrade"))
 	}
 
 	if r.Method != "GET" {
-		err := fmt.Errorf("websocket protocol violation: handshake request method is not GET but %q", r.Method)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return err
+		return fmt.Errorf("WebSocket protocol violation: handshake request method is not GET but %q", r.Method)
 	}
 
 	if r.Header.Get("Sec-WebSocket-Version") != "13" {
-		err := fmt.Errorf("unsupported websocket protocol version (only 13 is supported): %q", r.Header.Get("Sec-WebSocket-Version"))
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return err
+		return fmt.Errorf("unsupported WebSocket protocol version (only 13 is supported): %q", r.Header.Get("Sec-WebSocket-Version"))
 	}
 
 	if r.Header.Get("Sec-WebSocket-Key") == "" {
-		err := errors.New("websocket protocol violation: missing Sec-WebSocket-Key")
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return err
+		return errors.New("WebSocket protocol violation: missing Sec-WebSocket-Key")
 	}
 
 	return nil
@@ -171,30 +147,20 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 
 func authenticateOrigin(r *http.Request) error {
 	origin := r.Header.Get("Origin")
-	if origin == "" {
-		return nil
-	}
-	u, err := url.Parse(origin)
-	if err != nil {
-		return fmt.Errorf("failed to parse Origin header %q: %w", origin, err)
-	}
-	if !strings.EqualFold(u.Host, r.Host) {
-		return fmt.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host)
+	if origin != "" {
+		u, err := url.Parse(origin)
+		if err != nil {
+			return fmt.Errorf("failed to parse Origin header %q: %w", origin, err)
+		}
+		if !strings.EqualFold(u.Host, r.Host) {
+			return fmt.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host)
+		}
 	}
 	return nil
 }
 
-func handleSecWebSocketKey(w http.ResponseWriter, r *http.Request) {
-	key := r.Header.Get("Sec-WebSocket-Key")
-	w.Header().Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
-}
-
 func selectSubprotocol(r *http.Request, subprotocols []string) string {
 	cps := headerTokens(r.Header, "Sec-WebSocket-Protocol")
-	if len(cps) == 0 {
-		return ""
-	}
-
 	for _, sp := range subprotocols {
 		for _, cp := range cps {
 			if strings.EqualFold(sp, cp) {
@@ -236,7 +202,9 @@ func acceptDeflate(w http.ResponseWriter, ext websocketExtension, mode Compressi
 			continue
 		}
 
-		return nil, fmt.Errorf("unsupported permessage-deflate parameter: %q", p)
+		err := fmt.Errorf("unsupported permessage-deflate parameter: %q", p)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return nil, err
 	}
 
 	copts.setHeader(w.Header())
@@ -264,7 +232,9 @@ func acceptWebkitDeflate(w http.ResponseWriter, ext websocketExtension, mode Com
 		//
 		// Either way, we're only implementing this for webkit which never sends the max_window_bits
 		// parameter so we don't need to worry about it.
-		return nil, fmt.Errorf("unsupported x-webkit-deflate-frame parameter: %q", p)
+		err := fmt.Errorf("unsupported x-webkit-deflate-frame parameter: %q", p)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return nil, err
 	}
 
 	s := "x-webkit-deflate-frame"

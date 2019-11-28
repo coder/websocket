@@ -170,4 +170,4 @@ See the gorilla/websocket comparison for more performance details.
 If your company or project is using this library, feel free to open an issue or PR to amend this list.
 
 - [Coder](https://github.com/cdr)
-- [Tatsu Works](https://github.com/tatsuworks) - Ingresses 20 TB in websocket data every month on their Discord bot.
+- [Tatsu Works](https://github.com/tatsuworks) - Ingresses 20 TB in WebSocket data every month on their Discord bot.

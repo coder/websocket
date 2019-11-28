@@ -47,7 +47,7 @@ type DialOptions struct {
 func Dial(ctx context.Context, u string, opts *DialOptions) (*Conn, *http.Response, error) {
 	c, r, err := dial(ctx, u, opts)
 	if err != nil {
-		return nil, r, fmt.Errorf("failed to websocket dial: %w", err)
+		return nil, r, fmt.Errorf("failed to WebSocket dial: %w", err)
 	}
 	return c, r, nil
 }
@@ -158,22 +158,22 @@ func verifyServerResponse(r *http.Request, resp *http.Response) (*compressionOpt
 	}
 
 	if !headerContainsToken(resp.Header, "Connection", "Upgrade") {
-		return nil, fmt.Errorf("websocket protocol violation: Connection header %q does not contain Upgrade", resp.Header.Get("Connection"))
+		return nil, fmt.Errorf("WebSocket protocol violation: Connection header %q does not contain Upgrade", resp.Header.Get("Connection"))
 	}
 
 	if !headerContainsToken(resp.Header, "Upgrade", "WebSocket") {
-		return nil, fmt.Errorf("websocket protocol violation: Upgrade header %q does not contain websocket", resp.Header.Get("Upgrade"))
+		return nil, fmt.Errorf("WebSocket protocol violation: Upgrade header %q does not contain websocket", resp.Header.Get("Upgrade"))
 	}
 
 	if resp.Header.Get("Sec-WebSocket-Accept") != secWebSocketAccept(r.Header.Get("Sec-WebSocket-Key")) {
-		return nil, fmt.Errorf("websocket protocol violation: invalid Sec-WebSocket-Accept %q, key %q",
+		return nil, fmt.Errorf("WebSocket protocol violation: invalid Sec-WebSocket-Accept %q, key %q",
 			resp.Header.Get("Sec-WebSocket-Accept"),
 			r.Header.Get("Sec-WebSocket-Key"),
 		)
 	}
 
 	if proto := resp.Header.Get("Sec-WebSocket-Protocol"); proto != "" && !headerContainsToken(r.Header, "Sec-WebSocket-Protocol", proto) {
-		return nil, fmt.Errorf("websocket protocol violation: unexpected Sec-WebSocket-Protocol from server: %q", proto)
+		return nil, fmt.Errorf("WebSocket protocol violation: unexpected Sec-WebSocket-Protocol from server: %q", proto)
 	}
 
 	copts, err := verifyServerExtensions(resp.Header)

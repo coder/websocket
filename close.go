@@ -97,7 +97,7 @@ func CloseStatus(err error) StatusCode {
 func (c *Conn) Close(code StatusCode, reason string) error {
 	err := c.closeHandshake(code, reason)
 	if err != nil {
-		return fmt.Errorf("failed to close websocket: %w", err)
+		return fmt.Errorf("failed to close WebSocket: %w", err)
 	}
 	return nil
 }
@@ -236,7 +236,7 @@ func (c *Conn) setCloseErr(err error) {
 
 func (c *Conn) setCloseErrNoLock(err error) {
 	if c.closeErr == nil {
-		c.closeErr = fmt.Errorf("websocket closed: %w", err)
+		c.closeErr = fmt.Errorf("WebSocket closed: %w", err)
 	}
 }
 

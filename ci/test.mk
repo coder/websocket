@@ -19,5 +19,5 @@ coveralls: gotest
 
 gotest:
 	go test -covermode=count -coverprofile=ci/out/coverage.prof -coverpkg=./... $${GOTESTFLAGS-} ./...
-	sed -i '/_stringer\.go/d' ci/out/coverage.prof
+	sed -i '/stringer\.go/d' ci/out/coverage.prof
 	sed -i '/assert/d' ci/out/coverage.prof

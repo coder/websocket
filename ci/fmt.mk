@@ -22,4 +22,4 @@ prettier:
 	prettier --write --print-width=120 --no-semi --trailing-comma=all --loglevel=warn $$(git ls-files "*.yml" "*.md")
 
 gen:
-	stringer -type=opcode,MessageType,StatusCode -output=websocket_stringer.go
+	stringer -type=opcode,MessageType,StatusCode -output=stringer.go

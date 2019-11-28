@@ -102,7 +102,7 @@ type MessageEvent struct {
 	// See https://developer.mozilla.org/en-US/docs/Web/API/MessageEvent
 }
 
-// OnMessage registers a function to be called when the websocket receives a message.
+// OnMessage registers a function to be called when the WebSocket receives a message.
 func (c WebSocket) OnMessage(fn func(m MessageEvent)) (remove func()) {
 	return c.addEventListener("message", func(e js.Value) {
 		var data interface{}
@@ -128,7 +128,7 @@ func (c WebSocket) Subprotocol() string {
 	return c.v.Get("protocol").String()
 }
 
-// OnOpen registers a function to be called when the websocket is opened.
+// OnOpen registers a function to be called when the WebSocket is opened.
 func (c WebSocket) OnOpen(fn func(e js.Value)) (remove func()) {
 	return c.addEventListener("open", fn)
 }

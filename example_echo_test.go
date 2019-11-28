@@ -93,7 +93,7 @@ func echoServer(w http.ResponseWriter, r *http.Request) error {
 	}
 }
 
-// echo reads from the websocket connection and then writes
+// echo reads from the WebSocket connection and then writes
 // the received message back to it.
 // The entire function has 10s to complete.
 func echo(ctx context.Context, c *websocket.Conn, l *rate.Limiter) error {

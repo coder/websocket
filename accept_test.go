@@ -114,7 +114,6 @@ func Test_verifyClientHandshake(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			w := httptest.NewRecorder()
 			r := httptest.NewRequest(tc.method, "/", nil)
 
 			r.ProtoMajor = 1
@@ -127,7 +126,7 @@ func Test_verifyClientHandshake(t *testing.T) {
 				r.Header.Set(k, v)
 			}
 
-			err := verifyClientRequest(w, r)
+			err := verifyClientRequest(r)
 			if (err == nil) != tc.success {
 				t.Fatalf("unexpected error value: %+v", err)
 			}
