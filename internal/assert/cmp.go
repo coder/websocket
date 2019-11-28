@@ -1,8 +1,9 @@
 package assert
 
 import (
-	"github.com/google/go-cmp/cmp"
 	"reflect"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 // https://github.com/google/go-cmp/issues/40#issuecomment-328615283

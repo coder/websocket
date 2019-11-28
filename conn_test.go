@@ -8,13 +8,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"nhooyr.io/websocket/internal/assert"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/internal/assert"
 )
 
 func TestConn(t *testing.T) {
@@ -50,7 +50,6 @@ func TestConn(t *testing.T) {
 		assertJSONEcho(t, ctx, c, 2)
 	})
 }
-
 
 func testServer(tb testing.TB, fn func(w http.ResponseWriter, r *http.Request), tls bool) (s *httptest.Server, closeFn func()) {
 	h := http.HandlerFunc(fn)

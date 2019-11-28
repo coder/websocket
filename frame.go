@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"math"
 	"math/bits"
+
+	"nhooyr.io/websocket/internal/errd"
 )
 
 // opcode represents a WebSocket opcode.

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"nhooyr.io/websocket/internal/wssync"
 	"reflect"
 	"runtime"
 	"sync"
@@ -17,6 +16,7 @@ import (
 
 	"nhooyr.io/websocket/internal/bpool"
 	"nhooyr.io/websocket/internal/wsjs"
+	"nhooyr.io/websocket/internal/wssync"
 )
 
 // Conn provides a wrapper around the browser WebSocket API.

@@ -194,7 +194,7 @@ func (c *Conn) ping(ctx context.Context, p string) error {
 
 type mu struct {
 	once sync.Once
-	ch chan struct{}
+	ch   chan struct{}
 }
 
 func (m *mu) init() {

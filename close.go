@@ -6,8 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"nhooyr.io/websocket/internal/bpool"
 	"time"
+
+	"nhooyr.io/websocket/internal/bpool"
 )
 
 // StatusCode represents a WebSocket status code.

@@ -5,12 +5,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"nhooyr.io/websocket/internal/errd"
 
 	"github.com/golang/protobuf/proto"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/bpool"
+	"nhooyr.io/websocket/internal/errd"
 )
 
 // Read reads a Protobuf message from c into v.

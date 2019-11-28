@@ -1,12 +1,14 @@
 package websocket
 
 import (
-	"github.com/google/go-cmp/cmp"
 	"io"
 	"math"
-	"nhooyr.io/websocket/internal/assert"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+
+	"nhooyr.io/websocket/internal/assert"
 )
 
 func TestCloseError(t *testing.T) {

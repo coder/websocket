@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"nhooyr.io/websocket/internal/errd"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"nhooyr.io/websocket/internal/errd"
 )
 
 // Reader waits until there is a WebSocket data message to read

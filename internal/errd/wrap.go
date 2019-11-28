@@ -9,6 +9,6 @@ import (
 // Inspired by https://github.com/golang/go/issues/32676.
 func Wrap(err *error, f string, v ...interface{}) {
 	if *err != nil {
-		*err = fmt.Errorf(f+ ": %w", append(v, *err)...)
+		*err = fmt.Errorf(f+": %w", append(v, *err)...)
 	}
 }

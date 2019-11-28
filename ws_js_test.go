@@ -1,5 +1,15 @@
 package websocket
 
+import (
+	"context"
+	"net/http"
+	"os"
+	"testing"
+	"time"
+
+	"nhooyr.io/websocket"
+)
+
 func TestEcho(t *testing.T) {
 	t.Parallel()
 

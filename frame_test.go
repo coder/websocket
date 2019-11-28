@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math/bits"
-	"nhooyr.io/websocket/internal/assert"
+	"math/rand"
 	"strconv"
 	"testing"
 	"time"
@@ -15,7 +15,8 @@ import (
 
 	"github.com/gobwas/ws"
 	_ "github.com/gorilla/websocket"
-	"math/rand"
+
+	"nhooyr.io/websocket/internal/assert"
 )
 
 func init() {

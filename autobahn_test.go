@@ -8,13 +8,14 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"nhooyr.io/websocket"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"nhooyr.io/websocket"
 )
 
 func TestAutobahn(t *testing.T) {

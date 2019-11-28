@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"nhooyr.io/websocket/internal/errd"
 )
 
 // Writer returns a writer bounded by the context that will write

@@ -164,4 +164,3 @@ func (c *netConn) SetReadDeadline(t time.Time) error {
 	}
 	return nil
 }
-
