@@ -17,6 +17,41 @@ import (
 	"nhooyr.io/websocket"
 )
 
+func TestConn(t *testing.T) {
+	t.Parallel()
+
+	t.Run("json", func(t *testing.T) {
+		s, closeFn := testServer(t, func(w http.ResponseWriter, r *http.Request) {
+			c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+				Subprotocols:       []string{"echo"},
+				InsecureSkipVerify: true,
+			})
+			assert.Success(t, err)
+			defer c.Close(websocket.StatusInternalError, "")
+
+			err = echoLoop(r.Context(), c)
+			assertCloseStatus(t, websocket.StatusNormalClosure, err)
+		}, false)
+		defer closeFn()
+
+		wsURL := strings.Replace(s.URL, "http", "ws", 1)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+
+		opts := &websocket.DialOptions{
+			Subprotocols: []string{"echo"},
+		}
+		opts.HTTPClient = s.Client()
+
+		c, _, err := websocket.Dial(ctx, wsURL, opts)
+		assert.Success(t, err)
+
+		assertJSONEcho(t, ctx, c, 2)
+	})
+}
+
+
 func testServer(tb testing.TB, fn func(w http.ResponseWriter, r *http.Request), tls bool) (s *httptest.Server, closeFn func()) {
 	h := http.HandlerFunc(fn)
 	if tls {
@@ -107,38 +142,4 @@ func echoLoop(ctx context.Context, c *websocket.Conn) error {
 			return err
 		}
 	}
-}
-
-func TestConn(t *testing.T) {
-	t.Parallel()
-
-	t.Run("json", func(t *testing.T) {
-		s, closeFn := testServer(t, func(w http.ResponseWriter, r *http.Request) {
-			c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-				Subprotocols:       []string{"echo"},
-				InsecureSkipVerify: true,
-			})
-			assert.Success(t, err)
-			defer c.Close(websocket.StatusInternalError, "")
-
-			err = echoLoop(r.Context(), c)
-			assertCloseStatus(t, websocket.StatusNormalClosure, err)
-		}, false)
-		defer closeFn()
-
-		wsURL := strings.Replace(s.URL, "http", "ws", 1)
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
-
-		opts := &websocket.DialOptions{
-			Subprotocols: []string{"echo"},
-		}
-		opts.HTTPClient = s.Client()
-
-		c, _, err := websocket.Dial(ctx, wsURL, opts)
-		assert.Success(t, err)
-
-		assertJSONEcho(t, ctx, c, 2)
-	})
 }

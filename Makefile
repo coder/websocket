@@ -11,7 +11,3 @@ SHELL = bash
 include ci/fmt.mk
 include ci/lint.mk
 include ci/test.mk
-
-ci-image:
-	docker build -f ./ci/Dockerfile -t nhooyr/websocket-ci .
-	docker push nhooyr/websocket-ci
