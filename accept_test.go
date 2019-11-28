@@ -4,6 +4,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"nhooyr.io/websocket/internal/assert"
 )
 
 func TestAccept(t *testing.T) {
@@ -16,10 +18,7 @@ func TestAccept(t *testing.T) {
 		r := httptest.NewRequest("GET", "/", nil)
 
 		_, err := Accept(w, r, nil)
-		if err == nil {
-			t.Fatalf("unexpected error value: %v", err)
-		}
-
+		assert.ErrorContains(t, err, "protocol violation")
 	})
 
 	t.Run("requireHttpHijacker", func(t *testing.T) {
@@ -33,9 +32,7 @@ func TestAccept(t *testing.T) {
 		r.Header.Set("Sec-WebSocket-Key", "meow123")
 
 		_, err := Accept(w, r, nil)
-		if err == nil || !strings.Contains(err.Error(), "http.Hijacker") {
-			t.Fatalf("unexpected error value: %v", err)
-		}
+		assert.ErrorContains(t, err, "http.ResponseWriter does not implement http.Hijacker")
 	})
 }
 
@@ -127,8 +124,10 @@ func Test_verifyClientHandshake(t *testing.T) {
 			}
 
 			err := verifyClientRequest(r)
-			if (err == nil) != tc.success {
-				t.Fatalf("unexpected error value: %+v", err)
+			if tc.success {
+				assert.Success(t, err)
+			} else {
+				assert.Error(t, err)
 			}
 		})
 	}
@@ -178,9 +177,7 @@ func Test_selectSubprotocol(t *testing.T) {
 			r.Header.Set("Sec-WebSocket-Protocol", strings.Join(tc.clientProtocols, ","))
 
 			negotiated := selectSubprotocol(r, tc.serverProtocols)
-			if tc.negotiated != negotiated {
-				t.Fatalf("expected %q but got %q", tc.negotiated, negotiated)
-			}
+			assert.Equal(t, tc.negotiated, negotiated, "negotiated")
 		})
 	}
 }
@@ -234,8 +231,10 @@ func Test_authenticateOrigin(t *testing.T) {
 			r.Header.Set("Origin", tc.origin)
 
 			err := authenticateOrigin(r)
-			if (err == nil) != tc.success {
-				t.Fatalf("unexpected error value: %+v", err)
+			if tc.success {
+				assert.Success(t, err)
+			} else {
+				assert.Error(t, err)
 			}
 		})
 	}

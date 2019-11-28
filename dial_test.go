@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -140,7 +141,10 @@ func Test_verifyServerHandshake(t *testing.T) {
 				resp.Header.Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
 			}
 
-			_, err = verifyServerResponse(r, resp)
+			opts := &DialOptions{
+				Subprotocols: strings.Split(r.Header.Get("Sec-WebSocket-Protocol"), ","),
+			}
+			_, err = verifyServerResponse(opts, key, resp)
 			if (err == nil) != tc.success {
 				t.Fatalf("unexpected error: %+v", err)
 			}

@@ -18,21 +18,19 @@ import (
 	"nhooyr.io/websocket"
 )
 
+// https://github.com/crossbario/autobahn-python/tree/master/wstest
 func TestAutobahn(t *testing.T) {
-	// This test contains the old autobahn test suite tests that use the
-	// python binary. The approach is clunky and slow so new tests
-	// have been written in pure Go in websocket_test.go.
-	// These have been kept for correctness purposes and are occasionally ran.
+	t.Parallel()
+
 	if os.Getenv("AUTOBAHN") == "" {
 		t.Skip("Set $AUTOBAHN to run tests against the autobahn test suite")
 	}
 
-	t.Run("server", testServerAutobahnPython)
-	t.Run("client", testClientAutobahnPython)
+	t.Run("server", testServerAutobahn)
+	t.Run("client", testClientAutobahn)
 }
 
-// https://github.com/crossbario/autobahn-python/tree/master/wstest
-func testServerAutobahnPython(t *testing.T) {
+func testServerAutobahn(t *testing.T) {
 	t.Parallel()
 
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -101,13 +99,8 @@ func unusedListenAddr() (string, error) {
 	return l.Addr().String(), nil
 }
 
-// https://github.com/crossbario/autobahn-python/blob/master/wstest/testee_client_aio.py
-func testClientAutobahnPython(t *testing.T) {
+func testClientAutobahn(t *testing.T) {
 	t.Parallel()
-
-	if os.Getenv("AUTOBAHN_PYTHON") == "" {
-		t.Skip("Set $AUTOBAHN_PYTHON to test against the python autobahn test suite")
-	}
 
 	serverAddr, err := unusedListenAddr()
 	if err != nil {

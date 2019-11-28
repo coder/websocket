@@ -10,11 +10,12 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
-	"nhooyr.io/websocket/internal/errd"
 	"strings"
+
+	"nhooyr.io/websocket/internal/errd"
 )
 
-// AcceptOptions represents the options available to pass to Accept.
+// AcceptOptions represents Accept's options.
 type AcceptOptions struct {
 	// Subprotocols lists the WebSocket subprotocols that Accept will negotiate with the client.
 	// The empty subprotocol will always be negotiated as per RFC 6455. If you would like to
@@ -35,7 +36,7 @@ type AcceptOptions struct {
 	InsecureSkipVerify bool
 
 	// CompressionMode sets the compression mode.
-	// See docs on the CompressionMode type.
+	// See the docs on CompressionMode.
 	CompressionMode CompressionMode
 }
 
