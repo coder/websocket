@@ -189,7 +189,7 @@ func TestCloseStatus(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equalf(t, tc.exp, CloseStatus(tc.in), "unexpected close status")
+			assert.Equal(t, tc.exp, CloseStatus(tc.in), "unexpected close status")
 		})
 	}
 }

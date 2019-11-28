@@ -1,40 +1,39 @@
-// Package wspb provides websocket helpers for protobuf messages.
+// Package wspb provides helpers for reading and writing protobuf messages.
 package wspb // import "nhooyr.io/websocket/wspb"
 
 import (
 	"bytes"
 	"context"
 	"fmt"
+	"nhooyr.io/websocket/internal/errd"
 
 	"github.com/golang/protobuf/proto"
 
 	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/internal/bufpool"
+	"nhooyr.io/websocket/internal/bpool"
 )
 
-// Read reads a protobuf message from c into v.
-// It will reuse buffers to avoid allocations.
+// Read reads a Protobuf message from c into v.
+// It will reuse buffers in between calls to avoid allocations.
 func Read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
-	err := read(ctx, c, v)
-	if err != nil {
-		return fmt.Errorf("failed to read protobuf: %w", err)
-	}
-	return nil
+	return read(ctx, c, v)
 }
 
-func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
+func read(ctx context.Context, c *websocket.Conn, v proto.Message) (err error) {
+	defer errd.Wrap(&err, "failed to read Protobuf message")
+
 	typ, r, err := c.Reader(ctx)
 	if err != nil {
 		return err
 	}
 
 	if typ != websocket.MessageBinary {
-		c.Close(websocket.StatusUnsupportedData, "can only accept binary messages")
-		return fmt.Errorf("unexpected frame type for protobuf (expected %v): %v", websocket.MessageBinary, typ)
+		c.Close(websocket.StatusUnsupportedData, "expected binary message")
+		return fmt.Errorf("expected binary message for Protobuf but got: %v", typ)
 	}
 
-	b := bufpool.Get()
-	defer bufpool.Put(b)
+	b := bpool.Get()
+	defer bpool.Put(b)
 
 	_, err = b.ReadFrom(r)
 	if err != nil {
@@ -43,33 +42,31 @@ func read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 
 	err = proto.Unmarshal(b.Bytes(), v)
 	if err != nil {
-		c.Close(websocket.StatusInvalidFramePayloadData, "failed to unmarshal protobuf")
-		return fmt.Errorf("failed to unmarshal protobuf: %w", err)
+		c.Close(websocket.StatusInvalidFramePayloadData, "failed to unmarshal Protobuf")
+		return fmt.Errorf("failed to unmarshal Protobuf: %w", err)
 	}
 
 	return nil
 }
 
-// Write writes the protobuf message v to c.
-// It will reuse buffers to avoid allocations.
+// Write writes the Protobuf message v to c.
+// It will reuse buffers in between calls to avoid allocations.
 func Write(ctx context.Context, c *websocket.Conn, v proto.Message) error {
-	err := write(ctx, c, v)
-	if err != nil {
-		return fmt.Errorf("failed to write protobuf: %w", err)
-	}
-	return nil
+	return write(ctx, c, v)
 }
 
-func write(ctx context.Context, c *websocket.Conn, v proto.Message) error {
-	b := bufpool.Get()
+func write(ctx context.Context, c *websocket.Conn, v proto.Message) (err error) {
+	defer errd.Wrap(&err, "failed to write Protobuf message")
+
+	b := bpool.Get()
 	pb := proto.NewBuffer(b.Bytes())
 	defer func() {
-		bufpool.Put(bytes.NewBuffer(pb.Bytes()))
+		bpool.Put(bytes.NewBuffer(pb.Bytes()))
 	}()
 
-	err := pb.Marshal(v)
+	err = pb.Marshal(v)
 	if err != nil {
-		return fmt.Errorf("failed to marshal protobuf: %w", err)
+		return fmt.Errorf("failed to marshal Protobuf: %w", err)
 	}
 
 	return c.Write(ctx, websocket.MessageBinary, pb.Bytes())

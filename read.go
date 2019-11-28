@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"nhooyr.io/websocket/internal/errd"
 	"strings"
 	"sync/atomic"
@@ -390,8 +389,6 @@ func (mr *msgReader) Read(p []byte) (_ int, err error) {
 }
 
 func (mr *msgReader) read(p []byte) (int, error) {
-	log.Println("compress", mr.deflate)
-
 	if mr.payloadLength == 0 {
 		h, err := mr.cr.loop(mr.ctx)
 		if err != nil {

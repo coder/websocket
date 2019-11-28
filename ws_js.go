@@ -15,7 +15,7 @@ import (
 	"sync"
 	"syscall/js"
 
-	"nhooyr.io/websocket/internal/bufpool"
+	"nhooyr.io/websocket/internal/bpool"
 	"nhooyr.io/websocket/internal/wsjs"
 )
 
@@ -302,7 +302,7 @@ func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 		c:   c,
 		ctx: ctx,
 		typ: typ,
-		b:   bufpool.Get(),
+		b:   bpool.Get(),
 	}, nil
 }
 
@@ -332,7 +332,7 @@ func (w writer) Close() error {
 		return errors.New("cannot close closed writer")
 	}
 	w.closed = true
-	defer bufpool.Put(w.b)
+	defer bpool.Put(w.b)
 
 	err := w.c.Write(w.ctx, w.typ, w.b.Bytes())
 	if err != nil {

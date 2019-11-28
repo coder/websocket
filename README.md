@@ -165,10 +165,6 @@ faster, the compression extensions are fully supported and as much as possible i
 
 See the gorilla/websocket comparison for more performance details.
 
-## Contributing
-
-See [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md).
-
 ## Users
 
 If your company or project is using this library, feel free to open an issue or PR to amend this list.

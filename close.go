@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"nhooyr.io/websocket/internal/bufpool"
+	"nhooyr.io/websocket/internal/bpool"
 	"time"
 )
 
@@ -146,10 +146,10 @@ func (cr *connReader) waitClose() error {
 	}
 	defer cr.mu.Unlock()
 
-	b := bufpool.Get()
+	b := bpool.Get()
 	buf := b.Bytes()
 	buf = buf[:cap(buf)]
-	defer bufpool.Put(b)
+	defer bpool.Put(b)
 
 	for {
 		// TODO

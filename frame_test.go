@@ -90,7 +90,7 @@ func testHeader(t *testing.T, h header) {
 	h2, err := readFrameHeader(r)
 	assert.Success(t, err)
 
-	assert.Equalf(t, h, h2, "written and read headers differ")
+	assert.Equal(t, h, h2, "written and read headers differ")
 }
 
 func Test_mask(t *testing.T) {
@@ -101,8 +101,8 @@ func Test_mask(t *testing.T) {
 	p := []byte{0xa, 0xb, 0xc, 0xf2, 0xc}
 	gotKey32 := mask(key32, p)
 
-	assert.Equalf(t, []byte{0, 0, 0, 0x0d, 0x6}, p, "unexpected mask")
-	assert.Equalf(t, bits.RotateLeft32(key32, -8), gotKey32, "unexpected mask key")
+	assert.Equal(t, []byte{0, 0, 0, 0x0d, 0x6}, p, "unexpected mask")
+	assert.Equal(t, bits.RotateLeft32(key32, -8), gotKey32, "unexpected mask key")
 }
 
 func basicMask(maskKey [4]byte, pos int, b []byte) int {

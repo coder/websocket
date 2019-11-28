@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"nhooyr.io/websocket/internal/errd"
 	"time"
 )
 

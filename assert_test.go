@@ -33,7 +33,7 @@ func assertJSONEcho(t *testing.T, ctx context.Context, c *websocket.Conn, n int)
 	err = wsjson.Read(ctx, c, &act)
 	assert.Success(t, err)
 
-	assert.Equalf(t, exp, act, "unexpected JSON")
+	assert.Equal(t, exp, act, "unexpected JSON")
 }
 
 func assertJSONRead(t *testing.T, ctx context.Context, c *websocket.Conn, exp interface{}) {
@@ -43,7 +43,7 @@ func assertJSONRead(t *testing.T, ctx context.Context, c *websocket.Conn, exp in
 	err := wsjson.Read(ctx, c, &act)
 	assert.Success(t, err)
 
-	assert.Equalf(t, exp, act, "unexpected JSON")
+	assert.Equal(t, exp, act, "unexpected JSON")
 }
 
 func randString(n int) string {
@@ -69,18 +69,18 @@ func assertEcho(t *testing.T, ctx context.Context, c *websocket.Conn, typ websoc
 	typ2, p2, err := c.Read(ctx)
 	assert.Success(t, err)
 
-	assert.Equalf(t, typ, typ2, "unexpected data type")
-	assert.Equalf(t, p, p2, "unexpected payload")
+	assert.Equal(t, typ, typ2, "unexpected data type")
+	assert.Equal(t, p, p2, "unexpected payload")
 }
 
 func assertSubprotocol(t *testing.T, c *websocket.Conn, exp string) {
 	t.Helper()
 
-	assert.Equalf(t, exp, c.Subprotocol(), "unexpected subprotocol")
+	assert.Equal(t, exp, c.Subprotocol(), "unexpected subprotocol")
 }
 
 func assertCloseStatus(t *testing.T, exp websocket.StatusCode, err error) {
 	t.Helper()
 
-	assert.Equalf(t, exp, websocket.CloseStatus(err), "unexpected status code")
+	assert.Equal(t, exp, websocket.CloseStatus(err), "unexpected status code")
 }
