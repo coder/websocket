@@ -1,5 +1,3 @@
-// +build js
-
 package websocket // import "nhooyr.io/websocket"
 
 import (
@@ -8,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"reflect"
 	"runtime"
 	"sync"
@@ -242,15 +239,15 @@ type DialOptions struct {
 // The passed context bounds the maximum time spent waiting for the connection to open.
 // The returned *http.Response is always nil or the zero value. It's only in the signature
 // to match the core API.
-func Dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Response, error) {
-	c, resp, err := dial(ctx, url, opts)
+func Dial(ctx context.Context, url string, opts *DialOptions) (*Conn, error) {
+	c, err := dial(ctx, url, opts)
 	if err != nil {
 		return nil, resp, fmt.Errorf("failed to WebSocket dial %q: %w", url, err)
 	}
-	return c, resp, nil
+	return c, nil
 }
 
-func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Response, error) {
+func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, error) {
 	if opts == nil {
 		opts = &DialOptions{}
 	}
@@ -280,8 +277,7 @@ func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Resp
 		return c, nil, c.closeErr
 	}
 
-	// Have to return a non nil response as the normal API does that.
-	return c, &http.Response{}, nil
+	return c, nil
 }
 
 // Reader attempts to read a message from the connection.

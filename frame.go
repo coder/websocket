@@ -12,7 +12,7 @@ import (
 // opcode represents a WebSocket opcode.
 type opcode int
 
-// List at https://tools.ietf.org/html/rfc6455#section-11.8.
+// https://tools.ietf.org/html/rfc6455#section-11.8.
 const (
 	opContinuation opcode = iota
 	opText

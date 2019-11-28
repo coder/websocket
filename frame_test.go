@@ -19,10 +19,6 @@ import (
 	"nhooyr.io/websocket/internal/assert"
 )
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
 func TestHeader(t *testing.T) {
 	t.Parallel()
 
@@ -56,8 +52,9 @@ func TestHeader(t *testing.T) {
 	t.Run("fuzz", func(t *testing.T) {
 		t.Parallel()
 
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
 		randBool := func() bool {
-			return rand.Intn(1) == 0
+			return r.Intn(1) == 0
 		}
 
 		for i := 0; i < 10000; i++ {
@@ -66,11 +63,11 @@ func TestHeader(t *testing.T) {
 				rsv1:   randBool(),
 				rsv2:   randBool(),
 				rsv3:   randBool(),
-				opcode: opcode(rand.Intn(16)),
+				opcode: opcode(r.Intn(16)),
 
 				masked:        randBool(),
-				maskKey:       rand.Uint32(),
-				payloadLength: rand.Int63(),
+				maskKey:       r.Uint32(),
+				payloadLength: r.Int63(),
 			}
 
 			testHeader(t, h)
@@ -91,7 +88,7 @@ func testHeader(t *testing.T, h header) {
 	h2, err := readFrameHeader(r)
 	assert.Success(t, err)
 
-	assert.Equal(t, h, h2, "written and read headers differ")
+	assert.Equal(t, h, h2, "header")
 }
 
 func Test_mask(t *testing.T) {
@@ -102,8 +99,8 @@ func Test_mask(t *testing.T) {
 	p := []byte{0xa, 0xb, 0xc, 0xf2, 0xc}
 	gotKey32 := mask(key32, p)
 
-	assert.Equal(t, []byte{0, 0, 0, 0x0d, 0x6}, p, "unexpected mask")
-	assert.Equal(t, bits.RotateLeft32(key32, -8), gotKey32, "unexpected mask key")
+	assert.Equal(t, []byte{0, 0, 0, 0x0d, 0x6}, p, "mask")
+	assert.Equal(t, bits.RotateLeft32(key32, -8), gotKey32, "mask key")
 }
 
 func basicMask(maskKey [4]byte, pos int, b []byte) int {
@@ -173,9 +170,7 @@ func Benchmark_mask(b *testing.B) {
 		},
 	}
 
-	var key [4]byte
-	_, err := rand.Read(key[:])
-	assert.Success(b, err)
+	key := [4]byte{1, 2, 3, 4}
 
 	for _, size := range sizes {
 		p := make([]byte, size)

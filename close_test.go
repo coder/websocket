@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-
 	"nhooyr.io/websocket/internal/assert"
 )
 
@@ -51,8 +49,10 @@ func TestCloseError(t *testing.T) {
 			t.Parallel()
 
 			_, err := tc.ce.bytesErr()
-			if (err == nil) != tc.success {
-				t.Fatalf("unexpected error value: %+v", err)
+			if (tc.success) {
+				assert.Success(t, err)
+			} else {
+				assert.Error(t, err)
 			}
 		})
 	}
@@ -101,12 +101,11 @@ func Test_parseClosePayload(t *testing.T) {
 			t.Parallel()
 
 			ce, err := parseClosePayload(tc.p)
-			if (err == nil) != tc.success {
-				t.Fatalf("unexpected expected error value: %+v", err)
-			}
-
-			if tc.success && tc.ce != ce {
-				t.Fatalf("unexpected close error: %v", cmp.Diff(tc.ce, ce))
+			if (tc.success) {
+				assert.Success(t, err)
+				assert.Equal(t, tc.ce, ce, "CloseError")
+			} else {
+				assert.Error(t, err)
 			}
 		})
 	}
@@ -152,9 +151,7 @@ func Test_validWireCloseCode(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			if valid := validWireCloseCode(tc.code); tc.valid != valid {
-				t.Fatalf("expected %v for %v but got %v", tc.valid, tc.code, valid)
-			}
+			assert.Equal(t, tc.code, validWireCloseCode(tc.code), "validWireCloseCode")
 		})
 	}
 }
@@ -191,7 +188,7 @@ func TestCloseStatus(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equal(t, tc.exp, CloseStatus(tc.in), "unexpected close status")
+			assert.Equal(t, tc.exp, CloseStatus(tc.in), "CloseStatus")
 		})
 	}
 }

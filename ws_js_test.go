@@ -23,7 +23,7 @@ func TestEcho(t *testing.T) {
 	defer c.Close(websocket.StatusInternalError, "")
 
 	assertSubprotocol(t, c, "echo")
-	assert.Equalf(t, &http.Response{}, resp, "unexpected http response")
+	assert.Equalf(t, &http.Response{}, resp, "http.Response")
 	assertJSONEcho(t, ctx, c, 1024)
 	assertEcho(t, ctx, c, websocket.MessageBinary, 1024)
 

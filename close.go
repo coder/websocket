@@ -15,11 +15,13 @@ import (
 // https://tools.ietf.org/html/rfc6455#section-7.4
 type StatusCode int
 
-// These codes were retrieved from:
 // https://www.iana.org/assignments/websocket/websocket.xhtml#close-code-number
 //
-// The defined constants only represent the status codes registered with IANA.
-// The 4000-4999 range of status codes is reserved for arbitrary use by applications.
+// These are only the status codes defined by the protocol.
+//
+// You can define custom codes in the 3000-4999 range.
+// The 3000-3999 range is reserved for use by libraries, frameworks and applications.
+// The 4000-4999 range is reserved for private use.
 const (
 	StatusNormalClosure   StatusCode = 1000
 	StatusGoingAway       StatusCode = 1001
@@ -31,11 +33,12 @@ const (
 
 	// StatusNoStatusRcvd cannot be sent in a close message.
 	// It is reserved for when a close message is received without
-	// an explicit status.
+	// a status code.
 	StatusNoStatusRcvd StatusCode = 1005
 
-	// StatusAbnormalClosure is only exported for use with Wasm.
-	// In non Wasm Go, the returned error will indicate whether the connection was closed or not or what happened.
+	// StatusAbnormalClosure is exported for use only with Wasm.
+	// In non Wasm Go, the returned error will indicate whether the
+	// connection was closed abnormally.
 	StatusAbnormalClosure StatusCode = 1006
 
 	StatusInvalidFramePayloadData StatusCode = 1007
@@ -48,15 +51,15 @@ const (
 	StatusBadGateway              StatusCode = 1014
 
 	// StatusTLSHandshake is only exported for use with Wasm.
-	// In non Wasm Go, the returned error will indicate whether there was a TLS handshake failure.
+	// In non Wasm Go, the returned error will indicate whether there was
+	// a TLS handshake failure.
 	StatusTLSHandshake StatusCode = 1015
 )
 
-// CloseError represents a WebSocket close frame.
-// It is returned by Conn's methods when a WebSocket close frame is received from
-// the peer.
-// You will need to use the https://golang.org/pkg/errors/#As function, new in Go 1.13,
-// to check for this error. See the CloseError example.
+// CloseError is returned when the connection is closed with a status and reason.
+//
+// Use Go 1.13's errors.As to check for this error.
+// Also see the CloseStatus helper.
 type CloseError struct {
 	Code   StatusCode
 	Reason string
@@ -66,9 +69,10 @@ func (ce CloseError) Error() string {
 	return fmt.Sprintf("status = %v and reason = %q", ce.Code, ce.Reason)
 }
 
-// CloseStatus is a convenience wrapper around errors.As to grab
-// the status code from a *CloseError. If the passed error is nil
-// or not a *CloseError, the returned StatusCode will be -1.
+// CloseStatus is a convenience wrapper around Go 1.13's errors.As to grab
+// the status code from a CloseError.
+//
+// -1 will be returned if the passed error is nil or not a CloseError.
 func CloseStatus(err error) StatusCode {
 	var ce CloseError
 	if errors.As(err, &ce) {
@@ -77,19 +81,16 @@ func CloseStatus(err error) StatusCode {
 	return -1
 }
 
-// Close closes the WebSocket connection with the given status code and reason.
+// Close performs the WebSocket close handshake with the given status code and reason.
 //
 // It will write a WebSocket close frame with a timeout of 5s and then wait 5s for
 // the peer to send a close frame.
-// Thus, it implements the full WebSocket close handshake.
-// All data messages received from the peer during the close handshake
-// will be discarded.
+// All data messages received from the peer during the close handshake will be discarded.
 //
 // The connection can only be closed once. Additional calls to Close
 // are no-ops.
 //
-// The maximum length of reason must be 125 bytes otherwise an internal
-// error will be sent to the peer. For this reason, you should avoid
+// The maximum length of reason must be 125 bytes. Avoid
 // sending a dynamic reason.
 //
 // Close will unblock all goroutines interacting with the connection once
