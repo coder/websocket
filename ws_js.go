@@ -13,7 +13,18 @@ import (
 
 	"nhooyr.io/websocket/internal/bpool"
 	"nhooyr.io/websocket/internal/wsjs"
-	"nhooyr.io/websocket/internal/wssync"
+)
+
+// MessageType represents the type of a WebSocket message.
+// See https://tools.ietf.org/html/rfc6455#section-5.6
+type MessageType int
+
+// MessageType constants.
+const (
+	// MessageText is for UTF-8 encoded text messages like JSON.
+	MessageText MessageType = iota + 1
+	// MessageBinary is for binary messages like Protobufs.
+	MessageBinary
 )
 
 // Conn provides a wrapper around the browser WebSocket API.
@@ -21,10 +32,10 @@ type Conn struct {
 	ws wsjs.WebSocket
 
 	// read limit for a message in bytes.
-	msgReadLimit *wssync.Int64
+	msgReadLimit atomicInt64
 
 	closingMu     sync.Mutex
-	isReadClosed  *wssync.Int64
+	isReadClosed  atomicInt64
 	closeOnce     sync.Once
 	closed        chan struct{}
 	closeErrOnce  sync.Once
@@ -337,6 +348,7 @@ func (w writer) Close() error {
 	return nil
 }
 
+// CloseRead implements *Conn.CloseRead for wasm.
 func (c *Conn) CloseRead(ctx context.Context) context.Context {
 	c.isReadClosed.Store(1)
 
@@ -349,6 +361,7 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 	return ctx
 }
 
+// SetReadLimit implements *Conn.SetReadLimit for wasm.
 func (c *Conn) SetReadLimit(n int64) {
 	c.msgReadLimit.Store(n)
 }

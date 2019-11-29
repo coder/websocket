@@ -1,3 +1,4 @@
+// Package assert contains helpers for test assertions.
 package assert
 
 import (
@@ -5,6 +6,7 @@ import (
 	"testing"
 )
 
+// Equal asserts exp == act.
 func Equal(t testing.TB, exp, act interface{}, name string) {
 	t.Helper()
 	diff := cmpDiff(exp, act)
@@ -13,6 +15,7 @@ func Equal(t testing.TB, exp, act interface{}, name string) {
 	}
 }
 
+// NotEqual asserts exp != act.
 func NotEqual(t testing.TB, exp, act interface{}, name string) {
 	t.Helper()
 	if cmpDiff(exp, act) == "" {
@@ -20,6 +23,7 @@ func NotEqual(t testing.TB, exp, act interface{}, name string) {
 	}
 }
 
+// Success asserts exp == nil.
 func Success(t testing.TB, err error) {
 	t.Helper()
 	if err != nil {
@@ -27,6 +31,7 @@ func Success(t testing.TB, err error) {
 	}
 }
 
+// Error asserts exp != nil.
 func Error(t testing.TB, err error) {
 	t.Helper()
 	if err == nil {
@@ -34,6 +39,7 @@ func Error(t testing.TB, err error) {
 	}
 }
 
+// ErrorContains asserts the error string from err contains sub.
 func ErrorContains(t testing.TB, err error, sub string) {
 	t.Helper()
 	Error(t, err)

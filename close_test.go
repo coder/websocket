@@ -1,3 +1,5 @@
+// +build !js
+
 package websocket
 
 import (
@@ -49,7 +51,7 @@ func TestCloseError(t *testing.T) {
 			t.Parallel()
 
 			_, err := tc.ce.bytesErr()
-			if (tc.success) {
+			if tc.success {
 				assert.Success(t, err)
 			} else {
 				assert.Error(t, err)
@@ -101,7 +103,7 @@ func Test_parseClosePayload(t *testing.T) {
 			t.Parallel()
 
 			ce, err := parseClosePayload(tc.p)
-			if (tc.success) {
+			if tc.success {
 				assert.Success(t, err)
 				assert.Equal(t, tc.ce, ce, "CloseError")
 			} else {
@@ -151,7 +153,7 @@ func Test_validWireCloseCode(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equal(t, tc.code, validWireCloseCode(tc.code), "validWireCloseCode")
+			assert.Equal(t, tc.valid, validWireCloseCode(tc.code), "validWireCloseCode")
 		})
 	}
 }

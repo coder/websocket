@@ -49,21 +49,21 @@ type Conn struct {
 	writeTimeout chan context.Context
 
 	// Read state.
-	readMu         mu
-	readControlBuf [maxControlPayload]byte
-	msgReader      *msgReader
+	readMu            *mu
+	readControlBuf    [maxControlPayload]byte
+	msgReader         *msgReader
+	readCloseFrameErr error
 
 	// Write state.
 	msgWriter    *msgWriter
-	writeFrameMu mu
+	writeFrameMu *mu
 	writeBuf     []byte
 	writeHeader  header
 
-	closed chan struct{}
-
-	closeMu           sync.Mutex
-	closeErr          error
-	closeHandshakeErr error
+	closed     chan struct{}
+	closeMu    sync.Mutex
+	closeErr   error
+	wroteClose int64
 
 	pingCounter   int32
 	activePingsMu sync.Mutex
@@ -90,12 +90,15 @@ func newConn(cfg connConfig) *Conn {
 		br: cfg.br,
 		bw: cfg.bw,
 
-		readTimeout: make(chan context.Context),
+		readTimeout:  make(chan context.Context),
 		writeTimeout: make(chan context.Context),
 
-		closed: make(chan struct{}),
+		closed:      make(chan struct{}),
 		activePings: make(map[string]chan<- struct{}),
 	}
+
+	c.readMu = newMu(c)
+	c.writeFrameMu = newMu(c)
 
 	c.msgReader = newMsgReader(c)
 
@@ -105,40 +108,12 @@ func newConn(cfg connConfig) *Conn {
 	}
 
 	runtime.SetFinalizer(c, func(c *Conn) {
-		c.closeWithErr(errors.New("connection garbage collected"))
+		c.close(errors.New("connection garbage collected"))
 	})
 
 	go c.timeoutLoop()
 
 	return c
-}
-
-func newMsgReader(c *Conn) *msgReader {
-	mr := &msgReader{
-		c:   c,
-		fin: true,
-	}
-
-	mr.limitReader = newLimitReader(c, readerFunc(mr.read), 32768)
-	if c.deflateNegotiated() && mr.contextTakeover() {
-		mr.ensureFlateReader()
-	}
-
-	return mr
-}
-
-func newMsgWriter(c *Conn) *msgWriter {
-	mw := &msgWriter{
-		c: c,
-	}
-	mw.trimWriter = &trimLastFourBytesWriter{
-		w: writerFunc(mw.write),
-	}
-	if c.deflateNegotiated() && mw.contextTakeover() {
-		mw.ensureFlateWriter()
-	}
-
-	return mw
 }
 
 // Subprotocol returns the negotiated subprotocol.
@@ -147,7 +122,7 @@ func (c *Conn) Subprotocol() string {
 	return c.subprotocol
 }
 
-func (c *Conn) closeWithErr(err error) {
+func (c *Conn) close(err error) {
 	c.closeMu.Lock()
 	defer c.closeMu.Unlock()
 
@@ -195,13 +170,13 @@ func (c *Conn) timeoutLoop() {
 			c.setCloseErr(fmt.Errorf("read timed out: %w", readCtx.Err()))
 			go c.writeError(StatusPolicyViolation, errors.New("timed out"))
 		case <-writeCtx.Done():
-			c.closeWithErr(fmt.Errorf("write timed out: %w", writeCtx.Err()))
+			c.close(fmt.Errorf("write timed out: %w", writeCtx.Err()))
 			return
 		}
 	}
 }
 
-func (c *Conn) deflateNegotiated() bool {
+func (c *Conn) deflate() bool {
 	return c.copts != nil
 }
 
@@ -245,7 +220,7 @@ func (c *Conn) ping(ctx context.Context, p string) error {
 		return c.closeErr
 	case <-ctx.Done():
 		err := fmt.Errorf("failed to wait for pong: %w", ctx.Err())
-		c.closeWithErr(err)
+		c.close(err)
 		return err
 	case <-pong:
 		return nil
@@ -253,19 +228,21 @@ func (c *Conn) ping(ctx context.Context, p string) error {
 }
 
 type mu struct {
-	once sync.Once
-	ch   chan struct{}
+	c  *Conn
+	ch chan struct{}
 }
 
-func (m *mu) init() {
-	m.once.Do(func() {
-		m.ch = make(chan struct{}, 1)
-	})
+func newMu(c *Conn) *mu {
+	return &mu{
+		c:  c,
+		ch: make(chan struct{}, 1),
+	}
 }
 
 func (m *mu) Lock(ctx context.Context) error {
-	m.init()
 	select {
+	case <-m.c.closed:
+		return m.c.closeErr
 	case <-ctx.Done():
 		return ctx.Err()
 	case m.ch <- struct{}{}:
@@ -274,7 +251,6 @@ func (m *mu) Lock(ctx context.Context) error {
 }
 
 func (m *mu) TryLock() bool {
-	m.init()
 	select {
 	case m.ch <- struct{}{}:
 		return true

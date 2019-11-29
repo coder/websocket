@@ -4,11 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"io"
+	"strings"
+	"testing"
+
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/assert"
 	"nhooyr.io/websocket/wsjson"
-	"strings"
-	"testing"
 )
 
 func randBytes(t *testing.T, n int) []byte {

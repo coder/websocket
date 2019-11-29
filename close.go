@@ -1,3 +1,5 @@
+// +build !js
+
 package websocket
 
 import (
@@ -6,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"time"
+
 	"nhooyr.io/websocket/internal/errd"
 )
 
@@ -99,19 +103,24 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 
 func (c *Conn) closeHandshake(code StatusCode, reason string) (err error) {
 	defer errd.Wrap(&err, "failed to close WebSocket")
+	defer c.close(nil)
 
 	err = c.writeClose(code, reason)
 	if err != nil {
 		return err
 	}
 
-	return c.waitClose()
+	err = c.waitCloseHandshake()
+	if CloseStatus(err) == -1 {
+		return err
+	}
+	return nil
 }
 
 func (c *Conn) writeError(code StatusCode, err error) {
 	c.setCloseErr(err)
 	c.writeClose(code, err.Error())
-	c.closeWithErr(nil)
+	c.close(nil)
 }
 
 func (c *Conn) writeClose(code StatusCode, reason string) error {
@@ -130,28 +139,33 @@ func (c *Conn) writeClose(code StatusCode, reason string) error {
 	return c.writeControl(context.Background(), opClose, p)
 }
 
-func (c *Conn) waitClose() error {
-	defer c.closeWithErr(nil)
+func (c *Conn) waitCloseHandshake() error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
 
-	return nil
+	err := c.readMu.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer c.readMu.Unlock()
 
-	// ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	// defer cancel()
-	//
-	// err := cr.mu.Lock(ctx)
-	// if err != nil {
-	// 	return err
-	// }
-	// defer cr.mu.Unlock()
-	//
-	// b := bpool.Get()
-	// buf := b.Bytes()
-	// buf = buf[:cap(buf)]
-	// defer bpool.Put(b)
-	//
-	// for {
-	// 	return nil
-	// }
+	if c.readCloseFrameErr != nil {
+		return c.readCloseFrameErr
+	}
+
+	for {
+		h, err := c.readLoop(ctx)
+		if err != nil {
+			return err
+		}
+
+		for i := int64(0); i < h.payloadLength; i++ {
+			_, err := c.br.ReadByte()
+			if err != nil {
+				return err
+			}
+		}
+	}
 }
 
 func parseClosePayload(p []byte) (CloseError, error) {

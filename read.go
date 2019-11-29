@@ -1,3 +1,5 @@
+// +build !js
+
 package websocket
 
 import (
@@ -70,13 +72,27 @@ func (c *Conn) SetReadLimit(n int64) {
 	c.msgReader.limitReader.setLimit(n)
 }
 
-func (mr *msgReader) ensureFlateReader() {
+func newMsgReader(c *Conn) *msgReader {
+	mr := &msgReader{
+		c:   c,
+		fin: true,
+	}
+
+	mr.limitReader = newLimitReader(c, readerFunc(mr.read), 32768)
+	if c.deflate() && mr.contextTakeover() {
+		mr.initFlateReader()
+	}
+
+	return mr
+}
+
+func (mr *msgReader) initFlateReader() {
 	mr.flateReader = getFlateReader(readerFunc(mr.read))
 	mr.limitReader.reset(mr.flateReader)
 }
 
 func (mr *msgReader) close() {
-	if mr.c.deflateNegotiated() && mr.contextTakeover() {
+	if mr.c.deflate() && mr.contextTakeover() {
 		mr.c.readMu.Lock(context.Background())
 		putFlateReader(mr.flateReader)
 		mr.c.readMu.Unlock()
@@ -92,7 +108,7 @@ func (mr *msgReader) contextTakeover() bool {
 
 func (c *Conn) readRSV1Illegal(h header) bool {
 	// If compression is enabled, rsv1 is always illegal.
-	if !c.deflateNegotiated() {
+	if !c.deflate() {
 		return true
 	}
 	// rsv1 is only allowed on data frames beginning messages.
@@ -154,7 +170,7 @@ func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 		case <-ctx.Done():
 			return header{}, ctx.Err()
 		default:
-			c.closeWithErr(err)
+			c.close(err)
 			return header{}, err
 		}
 	}
@@ -184,7 +200,7 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
 			return n, ctx.Err()
 		default:
 			err = fmt.Errorf("failed to read frame payload: %w", err)
-			c.closeWithErr(err)
+			c.close(err)
 			return n, err
 		}
 	}
@@ -198,7 +214,7 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
 	return n, err
 }
 
-func (c *Conn) handleControl(ctx context.Context, h header) error {
+func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 	if h.payloadLength < 0 || h.payloadLength > maxControlPayload {
 		err := fmt.Errorf("received control frame payload with invalid length: %d", h.payloadLength)
 		c.writeError(StatusProtocolError, err)
@@ -215,7 +231,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 	defer cancel()
 
 	b := c.readControlBuf[:h.payloadLength]
-	_, err := c.readFramePayload(ctx, b)
+	_, err = c.readFramePayload(ctx, b)
 	if err != nil {
 		return err
 	}
@@ -236,6 +252,10 @@ func (c *Conn) handleControl(ctx context.Context, h header) error {
 		}
 		return nil
 	}
+
+	defer func() {
+		c.readCloseFrameErr = err
+	}()
 
 	ce, err := parseClosePayload(b)
 	if err != nil {
@@ -301,7 +321,7 @@ func (mr *msgReader) reset(ctx context.Context, h header) {
 	if mr.deflate {
 		mr.deflateTail.Reset(deflateMessageTail)
 		if !mr.contextTakeover() {
-			mr.ensureFlateReader()
+			mr.initFlateReader()
 		}
 	}
 	mr.setFrame(h)
@@ -329,7 +349,7 @@ func (mr *msgReader) Read(p []byte) (_ int, err error) {
 	defer mr.c.readMu.Unlock()
 
 	if mr.payloadLength == 0 && mr.fin {
-		if mr.c.deflateNegotiated() && !mr.contextTakeover() {
+		if mr.c.deflate() && !mr.contextTakeover() {
 			if mr.flateReader != nil {
 				putFlateReader(mr.flateReader)
 				mr.flateReader = nil
@@ -345,7 +365,7 @@ func (mr *msgReader) read(p []byte) (int, error) {
 	if mr.payloadLength == 0 {
 		if mr.fin {
 			if mr.deflate {
-				n, _ := mr.deflateTail.Read(p[:4])
+				n, _ := mr.deflateTail.Read(p)
 				return n, nil
 			}
 			return 0, io.EOF
