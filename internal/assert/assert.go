@@ -23,7 +23,7 @@ func NotEqual(t testing.TB, exp, act interface{}, name string) {
 func Success(t testing.TB, err error) {
 	t.Helper()
 	if err != nil {
-		t.Fatalf("unexpected error : %+v", err)
+		t.Fatalf("unexpected error: %+v", err)
 	}
 }
 

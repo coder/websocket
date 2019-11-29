@@ -25,6 +25,7 @@ func TestConn(t *testing.T) {
 			c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 				Subprotocols:       []string{"echo"},
 				InsecureSkipVerify: true,
+				// CompressionMode: websocket.CompressionDisabled,
 			})
 			assert.Success(t, err)
 			defer c.Close(websocket.StatusInternalError, "")
@@ -41,12 +42,12 @@ func TestConn(t *testing.T) {
 
 		opts := &websocket.DialOptions{
 			Subprotocols: []string{"echo"},
+			// CompressionMode: websocket.CompressionDisabled,
 		}
 		opts.HTTPClient = s.Client()
 
 		c, _, err := websocket.Dial(ctx, wsURL, opts)
 		assert.Success(t, err)
-
 		assertJSONEcho(t, ctx, c, 2)
 	})
 }

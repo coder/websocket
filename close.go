@@ -7,9 +7,6 @@ import (
 	"fmt"
 	"log"
 	"nhooyr.io/websocket/internal/errd"
-	"time"
-
-	"nhooyr.io/websocket/internal/bpool"
 )
 
 // StatusCode represents a WebSocket status code.
@@ -103,59 +100,58 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 func (c *Conn) closeHandshake(code StatusCode, reason string) (err error) {
 	defer errd.Wrap(&err, "failed to close WebSocket")
 
-	err = c.cw.sendClose(code, reason)
+	err = c.writeClose(code, reason)
 	if err != nil {
 		return err
 	}
 
-	return c.cr.waitClose()
+	return c.waitClose()
 }
 
-func (cw *connWriter) error(code StatusCode, err error) {
-	cw.c.setCloseErr(err)
-	cw.sendClose(code, err.Error())
-	cw.c.closeWithErr(nil)
+func (c *Conn) writeError(code StatusCode, err error) {
+	c.setCloseErr(err)
+	c.writeClose(code, err.Error())
+	c.closeWithErr(nil)
 }
 
-func (cw *connWriter) sendClose(code StatusCode, reason string) error {
+func (c *Conn) writeClose(code StatusCode, reason string) error {
 	ce := CloseError{
 		Code:   code,
 		Reason: reason,
 	}
 
-	cw.c.setCloseErr(fmt.Errorf("sent close frame: %w", ce))
+	c.setCloseErr(fmt.Errorf("sent close frame: %w", ce))
 
 	var p []byte
 	if ce.Code != StatusNoStatusRcvd {
 		p = ce.bytes()
 	}
 
-	return cw.control(context.Background(), opClose, p)
+	return c.writeControl(context.Background(), opClose, p)
 }
 
-func (cr *connReader) waitClose() error {
-	defer cr.c.closeWithErr(nil)
+func (c *Conn) waitClose() error {
+	defer c.closeWithErr(nil)
 
 	return nil
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()
-
-	err := cr.mu.Lock(ctx)
-	if err != nil {
-		return err
-	}
-	defer cr.mu.Unlock()
-
-	b := bpool.Get()
-	buf := b.Bytes()
-	buf = buf[:cap(buf)]
-	defer bpool.Put(b)
-
-	for {
-		// TODO
-		return nil
-	}
+	// ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	// defer cancel()
+	//
+	// err := cr.mu.Lock(ctx)
+	// if err != nil {
+	// 	return err
+	// }
+	// defer cr.mu.Unlock()
+	//
+	// b := bpool.Get()
+	// buf := b.Bytes()
+	// buf = buf[:cap(buf)]
+	// defer bpool.Put(b)
+	//
+	// for {
+	// 	return nil
+	// }
 }
 
 func parseClosePayload(p []byte) (CloseError, error) {
@@ -230,11 +226,11 @@ func (ce CloseError) bytesErr() ([]byte, error) {
 
 func (c *Conn) setCloseErr(err error) {
 	c.closeMu.Lock()
-	c.setCloseErrNoLock(err)
+	c.setCloseErrLocked(err)
 	c.closeMu.Unlock()
 }
 
-func (c *Conn) setCloseErrNoLock(err error) {
+func (c *Conn) setCloseErrLocked(err error) {
 	if c.closeErr == nil {
 		c.closeErr = fmt.Errorf("WebSocket closed: %w", err)
 	}

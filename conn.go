@@ -30,7 +30,7 @@ const (
 // All methods may be called concurrently except for Reader and Read.
 //
 // You must always read from the connection. Otherwise control
-// frames will not be handled. See the docs on Reader and CloseRead.
+// frames will not be handled. See Reader and CloseRead.
 //
 // Be sure to call Close on the connection when you
 // are finished with it to release associated resources.
@@ -42,9 +42,22 @@ type Conn struct {
 	rwc         io.ReadWriteCloser
 	client      bool
 	copts       *compressionOptions
+	br          *bufio.Reader
+	bw          *bufio.Writer
 
-	cr connReader
-	cw connWriter
+	readTimeout  chan context.Context
+	writeTimeout chan context.Context
+
+	// Read state.
+	readMu         mu
+	readControlBuf [maxControlPayload]byte
+	msgReader      *msgReader
+
+	// Write state.
+	msgWriter    *msgWriter
+	writeFrameMu mu
+	writeBuf     []byte
+	writeHeader  header
 
 	closed chan struct{}
 
@@ -63,8 +76,8 @@ type connConfig struct {
 	client      bool
 	copts       *compressionOptions
 
-	bw *bufio.Writer
 	br *bufio.Reader
+	bw *bufio.Writer
 }
 
 func newConn(cfg connConfig) *Conn {
@@ -73,13 +86,23 @@ func newConn(cfg connConfig) *Conn {
 		rwc:         cfg.rwc,
 		client:      cfg.client,
 		copts:       cfg.copts,
+
+		br: cfg.br,
+		bw: cfg.bw,
+
+		readTimeout: make(chan context.Context),
+		writeTimeout: make(chan context.Context),
+
+		closed: make(chan struct{}),
+		activePings: make(map[string]chan<- struct{}),
 	}
 
-	c.cr.init(c, cfg.br)
-	c.cw.init(c, cfg.bw)
+	c.msgReader = newMsgReader(c)
 
-	c.closed = make(chan struct{})
-	c.activePings = make(map[string]chan<- struct{})
+	c.msgWriter = newMsgWriter(c)
+	if c.client {
+		c.writeBuf = extractBufioWriterBuf(c.bw, c.rwc)
+	}
 
 	runtime.SetFinalizer(c, func(c *Conn) {
 		c.closeWithErr(errors.New("connection garbage collected"))
@@ -88,6 +111,34 @@ func newConn(cfg connConfig) *Conn {
 	go c.timeoutLoop()
 
 	return c
+}
+
+func newMsgReader(c *Conn) *msgReader {
+	mr := &msgReader{
+		c:   c,
+		fin: true,
+	}
+
+	mr.limitReader = newLimitReader(c, readerFunc(mr.read), 32768)
+	if c.deflateNegotiated() && mr.contextTakeover() {
+		mr.ensureFlateReader()
+	}
+
+	return mr
+}
+
+func newMsgWriter(c *Conn) *msgWriter {
+	mw := &msgWriter{
+		c: c,
+	}
+	mw.trimWriter = &trimLastFourBytesWriter{
+		w: writerFunc(mw.write),
+	}
+	if c.deflateNegotiated() && mw.contextTakeover() {
+		mw.ensureFlateWriter()
+	}
+
+	return mw
 }
 
 // Subprotocol returns the negotiated subprotocol.
@@ -105,7 +156,7 @@ func (c *Conn) closeWithErr(err error) {
 	}
 	close(c.closed)
 	runtime.SetFinalizer(c, nil)
-	c.setCloseErrNoLock(err)
+	c.setCloseErrLocked(err)
 
 	// Have to close after c.closed is closed to ensure any goroutine that wakes up
 	// from the connection being closed also sees that c.closed is closed and returns
@@ -113,8 +164,18 @@ func (c *Conn) closeWithErr(err error) {
 	c.rwc.Close()
 
 	go func() {
-		c.cr.close()
-		c.cw.close()
+		if c.client {
+			c.writeFrameMu.Lock(context.Background())
+			putBufioWriter(c.bw)
+		}
+		c.msgWriter.close()
+
+		if c.client {
+			c.readMu.Lock(context.Background())
+			putBufioReader(c.br)
+			c.readMu.Unlock()
+		}
+		c.msgReader.close()
 	}()
 }
 
@@ -127,13 +188,12 @@ func (c *Conn) timeoutLoop() {
 		case <-c.closed:
 			return
 
-		case writeCtx = <-c.cw.timeout:
-		case readCtx = <-c.cr.timeout:
+		case writeCtx = <-c.writeTimeout:
+		case readCtx = <-c.readTimeout:
 
 		case <-readCtx.Done():
 			c.setCloseErr(fmt.Errorf("read timed out: %w", readCtx.Err()))
-			c.cw.error(StatusPolicyViolation, errors.New("timed out"))
-			return
+			go c.writeError(StatusPolicyViolation, errors.New("timed out"))
 		case <-writeCtx.Done():
 			c.closeWithErr(fmt.Errorf("write timed out: %w", writeCtx.Err()))
 			return
@@ -175,7 +235,7 @@ func (c *Conn) ping(ctx context.Context, p string) error {
 		c.activePingsMu.Unlock()
 	}()
 
-	err := c.cw.control(ctx, opPing, []byte(p))
+	err := c.writeControl(ctx, opPing, []byte(p))
 	if err != nil {
 		return err
 	}

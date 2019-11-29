@@ -4,12 +4,11 @@ import (
 	"context"
 	"crypto/rand"
 	"io"
-	"strings"
-	"testing"
-
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/assert"
 	"nhooyr.io/websocket/wsjson"
+	"strings"
+	"testing"
 )
 
 func randBytes(t *testing.T, n int) []byte {
@@ -21,12 +20,15 @@ func randBytes(t *testing.T, n int) []byte {
 
 func assertJSONEcho(t *testing.T, ctx context.Context, c *websocket.Conn, n int) {
 	t.Helper()
+	defer c.Close(websocket.StatusInternalError, "")
 
 	exp := randString(t, n)
 	err := wsjson.Write(ctx, c, exp)
 	assert.Success(t, err)
 
 	assertJSONRead(t, ctx, c, exp)
+
+	c.Close(websocket.StatusNormalClosure, "")
 }
 
 func assertJSONRead(t *testing.T, ctx context.Context, c *websocket.Conn, exp interface{}) {
@@ -74,5 +76,10 @@ func assertSubprotocol(t *testing.T, c *websocket.Conn, exp string) {
 
 func assertCloseStatus(t *testing.T, exp websocket.StatusCode, err error) {
 	t.Helper()
+	defer func() {
+		if t.Failed() {
+			t.Logf("error: %+v", err)
+		}
+	}()
 	assert.Equal(t, exp, websocket.CloseStatus(err), "StatusCode")
 }
