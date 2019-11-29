@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"nhooyr.io/websocket/internal/errd"
 	"time"
 
 	"nhooyr.io/websocket/internal/bpool"
@@ -96,15 +97,13 @@ func CloseStatus(err error) StatusCode {
 // Close will unblock all goroutines interacting with the connection once
 // complete.
 func (c *Conn) Close(code StatusCode, reason string) error {
-	err := c.closeHandshake(code, reason)
-	if err != nil {
-		return fmt.Errorf("failed to close WebSocket: %w", err)
-	}
-	return nil
+	return c.closeHandshake(code, reason)
 }
 
-func (c *Conn) closeHandshake(code StatusCode, reason string) error {
-	err := c.cw.sendClose(code, reason)
+func (c *Conn) closeHandshake(code StatusCode, reason string) (err error) {
+	defer errd.Wrap(&err, "failed to close WebSocket")
+
+	err = c.cw.sendClose(code, reason)
 	if err != nil {
 		return err
 	}
@@ -115,7 +114,7 @@ func (c *Conn) closeHandshake(code StatusCode, reason string) error {
 func (cw *connWriter) error(code StatusCode, err error) {
 	cw.c.setCloseErr(err)
 	cw.sendClose(code, err.Error())
-	cw.c.close(nil)
+	cw.c.closeWithErr(nil)
 }
 
 func (cw *connWriter) sendClose(code StatusCode, reason string) error {
@@ -135,7 +134,7 @@ func (cw *connWriter) sendClose(code StatusCode, reason string) error {
 }
 
 func (cr *connReader) waitClose() error {
-	defer cr.c.close(nil)
+	defer cr.c.closeWithErr(nil)
 
 	return nil
 

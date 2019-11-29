@@ -199,7 +199,7 @@ func (cr *connReader) frameHeader(ctx context.Context) (header, error) {
 		case <-ctx.Done():
 			return header{}, ctx.Err()
 		default:
-			cr.c.close(err)
+			cr.c.closeWithErr(err)
 			return header{}, err
 		}
 	}
@@ -229,7 +229,7 @@ func (cr *connReader) framePayload(ctx context.Context, p []byte) (int, error) {
 			return n, ctx.Err()
 		default:
 			err = fmt.Errorf("failed to read frame payload: %w", err)
-			cr.c.close(err)
+			cr.c.closeWithErr(err)
 			return n, err
 		}
 	}

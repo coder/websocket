@@ -33,11 +33,10 @@ const (
 // frames will not be handled. See the docs on Reader and CloseRead.
 //
 // Be sure to call Close on the connection when you
-// are finished with it to release the associated resources.
+// are finished with it to release associated resources.
 //
-// Every error from Read or Reader will cause the connection
-// to be closed so you do not need to write your own error message.
-// This applies to the Read methods in the wsjson/wspb subpackages as well.
+// On any error from any method, the connection is closed
+// with an appropriate reason.
 type Conn struct {
 	subprotocol string
 	rwc         io.ReadWriteCloser
@@ -69,11 +68,12 @@ type connConfig struct {
 }
 
 func newConn(cfg connConfig) *Conn {
-	c := &Conn{}
-	c.subprotocol = cfg.subprotocol
-	c.rwc = cfg.rwc
-	c.client = cfg.client
-	c.copts = cfg.copts
+	c := &Conn{
+		subprotocol: cfg.subprotocol,
+		rwc:         cfg.rwc,
+		client:      cfg.client,
+		copts:       cfg.copts,
+	}
 
 	c.cr.init(c, cfg.br)
 	c.cw.init(c, cfg.bw)
@@ -82,7 +82,7 @@ func newConn(cfg connConfig) *Conn {
 	c.activePings = make(map[string]chan<- struct{})
 
 	runtime.SetFinalizer(c, func(c *Conn) {
-		c.close(errors.New("connection garbage collected"))
+		c.closeWithErr(errors.New("connection garbage collected"))
 	})
 
 	go c.timeoutLoop()
@@ -96,7 +96,7 @@ func (c *Conn) Subprotocol() string {
 	return c.subprotocol
 }
 
-func (c *Conn) close(err error) {
+func (c *Conn) closeWithErr(err error) {
 	c.closeMu.Lock()
 	defer c.closeMu.Unlock()
 
@@ -135,7 +135,7 @@ func (c *Conn) timeoutLoop() {
 			c.cw.error(StatusPolicyViolation, errors.New("timed out"))
 			return
 		case <-writeCtx.Done():
-			c.close(fmt.Errorf("write timed out: %w", writeCtx.Err()))
+			c.closeWithErr(fmt.Errorf("write timed out: %w", writeCtx.Err()))
 			return
 		}
 	}
@@ -185,7 +185,7 @@ func (c *Conn) ping(ctx context.Context, p string) error {
 		return c.closeErr
 	case <-ctx.Done():
 		err := fmt.Errorf("failed to wait for pong: %w", ctx.Err())
-		c.close(err)
+		c.closeWithErr(err)
 		return err
 	case <-pong:
 		return nil
