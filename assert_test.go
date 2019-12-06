@@ -3,19 +3,19 @@ package websocket_test
 import (
 	"context"
 	"crypto/rand"
-	"io"
 	"strings"
 	"testing"
 
+	"cdr.dev/slog/sloggers/slogtest/assert"
+
 	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/internal/assert"
 	"nhooyr.io/websocket/wsjson"
 )
 
 func randBytes(t *testing.T, n int) []byte {
 	b := make([]byte, n)
-	_, err := io.ReadFull(rand.Reader, b)
-	assert.Success(t, err)
+	_, err := rand.Reader.Read(b)
+	assert.Success(t, "readRandBytes", err)
 	return b
 }
 
@@ -25,7 +25,7 @@ func assertJSONEcho(t *testing.T, ctx context.Context, c *websocket.Conn, n int)
 
 	exp := randString(t, n)
 	err := wsjson.Write(ctx, c, exp)
-	assert.Success(t, err)
+	assert.Success(t, "wsjson.Write", err)
 
 	assertJSONRead(t, ctx, c, exp)
 
@@ -37,9 +37,9 @@ func assertJSONRead(t *testing.T, ctx context.Context, c *websocket.Conn, exp in
 
 	var act interface{}
 	err := wsjson.Read(ctx, c, &act)
-	assert.Success(t, err)
+	assert.Success(t, "wsjson.Read", err)
 
-	assert.Equal(t, exp, act, "JSON")
+	assert.Equal(t, "json", exp, act)
 }
 
 func randString(t *testing.T, n int) string {
@@ -60,19 +60,19 @@ func assertEcho(t *testing.T, ctx context.Context, c *websocket.Conn, typ websoc
 
 	p := randBytes(t, n)
 	err := c.Write(ctx, typ, p)
-	assert.Success(t, err)
+	assert.Success(t, "write", err)
 
 	typ2, p2, err := c.Read(ctx)
-	assert.Success(t, err)
+	assert.Success(t, "read", err)
 
-	assert.Equal(t, typ, typ2, "data type")
-	assert.Equal(t, p, p2, "payload")
+	assert.Equal(t, "dataType", typ, typ2)
+	assert.Equal(t, "payload", p, p2)
 }
 
 func assertSubprotocol(t *testing.T, c *websocket.Conn, exp string) {
 	t.Helper()
 
-	assert.Equal(t, exp, c.Subprotocol(), "subprotocol")
+	assert.Equal(t, "subprotocol", exp, c.Subprotocol())
 }
 
 func assertCloseStatus(t *testing.T, exp websocket.StatusCode, err error) {
@@ -82,5 +82,5 @@ func assertCloseStatus(t *testing.T, exp websocket.StatusCode, err error) {
 			t.Logf("error: %+v", err)
 		}
 	}()
-	assert.Equal(t, exp, websocket.CloseStatus(err), "StatusCode")
+	assert.Equal(t, "closeStatus", exp, websocket.CloseStatus(err))
 }

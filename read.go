@@ -69,7 +69,7 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 //
 // When the limit is hit, the connection will be closed with StatusMessageTooBig.
 func (c *Conn) SetReadLimit(n int64) {
-	c.msgReader.limitReader.setLimit(n)
+	c.msgReader.limitReader.limit.Store(n)
 }
 
 func newMsgReader(c *Conn) *msgReader {
@@ -87,15 +87,17 @@ func newMsgReader(c *Conn) *msgReader {
 }
 
 func (mr *msgReader) initFlateReader() {
-	mr.flateReader = getFlateReader(readerFunc(mr.read))
-	mr.limitReader.reset(mr.flateReader)
+	mr.deflateReader = getFlateReader(readerFunc(mr.read))
+	mr.limitReader.r = mr.deflateReader
 }
 
 func (mr *msgReader) close() {
-	if mr.c.deflate() && mr.contextTakeover() {
-		mr.c.readMu.Lock(context.Background())
-		putFlateReader(mr.flateReader)
-		mr.c.readMu.Unlock()
+	mr.c.readMu.Lock(context.Background())
+	defer mr.c.readMu.Unlock()
+
+	if mr.deflateReader != nil {
+		putFlateReader(mr.deflateReader)
+		mr.deflateReader = nil
 	}
 }
 
@@ -266,7 +268,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 
 	err = fmt.Errorf("received close frame: %w", ce)
 	c.setCloseErr(err)
-	c.writeControl(context.Background(), opClose, ce.bytes())
+	c.writeClose(ce.Code, ce.Reason)
 	return err
 }
 
@@ -302,36 +304,35 @@ func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err erro
 type msgReader struct {
 	c *Conn
 
-	ctx context.Context
+	ctx           context.Context
+	deflate       bool
+	deflateReader io.Reader
+	deflateTail   strings.Reader
+	limitReader   *limitReader
 
-	deflate     bool
-	flateReader io.Reader
-	deflateTail strings.Reader
-
-	limitReader *limitReader
-
+	fin           bool
 	payloadLength int64
 	maskKey       uint32
-	fin           bool
 }
 
 func (mr *msgReader) reset(ctx context.Context, h header) {
 	mr.ctx = ctx
 	mr.deflate = h.rsv1
 	if mr.deflate {
-		mr.deflateTail.Reset(deflateMessageTail)
 		if !mr.contextTakeover() {
 			mr.initFlateReader()
 		}
+		mr.deflateTail.Reset(deflateMessageTail)
 	}
+
+	mr.limitReader.reset()
 	mr.setFrame(h)
-	mr.fin = false
 }
 
 func (mr *msgReader) setFrame(h header) {
+	mr.fin = h.fin
 	mr.payloadLength = h.payloadLength
 	mr.maskKey = h.maskKey
-	mr.fin = h.fin
 }
 
 func (mr *msgReader) Read(p []byte) (_ int, err error) {
@@ -350,9 +351,9 @@ func (mr *msgReader) Read(p []byte) (_ int, err error) {
 
 	if mr.payloadLength == 0 && mr.fin {
 		if mr.c.deflate() && !mr.contextTakeover() {
-			if mr.flateReader != nil {
-				putFlateReader(mr.flateReader)
-				mr.flateReader = nil
+			if mr.deflateReader != nil {
+				putFlateReader(mr.deflateReader)
+				mr.deflateReader = nil
 			}
 		}
 		return 0, io.EOF
@@ -363,12 +364,9 @@ func (mr *msgReader) Read(p []byte) (_ int, err error) {
 
 func (mr *msgReader) read(p []byte) (int, error) {
 	if mr.payloadLength == 0 {
-		if mr.fin {
-			if mr.deflate {
-				n, _ := mr.deflateTail.Read(p)
-				return n, nil
-			}
-			return 0, io.EOF
+		if mr.fin && mr.deflate {
+			n, _ := mr.deflateTail.Read(p)
+			return n, nil
 		}
 
 		h, err := mr.c.readLoop(mr.ctx)
@@ -413,17 +411,13 @@ func newLimitReader(c *Conn, r io.Reader, limit int64) *limitReader {
 		c: c,
 	}
 	lr.limit.Store(limit)
-	lr.reset(r)
+	lr.r = r
+	lr.reset()
 	return lr
 }
 
-func (lr *limitReader) reset(r io.Reader) {
+func (lr *limitReader) reset() {
 	lr.n = lr.limit.Load()
-	lr.r = r
-}
-
-func (lr *limitReader) setLimit(limit int64) {
-	lr.limit.Store(limit)
 }
 
 func (lr *limitReader) Read(p []byte) (int, error) {

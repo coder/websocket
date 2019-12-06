@@ -30,7 +30,7 @@ const (
 	StatusProtocolError   StatusCode = 1002
 	StatusUnsupportedData StatusCode = 1003
 
-	// 1004 is reserved and so not exported.
+	// 1004 is reserved and so unexported.
 	statusReserved StatusCode = 1004
 
 	// StatusNoStatusRcvd cannot be sent in a close message.
@@ -103,7 +103,6 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 
 func (c *Conn) closeHandshake(code StatusCode, reason string) (err error) {
 	defer errd.Wrap(&err, "failed to close WebSocket")
-	defer c.close(nil)
 
 	err = c.writeClose(code, reason)
 	if err != nil {
@@ -124,6 +123,14 @@ func (c *Conn) writeError(code StatusCode, err error) {
 }
 
 func (c *Conn) writeClose(code StatusCode, reason string) error {
+	c.closeMu.Lock()
+	closing := c.wroteClose
+	c.wroteClose = true
+	c.closeMu.Unlock()
+	if closing {
+		return errors.New("already wrote close")
+	}
+
 	ce := CloseError{
 		Code:   code,
 		Reason: reason,

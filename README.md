@@ -1,7 +1,7 @@
 # websocket
 
-[![version](https://img.shields.io/github/v/release/nhooyr/websocket?color=6b9ded&sort=semver)](https://github.com/nhooyr/websocket/releases)
-[![docs](https://godoc.org/nhooyr.io/websocket?status.svg)](https://godoc.org/nhooyr.io/websocket)
+[![release](https://img.shields.io/github/v/release/nhooyr/websocket?color=6b9ded&sort=semver)](https://github.com/nhooyr/websocket/releases)
+[![godoc](https://godoc.org/nhooyr.io/websocket?status.svg)](https://godoc.org/nhooyr.io/websocket)
 [![coverage](https://img.shields.io/coveralls/github/nhooyr/websocket?color=65d6a4)](https://coveralls.io/github/nhooyr/websocket)
 [![ci](https://github.com/nhooyr/websocket/workflows/ci/badge.svg)](https://github.com/nhooyr/websocket/actions)
 
@@ -19,14 +19,14 @@ go get nhooyr.io/websocket
 - First class [context.Context](https://blog.golang.org/context) support
 - Thorough tests, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 - [Zero dependencies](https://godoc.org/nhooyr.io/websocket?imports)
-- JSON and ProtoBuf helpers in the [wsjson](https://godoc.org/nhooyr.io/websocket/wsjson) and [wspb](https://godoc.org/nhooyr.io/websocket/wspb) subpackages
+- JSON and protobuf helpers in the [wsjson](https://godoc.org/nhooyr.io/websocket/wsjson) and [wspb](https://godoc.org/nhooyr.io/websocket/wspb) subpackages
 - Zero alloc reads and writes
 - Concurrent writes
 - [Close handshake](https://godoc.org/nhooyr.io/websocket#Conn.Close)
 - [net.Conn](https://godoc.org/nhooyr.io/websocket#NetConn) wrapper
-- [Ping pong](https://godoc.org/nhooyr.io/websocket#Conn.Ping)
+- [Ping pong](https://godoc.org/nhooyr.io/websocket#Conn.Ping) API
 - [RFC 7692](https://tools.ietf.org/html/rfc7692) permessage-deflate compression
-- Compile to [Wasm](https://godoc.org/nhooyr.io/websocket#hdr-Wasm)
+- Can target [Wasm](https://godoc.org/nhooyr.io/websocket#hdr-Wasm)
 
 ## Roadmap
 
@@ -85,7 +85,11 @@ c.Close(websocket.StatusNormalClosure, "")
 
 ### gorilla/websocket
 
-[gorilla/websocket](https://github.com/gorilla/websocket) is a widely used and mature library.
+Advantages of [gorilla/websocket](https://github.com/gorilla/websocket):
+
+- Mature and widely used
+- [Prepared writes](https://godoc.org/github.com/gorilla/websocket#PreparedMessage)
+- Configurable [buffer sizes](https://godoc.org/github.com/gorilla/websocket#hdr-Buffers)
 
 Advantages of nhooyr.io/websocket:
 
@@ -94,26 +98,26 @@ Advantages of nhooyr.io/websocket:
 - [net.Conn](https://godoc.org/nhooyr.io/websocket#NetConn) wrapper
 - Zero alloc reads and writes ([gorilla/websocket#535](https://github.com/gorilla/websocket/issues/535))
 - Full [context.Context](https://blog.golang.org/context) support
-- Uses [net/http.Client](https://golang.org/pkg/net/http/#Client) for dialing
+- Dial uses [net/http.Client](https://golang.org/pkg/net/http/#Client)
   - Will enable easy HTTP/2 support in the future
-  - Gorilla writes directly to a net.Conn and so duplicates features from net/http.Client.
+  - Gorilla writes directly to a net.Conn and so duplicates features of net/http.Client.
 - Concurrent writes
 - Close handshake ([gorilla/websocket#448](https://github.com/gorilla/websocket/issues/448))
-- Idiomatic [ping](https://godoc.org/nhooyr.io/websocket#Conn.Ping) API
-  - gorilla/websocket requires registering a pong callback and then sending a Ping
-- Wasm ([gorilla/websocket#432](https://github.com/gorilla/websocket/issues/432))
+- Idiomatic [ping pong](https://godoc.org/nhooyr.io/websocket#Conn.Ping) API
+  - Gorilla requires registering a pong callback before sending a Ping
+- Can target Wasm ([gorilla/websocket#432](https://github.com/gorilla/websocket/issues/432))
 - Transparent message buffer reuse with [wsjson](https://godoc.org/nhooyr.io/websocket/wsjson) and [wspb](https://godoc.org/nhooyr.io/websocket/wspb) subpackages
 - [1.75x](https://github.com/nhooyr/websocket/releases/tag/v1.7.4) faster WebSocket masking implementation in pure Go
-  - Gorilla's implementation depends on unsafe and is slower
+  - Gorilla's implementation is slower and uses [unsafe](https://golang.org/pkg/unsafe/).
 - Full [permessage-deflate](https://tools.ietf.org/html/rfc7692) compression extension support
   - Gorilla only supports no context takeover mode
-- [CloseRead](https://godoc.org/nhooyr.io/websocket#Conn.CloseRead) helper
+- [CloseRead](https://godoc.org/nhooyr.io/websocket#Conn.CloseRead) helper ([gorilla/websocket#492](https://github.com/gorilla/websocket/issues/492))
 - Actively maintained ([gorilla/websocket#370](https://github.com/gorilla/websocket/issues/370))
 
 #### golang.org/x/net/websocket
 
 [golang.org/x/net/websocket](https://godoc.org/golang.org/x/net/websocket) is deprecated.
-See ([golang/go/issues/18152](https://github.com/golang/go/issues/18152)).
+See [golang/go/issues/18152](https://github.com/golang/go/issues/18152).
 
 The [net.Conn](https://godoc.org/nhooyr.io/websocket#NetConn) wrapper will ease in transitioning
 to nhooyr.io/websocket.
@@ -124,10 +128,3 @@ to nhooyr.io/websocket.
 in an event driven style for performance. See the author's [blog post](https://medium.freecodecamp.org/million-websockets-and-go-cc58418460bb).
 
 However when writing idiomatic Go, nhooyr.io/websocket will be faster and easier to use.
-
-## Users
-
-If your company or project is using this library, feel free to open an issue or PR to amend this list.
-
-- [Coder](https://github.com/cdr)
-- [Tatsu Works](https://github.com/tatsuworks) - Ingresses 20 TB in WebSocket data every month on their Discord bot.

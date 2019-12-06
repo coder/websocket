@@ -13,10 +13,9 @@ import (
 	"time"
 	_ "unsafe"
 
+	"cdr.dev/slog/sloggers/slogtest/assert"
 	"github.com/gobwas/ws"
 	_ "github.com/gorilla/websocket"
-
-	"nhooyr.io/websocket/internal/assert"
 )
 
 func TestHeader(t *testing.T) {
@@ -81,14 +80,14 @@ func testHeader(t *testing.T, h header) {
 	r := bufio.NewReader(b)
 
 	err := writeFrameHeader(h, w)
-	assert.Success(t, err)
+	assert.Success(t, "writeFrameHeader", err)
 	err = w.Flush()
-	assert.Success(t, err)
+	assert.Success(t, "flush", err)
 
 	h2, err := readFrameHeader(r)
-	assert.Success(t, err)
+	assert.Success(t, "readFrameHeader", err)
 
-	assert.Equal(t, h, h2, "header")
+	assert.Equal(t, "header", h, h2)
 }
 
 func Test_mask(t *testing.T) {
@@ -99,8 +98,8 @@ func Test_mask(t *testing.T) {
 	p := []byte{0xa, 0xb, 0xc, 0xf2, 0xc}
 	gotKey32 := mask(key32, p)
 
-	assert.Equal(t, []byte{0, 0, 0, 0x0d, 0x6}, p, "mask")
-	assert.Equal(t, bits.RotateLeft32(key32, -8), gotKey32, "mask key")
+	assert.Equal(t, "mask", []byte{0, 0, 0, 0x0d, 0x6}, p)
+	assert.Equal(t, "maskKey", bits.RotateLeft32(key32, -8), gotKey32)
 }
 
 func basicMask(maskKey [4]byte, pos int, b []byte) int {

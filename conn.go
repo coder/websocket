@@ -63,7 +63,7 @@ type Conn struct {
 	closed     chan struct{}
 	closeMu    sync.Mutex
 	closeErr   error
-	wroteClose int64
+	wroteClose bool
 
 	pingCounter   int32
 	activePingsMu sync.Mutex
@@ -244,7 +244,9 @@ func (m *mu) Lock(ctx context.Context) error {
 	case <-m.c.closed:
 		return m.c.closeErr
 	case <-ctx.Done():
-		return ctx.Err()
+		err := fmt.Errorf("failed to acquire lock: %w", ctx.Err())
+		m.c.close(err)
+		return err
 	case m.ch <- struct{}{}:
 		return nil
 	}

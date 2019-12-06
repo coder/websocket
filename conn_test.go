@@ -13,8 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"cdr.dev/slog/sloggers/slogtest/assert"
+
 	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/internal/assert"
 )
 
 func TestConn(t *testing.T) {
@@ -27,7 +28,7 @@ func TestConn(t *testing.T) {
 				InsecureSkipVerify: true,
 				CompressionMode:    websocket.CompressionNoContextTakeover,
 			})
-			assert.Success(t, err)
+			assert.Success(t, "accept", err)
 			defer c.Close(websocket.StatusInternalError, "")
 
 			err = echoLoop(r.Context(), c)
@@ -47,7 +48,7 @@ func TestConn(t *testing.T) {
 		opts.HTTPClient = s.Client()
 
 		c, _, err := websocket.Dial(ctx, wsURL, opts)
-		assert.Success(t, err)
+		assert.Success(t, "dial", err)
 		assertJSONEcho(t, ctx, c, 2)
 	})
 }

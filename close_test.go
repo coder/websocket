@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"nhooyr.io/websocket/internal/assert"
+	"cdr.dev/slog/sloggers/slogtest/assert"
 )
 
 func TestCloseError(t *testing.T) {
@@ -52,9 +52,9 @@ func TestCloseError(t *testing.T) {
 
 			_, err := tc.ce.bytesErr()
 			if tc.success {
-				assert.Success(t, err)
+				assert.Success(t, "CloseError.bytesErr", err)
 			} else {
-				assert.Error(t, err)
+				assert.Error(t, "CloseError.bytesErr", err)
 			}
 		})
 	}
@@ -104,10 +104,10 @@ func Test_parseClosePayload(t *testing.T) {
 
 			ce, err := parseClosePayload(tc.p)
 			if tc.success {
-				assert.Success(t, err)
-				assert.Equal(t, tc.ce, ce, "CloseError")
+				assert.Success(t, "parse err", err)
+				assert.Equal(t, "ce", tc.ce, ce)
 			} else {
-				assert.Error(t, err)
+				assert.Error(t, "parse err", err)
 			}
 		})
 	}
@@ -153,7 +153,7 @@ func Test_validWireCloseCode(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equal(t, tc.valid, validWireCloseCode(tc.code), "validWireCloseCode")
+			assert.Equal(t, "valid", tc.valid, validWireCloseCode(tc.code))
 		})
 	}
 }
@@ -190,7 +190,7 @@ func TestCloseStatus(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equal(t, tc.exp, CloseStatus(tc.in), "CloseStatus")
+			assert.Equal(t, "closeStatus", tc.exp, CloseStatus(tc.in))
 		})
 	}
 }
