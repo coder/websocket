@@ -55,14 +55,18 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if !headerValuesContainsToken(r.Header, "Connection", "Upgrade") {
+		w.Header().Set("Connection", "Upgrade")
+		w.Header().Set("Upgrade", "websocket")
 		err := fmt.Errorf("websocket protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusUpgradeRequired)
 		return err
 	}
 
 	if !headerValuesContainsToken(r.Header, "Upgrade", "WebSocket") {
+		w.Header().Set("Connection", "Upgrade")
+		w.Header().Set("Upgrade", "websocket")
 		err := fmt.Errorf("websocket protocol violation: Upgrade header %q does not contain websocket", r.Header.Get("Upgrade"))
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusUpgradeRequired)
 		return err
 	}
 
@@ -73,6 +77,7 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if r.Header.Get("Sec-WebSocket-Version") != "13" {
+		w.Header().Set("Sec-WebSocket-Version", "13")
 		err := fmt.Errorf("unsupported websocket protocol version (only 13 is supported): %q", r.Header.Get("Sec-WebSocket-Version"))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return err
