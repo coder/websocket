@@ -79,7 +79,7 @@ func newMsgReader(c *Conn) *msgReader {
 	}
 
 	mr.limitReader = newLimitReader(c, readerFunc(mr.read), 32768)
-	if c.deflate() && mr.contextTakeover() {
+	if c.flate() && mr.flateContextTakeover() {
 		mr.initFlateReader()
 	}
 
@@ -87,30 +87,27 @@ func newMsgReader(c *Conn) *msgReader {
 }
 
 func (mr *msgReader) initFlateReader() {
-	mr.deflateReader = getFlateReader(readerFunc(mr.read))
-	mr.limitReader.r = mr.deflateReader
+	mr.flateReader = getFlateReader(readerFunc(mr.read))
+	mr.limitReader.r = mr.flateReader
 }
 
 func (mr *msgReader) close() {
 	mr.c.readMu.Lock(context.Background())
 	defer mr.c.readMu.Unlock()
 
-	if mr.deflateReader != nil {
-		putFlateReader(mr.deflateReader)
-		mr.deflateReader = nil
-	}
+	mr.returnFlateReader()
 }
 
-func (mr *msgReader) contextTakeover() bool {
+func (mr *msgReader) flateContextTakeover() bool {
 	if mr.c.client {
-		return mr.c.copts.serverNoContextTakeover
+		return !mr.c.copts.serverNoContextTakeover
 	}
-	return mr.c.copts.clientNoContextTakeover
+	return !mr.c.copts.clientNoContextTakeover
 }
 
 func (c *Conn) readRSV1Illegal(h header) bool {
 	// If compression is enabled, rsv1 is always illegal.
-	if !c.deflate() {
+	if !c.flate() {
 		return true
 	}
 	// rsv1 is only allowed on data frames beginning messages.
@@ -269,6 +266,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 	err = fmt.Errorf("received close frame: %w", ce)
 	c.setCloseErr(err)
 	c.writeClose(ce.Code, ce.Reason)
+	c.close(err)
 	return err
 }
 
@@ -304,11 +302,11 @@ func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err erro
 type msgReader struct {
 	c *Conn
 
-	ctx           context.Context
-	deflate       bool
-	deflateReader io.Reader
-	deflateTail   strings.Reader
-	limitReader   *limitReader
+	ctx         context.Context
+	deflate     bool
+	flateReader io.Reader
+	deflateTail strings.Reader
+	limitReader *limitReader
 
 	fin           bool
 	payloadLength int64
@@ -319,7 +317,7 @@ func (mr *msgReader) reset(ctx context.Context, h header) {
 	mr.ctx = ctx
 	mr.deflate = h.rsv1
 	if mr.deflate {
-		if !mr.contextTakeover() {
+		if !mr.flateContextTakeover() {
 			mr.initFlateReader()
 		}
 		mr.deflateTail.Reset(deflateMessageTail)
@@ -335,8 +333,19 @@ func (mr *msgReader) setFrame(h header) {
 	mr.maskKey = h.maskKey
 }
 
-func (mr *msgReader) Read(p []byte) (_ int, err error) {
+func (mr *msgReader) Read(p []byte) (n int, err error) {
 	defer func() {
+		r := recover()
+		if r != nil {
+			if r != "ANMOL" {
+				panic(r)
+			}
+			err = io.EOF
+			if !mr.flateContextTakeover() {
+				mr.returnFlateReader()
+			}
+		}
+
 		errd.Wrap(&err, "failed to read")
 		if errors.Is(err, io.EOF) {
 			err = io.EOF
@@ -349,24 +358,27 @@ func (mr *msgReader) Read(p []byte) (_ int, err error) {
 	}
 	defer mr.c.readMu.Unlock()
 
-	if mr.payloadLength == 0 && mr.fin {
-		if mr.c.deflate() && !mr.contextTakeover() {
-			if mr.deflateReader != nil {
-				putFlateReader(mr.deflateReader)
-				mr.deflateReader = nil
-			}
-		}
-		return 0, io.EOF
-	}
-
 	return mr.limitReader.Read(p)
+}
+
+func (mr *msgReader) returnFlateReader() {
+	if mr.flateReader != nil {
+		putFlateReader(mr.flateReader)
+		mr.flateReader = nil
+	}
 }
 
 func (mr *msgReader) read(p []byte) (int, error) {
 	if mr.payloadLength == 0 {
-		if mr.fin && mr.deflate {
-			n, _ := mr.deflateTail.Read(p)
-			return n, nil
+		if mr.fin {
+			if mr.deflate {
+				if mr.deflateTail.Len() == 0 {
+					panic("ANMOL")
+				}
+				n, _ := mr.deflateTail.Read(p)
+				return n, nil
+			}
+			return 0, io.EOF
 		}
 
 		h, err := mr.c.readLoop(mr.ctx)

@@ -176,7 +176,7 @@ func (c *Conn) timeoutLoop() {
 	}
 }
 
-func (c *Conn) deflate() bool {
+func (c *Conn) flate() bool {
 	return c.copts != nil
 }
 
@@ -262,5 +262,8 @@ func (m *mu) TryLock() bool {
 }
 
 func (m *mu) Unlock() {
-	<-m.ch
+	select {
+	case <-m.ch:
+	default:
+	}
 }

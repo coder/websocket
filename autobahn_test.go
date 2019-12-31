@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"strconv"
@@ -17,8 +16,26 @@ import (
 	"testing"
 	"time"
 
+	"cdr.dev/slog/sloggers/slogtest/assert"
+
 	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/internal/errd"
 )
+
+var excludedAutobahnCases = []string{
+	// We skip the UTF-8 handling tests as there isn't any reason to reject invalid UTF-8, just
+	// more performance overhead.
+	"6.*", "7.5.1",
+
+	// We skip the tests related to requestMaxWindowBits as that is unimplemented due
+	// to limitations in compress/flate. See https://github.com/golang/go/issues/3155
+	"13.3.*", "13.4.*", "13.5.*", "13.6.*",
+
+	"12.*",
+	"13.*",
+}
+
+var autobahnCases = []string{"*"}
 
 // https://github.com/crossbario/autobahn-python/tree/master/wstest
 func TestAutobahn(t *testing.T) {
@@ -35,19 +52,17 @@ func TestAutobahn(t *testing.T) {
 func testServerAutobahn(t *testing.T) {
 	t.Parallel()
 
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s, closeFn := testServer(t, func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 			Subprotocols: []string{"echo"},
 		})
-		if err != nil {
-			t.Logf("server handshake failed: %+v", err)
-			return
-		}
-		echoLoop(r.Context(), c)
-	}))
-	defer s.Close()
+		assert.Success(t, "accept", err)
+		err = echoLoop(r.Context(), c)
+		assertCloseStatus(t, websocket.StatusNormalClosure, err)
+	}, false)
+	defer closeFn()
 
-	spec := map[string]interface{}{
+	specFile, err := tempJSONFile(map[string]interface{}{
 		"outdir": "ci/out/wstestServerReports",
 		"servers": []interface{}{
 			map[string]interface{}{
@@ -55,44 +70,184 @@ func testServerAutobahn(t *testing.T) {
 				"url":   strings.Replace(s.URL, "http", "ws", 1),
 			},
 		},
-		"cases": []string{"*"},
-		// We skip the UTF-8 handling tests as there isn't any reason to reject invalid UTF-8, just
-		// more performance overhead. 7.5.1 is the same.
-		"exclude-cases": []string{"6.*", "7.5.1"},
-	}
-	specFile, err := ioutil.TempFile("", "websocketFuzzingClient.json")
-	if err != nil {
-		t.Fatalf("failed to create temp file for fuzzingclient.json: %v", err)
-	}
-	defer specFile.Close()
+		"cases":         autobahnCases,
+		"exclude-cases": excludedAutobahnCases,
+	})
+	assert.Success(t, "tempJSONFile", err)
 
-	e := json.NewEncoder(specFile)
-	e.SetIndent("", "\t")
-	err = e.Encode(spec)
-	if err != nil {
-		t.Fatalf("failed to write spec: %v", err)
-	}
-
-	err = specFile.Close()
-	if err != nil {
-		t.Fatalf("failed to close file: %v", err)
-	}
-
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Minute*10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
 	defer cancel()
 
-	args := []string{"--mode", "fuzzingclient", "--spec", specFile.Name()}
+	args := []string{"--mode", "fuzzingclient", "--spec", specFile}
 	wstest := exec.CommandContext(ctx, "wstest", args...)
-	out, err := wstest.CombinedOutput()
-	if err != nil {
-		t.Fatalf("failed to run wstest: %v\nout:\n%s", err, out)
-	}
+	_, err = wstest.CombinedOutput()
+	assert.Success(t, "wstest", err)
 
 	checkWSTestIndex(t, "./ci/out/wstestServerReports/index.json")
 }
 
-func unusedListenAddr() (string, error) {
+func testClientAutobahn(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
+	defer cancel()
+
+	wstestURL, closeFn, err := wstestClientServer(ctx)
+	assert.Success(t, "wstestClient", err)
+	defer closeFn()
+
+	err = waitWS(ctx, wstestURL)
+	assert.Success(t, "waitWS", err)
+
+	cases, err := wstestCaseCount(ctx, wstestURL)
+	assert.Success(t, "wstestCaseCount", err)
+
+	t.Run("cases", func(t *testing.T) {
+		for i := 1; i <= cases; i++ {
+			i := i
+			t.Run("", func(t *testing.T) {
+				t.Parallel()
+
+				ctx, cancel := context.WithTimeout(ctx, time.Second*45)
+				defer cancel()
+
+				c, _, err := websocket.Dial(ctx, fmt.Sprintf(wstestURL+"/runCase?case=%v&agent=main", i), nil)
+				assert.Success(t, "autobahn dial", err)
+
+				err = echoLoop(ctx, c)
+				t.Logf("echoLoop: %+v", err)
+			})
+		}
+	})
+
+	c, _, err := websocket.Dial(ctx, fmt.Sprintf(wstestURL+"/updateReports?agent=main"), nil)
+	assert.Success(t, "dial", err)
+	c.Close(websocket.StatusNormalClosure, "")
+
+	checkWSTestIndex(t, "./ci/out/wstestClientReports/index.json")
+}
+
+func waitWS(ctx context.Context, url string) error {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
+
+	for ctx.Err() == nil {
+		c, _, err := websocket.Dial(ctx, url, nil)
+		if err != nil {
+			continue
+		}
+		c.Close(websocket.StatusNormalClosure, "")
+		return nil
+	}
+
+	return ctx.Err()
+}
+
+func wstestClientServer(ctx context.Context) (url string, closeFn func(), err error) {
+	serverAddr, err := unusedListenAddr()
+	if err != nil {
+		return "", nil, err
+	}
+
+	url = "ws://" + serverAddr
+
+	specFile, err := tempJSONFile(map[string]interface{}{
+		"url":           url,
+		"outdir":        "ci/out/wstestClientReports",
+		"cases":         autobahnCases,
+		"exclude-cases": excludedAutobahnCases,
+	})
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to write spec: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
+	defer func() {
+		if err != nil {
+			cancel()
+		}
+	}()
+
+	args := []string{"--mode", "fuzzingserver", "--spec", specFile,
+		// Disables some server that runs as part of fuzzingserver mode.
+		// See https://github.com/crossbario/autobahn-testsuite/blob/058db3a36b7c3a1edf68c282307c6b899ca4857f/autobahntestsuite/autobahntestsuite/wstest.py#L124
+		"--webport=0",
+	}
+	wstest := exec.CommandContext(ctx, "wstest", args...)
+	err = wstest.Start()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to start wstest: %w", err)
+	}
+
+	return url, func() {
+		wstest.Process.Kill()
+	}, nil
+}
+
+func wstestCaseCount(ctx context.Context, url string) (cases int, err error) {
+	defer errd.Wrap(&err, "failed to get case count")
+
+	c, _, err := websocket.Dial(ctx, url+"/getCaseCount", nil)
+	if err != nil {
+		return 0, err
+	}
+	defer c.Close(websocket.StatusInternalError, "")
+
+	_, r, err := c.Reader(ctx)
+	if err != nil {
+		return 0, err
+	}
+	b, err := ioutil.ReadAll(r)
+	if err != nil {
+		return 0, err
+	}
+	cases, err = strconv.Atoi(string(b))
+	if err != nil {
+		return 0, err
+	}
+
+	c.Close(websocket.StatusNormalClosure, "")
+
+	return cases, nil
+}
+
+func checkWSTestIndex(t *testing.T, path string) {
+	wstestOut, err := ioutil.ReadFile(path)
+	assert.Success(t, "ioutil.ReadFile", err)
+
+	var indexJSON map[string]map[string]struct {
+		Behavior      string `json:"behavior"`
+		BehaviorClose string `json:"behaviorClose"`
+	}
+	err = json.Unmarshal(wstestOut, &indexJSON)
+	assert.Success(t, "json.Unmarshal", err)
+
+	for _, tests := range indexJSON {
+		for test, result := range tests {
+			t.Run(test, func(t *testing.T) {
+				switch result.BehaviorClose {
+				case "OK", "INFORMATIONAL":
+				default:
+					t.Errorf("bad close behaviour")
+				}
+
+				switch result.Behavior {
+				case "OK", "NON-STRICT", "INFORMATIONAL":
+				default:
+					t.Errorf("failed")
+				}
+			})
+		}
+	}
+
+	if t.Failed() {
+		htmlPath := strings.Replace(path, ".json", ".html", 1)
+		t.Errorf("detected autobahn violation, see %q", htmlPath)
+	}
+}
+
+func unusedListenAddr() (_ string, err error) {
+	defer errd.Wrap(&err, "failed to get unused listen address")
 	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		return "", err
@@ -101,148 +256,24 @@ func unusedListenAddr() (string, error) {
 	return l.Addr().String(), nil
 }
 
-func testClientAutobahn(t *testing.T) {
-	t.Parallel()
-
-	serverAddr, err := unusedListenAddr()
+func tempJSONFile(v interface{}) (string, error) {
+	f, err := ioutil.TempFile("", "temp.json")
 	if err != nil {
-		t.Fatalf("failed to get unused listen addr for wstest: %v", err)
+		return "", fmt.Errorf("temp file: %w", err)
 	}
+	defer f.Close()
 
-	wsServerURL := "ws://" + serverAddr
-
-	spec := map[string]interface{}{
-		"url":    wsServerURL,
-		"outdir": "ci/out/wstestClientReports",
-		"cases":  []string{"*"},
-		// See TestAutobahnServer for the reasons why we exclude these.
-		"exclude-cases": []string{"6.*", "7.5.1"},
-	}
-	specFile, err := ioutil.TempFile("", "websocketFuzzingServer.json")
-	if err != nil {
-		t.Fatalf("failed to create temp file for fuzzingserver.json: %v", err)
-	}
-	defer specFile.Close()
-
-	e := json.NewEncoder(specFile)
+	e := json.NewEncoder(f)
 	e.SetIndent("", "\t")
-	err = e.Encode(spec)
+	err = e.Encode(v)
 	if err != nil {
-		t.Fatalf("failed to write spec: %v", err)
+		return "", fmt.Errorf("json encode: %w", err)
 	}
 
-	err = specFile.Close()
+	err = f.Close()
 	if err != nil {
-		t.Fatalf("failed to close file: %v", err)
+		return "", fmt.Errorf("close temp file: %w", err)
 	}
 
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Minute*10)
-	defer cancel()
-
-	args := []string{"--mode", "fuzzingserver", "--spec", specFile.Name(),
-		// Disables some server that runs as part of fuzzingserver mode.
-		// See https://github.com/crossbario/autobahn-testsuite/blob/058db3a36b7c3a1edf68c282307c6b899ca4857f/autobahntestsuite/autobahntestsuite/wstest.py#L124
-		"--webport=0",
-	}
-	wstest := exec.CommandContext(ctx, "wstest", args...)
-	err = wstest.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		err := wstest.Process.Kill()
-		if err != nil {
-			t.Error(err)
-		}
-	}()
-
-	// Let it come up.
-	time.Sleep(time.Second * 5)
-
-	var cases int
-	func() {
-		c, _, err := websocket.Dial(ctx, wsServerURL+"/getCaseCount", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer c.Close(websocket.StatusInternalError, "")
-
-		_, r, err := c.Reader(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		b, err := ioutil.ReadAll(r)
-		if err != nil {
-			t.Fatal(err)
-		}
-		cases, err = strconv.Atoi(string(b))
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		c.Close(websocket.StatusNormalClosure, "")
-	}()
-
-	for i := 1; i <= cases; i++ {
-		func() {
-			ctx, cancel := context.WithTimeout(ctx, time.Second*45)
-			defer cancel()
-
-			c, _, err := websocket.Dial(ctx, fmt.Sprintf(wsServerURL+"/runCase?case=%v&agent=main", i), nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			echoLoop(ctx, c)
-		}()
-	}
-
-	c, _, err := websocket.Dial(ctx, fmt.Sprintf(wsServerURL+"/updateReports?agent=main"), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c.Close(websocket.StatusNormalClosure, "")
-
-	checkWSTestIndex(t, "./ci/out/wstestClientReports/index.json")
-}
-
-func checkWSTestIndex(t *testing.T, path string) {
-	wstestOut, err := ioutil.ReadFile(path)
-	if err != nil {
-		t.Fatalf("failed to read index.json: %v", err)
-	}
-
-	var indexJSON map[string]map[string]struct {
-		Behavior      string `json:"behavior"`
-		BehaviorClose string `json:"behaviorClose"`
-	}
-	err = json.Unmarshal(wstestOut, &indexJSON)
-	if err != nil {
-		t.Fatalf("failed to unmarshal index.json: %v", err)
-	}
-
-	var failed bool
-	for _, tests := range indexJSON {
-		for test, result := range tests {
-			switch result.Behavior {
-			case "OK", "NON-STRICT", "INFORMATIONAL":
-			default:
-				failed = true
-				t.Errorf("test %v failed", test)
-			}
-			switch result.BehaviorClose {
-			case "OK", "INFORMATIONAL":
-			default:
-				failed = true
-				t.Errorf("bad close behaviour for test %v", test)
-			}
-		}
-	}
-
-	if failed {
-		path = strings.Replace(path, ".json", ".html", 1)
-		if os.Getenv("CI") == "" {
-			t.Errorf("wstest found failure, see %q (output as an artifact in CI)", path)
-		}
-	}
+	return f.Name(), nil
 }

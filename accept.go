@@ -37,8 +37,6 @@ type AcceptOptions struct {
 	// If used incorrectly your WebSocket server will be open to CSRF attacks.
 	InsecureSkipVerify bool
 
-	// CompressionMode sets the compression mode.
-	// See the docs on CompressionMode.
 	CompressionMode CompressionMode
 }
 

@@ -55,7 +55,7 @@ func newMsgWriter(c *Conn) *msgWriter {
 	mw.trimWriter = &trimLastFourBytesWriter{
 		w: writerFunc(mw.write),
 	}
-	if c.deflate() && mw.deflateContextTakeover() {
+	if c.flate() && mw.flateContextTakeover() {
 		mw.ensureFlateWriter()
 	}
 
@@ -63,14 +63,16 @@ func newMsgWriter(c *Conn) *msgWriter {
 }
 
 func (mw *msgWriter) ensureFlateWriter() {
-	mw.flateWriter = getFlateWriter(mw.trimWriter)
+	if mw.flateWriter == nil {
+		mw.flateWriter = getFlateWriter(mw.trimWriter)
+	}
 }
 
-func (mw *msgWriter) deflateContextTakeover() bool {
+func (mw *msgWriter) flateContextTakeover() bool {
 	if mw.c.client {
-		return mw.c.copts.clientNoContextTakeover
+		return !mw.c.copts.clientNoContextTakeover
 	}
-	return mw.c.copts.serverNoContextTakeover
+	return !mw.c.copts.serverNoContextTakeover
 }
 
 func (c *Conn) writer(ctx context.Context, typ MessageType) (io.WriteCloser, error) {
@@ -87,7 +89,7 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) (int, error
 		return 0, err
 	}
 
-	if !c.deflate() {
+	if !c.flate() {
 		// Fast single frame path.
 		defer c.msgWriter.mu.Unlock()
 		return c.writeFrame(ctx, true, c.msgWriter.opcode, p)
@@ -107,11 +109,12 @@ type msgWriter struct {
 
 	mu *mu
 
-	deflate bool
-	ctx     context.Context
-	opcode  opcode
-	closed  bool
+	ctx    context.Context
+	opcode opcode
+	closed bool
 
+	// TODO pass down into writeFrame
+	flate       bool
 	trimWriter  *trimLastFourBytesWriter
 	flateWriter *flate.Writer
 }
@@ -125,7 +128,7 @@ func (mw *msgWriter) reset(ctx context.Context, typ MessageType) error {
 	mw.closed = false
 	mw.ctx = ctx
 	mw.opcode = opcode(typ)
-	mw.deflate = false
+	mw.flate = false
 	return nil
 }
 
@@ -137,13 +140,14 @@ func (mw *msgWriter) Write(p []byte) (_ int, err error) {
 		return 0, errors.New("cannot use closed writer")
 	}
 
-	if mw.c.deflate() {
-		if !mw.deflate {
-			if !mw.deflateContextTakeover() {
+	if mw.c.flate() {
+		if !mw.flate {
+			mw.flate = true
+
+			if !mw.flateContextTakeover() {
 				mw.ensureFlateWriter()
 			}
 			mw.trimWriter.reset()
-			mw.deflate = true
 		}
 
 		return mw.flateWriter.Write(p)
@@ -170,7 +174,7 @@ func (mw *msgWriter) Close() (err error) {
 	}
 	mw.closed = true
 
-	if mw.c.deflate() {
+	if mw.flate {
 		err = mw.flateWriter.Flush()
 		if err != nil {
 			return fmt.Errorf("failed to flush flate writer: %w", err)
@@ -182,9 +186,9 @@ func (mw *msgWriter) Close() (err error) {
 		return fmt.Errorf("failed to write fin frame: %w", err)
 	}
 
-	if mw.deflate && !mw.deflateContextTakeover() {
+	if mw.c.flate() && !mw.flateContextTakeover() && mw.flateWriter != nil {
 		putFlateWriter(mw.flateWriter)
-		mw.deflate = false
+		mw.flateWriter = nil
 	}
 
 	mw.mu.Unlock()
@@ -192,9 +196,10 @@ func (mw *msgWriter) Close() (err error) {
 }
 
 func (mw *msgWriter) close() {
-	if mw.c.deflate() && mw.deflateContextTakeover() {
+	if mw.flateWriter != nil && mw.flateContextTakeover() {
 		mw.mu.Lock(context.Background())
 		putFlateWriter(mw.flateWriter)
+		mw.flateWriter = nil
 	}
 }
 
@@ -236,7 +241,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 	}
 
 	c.writeHeader.rsv1 = false
-	if c.msgWriter.deflate && (opcode == opText || opcode == opBinary) {
+	if c.flate() && (opcode == opText || opcode == opBinary) {
 		c.writeHeader.rsv1 = true
 	}
 

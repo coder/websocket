@@ -9,6 +9,14 @@ import (
 	"sync"
 )
 
+type CompressionOptions struct {
+	// Mode controls the compression mode.
+	Mode CompressionMode
+
+	// Threshold controls the minimum size of a message before compression is applied.
+	Threshold int
+}
+
 // CompressionMode controls the modes available RFC 7692's deflate extension.
 // See https://tools.ietf.org/html/rfc7692
 //
@@ -29,14 +37,8 @@ const (
 	// The message will only be compressed if greater than 512 bytes.
 	CompressionNoContextTakeover CompressionMode = iota
 
-	// CompressionContextTakeover uses a flate.Reader and flate.Writer per connection.
-	// This enables reusing the sliding window from previous messages.
-	// As most WebSocket protocols are repetitive, this can be very efficient.
-	//
-	// The message will only be compressed if greater than 128 bytes.
-	//
-	// If the peer negotiates NoContextTakeover on the client or server side, it will be
-	// used instead as this is required by the RFC.
+	// Unimplemented for now due to limitations in compress/flate.
+	// See https://github.com/golang/go/issues/31514#issuecomment-569668619
 	CompressionContextTakeover
 
 	// CompressionDisabled disables the deflate extension.
