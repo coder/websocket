@@ -37,7 +37,9 @@ type AcceptOptions struct {
 	// If used incorrectly your WebSocket server will be open to CSRF attacks.
 	InsecureSkipVerify bool
 
-	CompressionMode CompressionMode
+	// CompressionOptions controls the compression options.
+	// See docs on the CompressionOptions type.
+	CompressionOptions CompressionOptions
 }
 
 // Accept accepts a WebSocket handshake from a client and upgrades the

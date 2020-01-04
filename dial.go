@@ -33,9 +33,9 @@ type DialOptions struct {
 	// Subprotocols lists the WebSocket subprotocols to negotiate with the server.
 	Subprotocols []string
 
-	// CompressionMode sets the compression mode.
-	// See the docs on CompressionMode.
-	CompressionMode CompressionMode
+	// CompressionOptions controls the compression options.
+	// See docs on the CompressionOptions type.
+	CompressionOptions CompressionOptions
 }
 
 // Dial performs a WebSocket handshake on url.

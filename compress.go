@@ -37,8 +37,14 @@ const (
 	// The message will only be compressed if greater than 512 bytes.
 	CompressionNoContextTakeover CompressionMode = iota
 
-	// Unimplemented for now due to limitations in compress/flate.
-	// See https://github.com/golang/go/issues/31514#issuecomment-569668619
+	// CompressionContextTakeover uses a flate.Reader and flate.Writer per connection.
+	// This enables reusing the sliding window from previous messages.
+	// As most WebSocket protocols are repetitive, this can be very efficient.
+	//
+	// The message will only be compressed if greater than 128 bytes.
+	//
+	// If the peer negotiates NoContextTakeover on the client or server side, it will be
+	// used instead as this is required by the RFC.
 	CompressionContextTakeover
 
 	// CompressionDisabled disables the deflate extension.
@@ -151,10 +157,10 @@ func putFlateReader(fr io.Reader) {
 
 var flateWriterPool sync.Pool
 
-func getFlateWriter(w io.Writer) *flate.Writer {
+func getFlateWriter(w io.Writer, dict []byte) *flate.Writer {
 	fw, ok := flateWriterPool.Get().(*flate.Writer)
 	if !ok {
-		fw, _ = flate.NewWriter(w, flate.BestSpeed)
+		fw, _ = flate.NewWriterDict(w, flate.BestSpeed, dict)
 		return fw
 	}
 	fw.Reset(w)
@@ -163,4 +169,42 @@ func getFlateWriter(w io.Writer) *flate.Writer {
 
 func putFlateWriter(w *flate.Writer) {
 	flateWriterPool.Put(w)
+}
+
+type slidingWindowReader struct {
+	window []byte
+
+	r io.Reader
+}
+
+func (r slidingWindowReader) Read(p []byte) (int, error) {
+	n, err := r.r.Read(p)
+	p = p[:n]
+
+	r.append(p)
+
+	return n, err
+}
+
+func (r slidingWindowReader) append(p []byte) {
+	if len(r.window) <= cap(r.window) {
+		r.window = append(r.window, p...)
+	}
+
+	if len(p) > cap(r.window) {
+		p = p[len(p)-cap(r.window):]
+	}
+
+	// p now contains at max the last window bytes
+	// so we need to be able to append all of it to r.window.
+	// Shift as many bytes from r.window as needed.
+
+	// Maximum window size minus current window minus extra gives
+	// us the number of bytes that need to be shifted.
+	off := len(r.window) + len(p) - cap(r.window)
+
+	r.window = append(r.window[:0], r.window[off:]...)
+	copy(r.window, r.window[off:])
+	copy(r.window[len(r.window)-len(p):], p)
+	return
 }

@@ -103,10 +103,18 @@ func testClientAutobahn(t *testing.T) {
 	assert.Success(t, "wstestCaseCount", err)
 
 	t.Run("cases", func(t *testing.T) {
+		// Max 8 cases running at a time.
+		mu := make(chan struct{}, 8)
+
 		for i := 1; i <= cases; i++ {
 			i := i
 			t.Run("", func(t *testing.T) {
 				t.Parallel()
+
+				mu <- struct{}{}
+				defer func() {
+					<-mu
+				}()
 
 				ctx, cancel := context.WithTimeout(ctx, time.Second*45)
 				defer cancel()
