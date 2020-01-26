@@ -92,7 +92,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 		w.Header().Set("Sec-WebSocket-Protocol", subproto)
 	}
 
-	copts, err := acceptCompression(r, w, opts.CompressionMode)
+	copts, err := acceptCompression(r, w, opts.CompressionOptions.Mode)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +201,9 @@ func acceptDeflate(w http.ResponseWriter, ext websocketExtension, mode Compressi
 		case "server_no_context_takeover":
 			copts.serverNoContextTakeover = true
 			continue
-		case "client_max_window_bits", "server-max-window-bits":
+		}
+
+		if strings.HasPrefix(p, "client_max_window_bits") || strings.HasPrefix(p, "server_max_window_bits") {
 			continue
 		}
 

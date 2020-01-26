@@ -9,15 +9,22 @@ import (
 	"sync"
 )
 
+// CompressionOptions represents the available deflate extension options.
+// See https://tools.ietf.org/html/rfc7692
 type CompressionOptions struct {
 	// Mode controls the compression mode.
+	//
+	// See docs on CompressionMode.
 	Mode CompressionMode
 
 	// Threshold controls the minimum size of a message before compression is applied.
+	//
+	// Defaults to 512 bytes for CompressionNoContextTakeover and 256 bytes
+	// for CompressionContextTakeover.
 	Threshold int
 }
 
-// CompressionMode controls the modes available RFC 7692's deflate extension.
+// CompressionMode represents the modes available to the deflate extension.
 // See https://tools.ietf.org/html/rfc7692
 //
 // A compatibility layer is implemented for the older deflate-frame extension used
@@ -31,7 +38,7 @@ const (
 	// for every message. This applies to both server and client side.
 	//
 	// This means less efficient compression as the sliding window from previous messages
-	// will not be used but the memory overhead will be much lower if the connections
+	// will not be used but the memory overhead will be lower if the connections
 	// are long lived and seldom used.
 	//
 	// The message will only be compressed if greater than 512 bytes.
@@ -40,8 +47,7 @@ const (
 	// CompressionContextTakeover uses a flate.Reader and flate.Writer per connection.
 	// This enables reusing the sliding window from previous messages.
 	// As most WebSocket protocols are repetitive, this can be very efficient.
-	//
-	// The message will only be compressed if greater than 128 bytes.
+	// It carries an overhead of 64 kB for every connection compared to CompressionNoContextTakeover.
 	//
 	// If the peer negotiates NoContextTakeover on the client or server side, it will be
 	// used instead as this is required by the RFC.

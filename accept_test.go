@@ -3,6 +3,10 @@
 package websocket
 
 import (
+	"bufio"
+	"errors"
+	"net"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -23,6 +27,38 @@ func TestAccept(t *testing.T) {
 		assert.ErrorContains(t, "Accept", err, "protocol violation")
 	})
 
+	t.Run("badOrigin", func(t *testing.T) {
+		t.Parallel()
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", "/", nil)
+		r.Header.Set("Connection", "Upgrade")
+		r.Header.Set("Upgrade", "websocket")
+		r.Header.Set("Sec-WebSocket-Version", "13")
+		r.Header.Set("Sec-WebSocket-Key", "meow123")
+		r.Header.Set("Origin", "harhar.com")
+
+		_, err := Accept(w, r, nil)
+		assert.ErrorContains(t, "Accept", err, "request Origin \"harhar.com\" is not authorized for Host")
+	})
+
+	t.Run("badCompression", func(t *testing.T) {
+		t.Parallel()
+
+		w := mockHijacker{
+			ResponseWriter: httptest.NewRecorder(),
+		}
+		r := httptest.NewRequest("GET", "/", nil)
+		r.Header.Set("Connection", "Upgrade")
+		r.Header.Set("Upgrade", "websocket")
+		r.Header.Set("Sec-WebSocket-Version", "13")
+		r.Header.Set("Sec-WebSocket-Key", "meow123")
+		r.Header.Set("Sec-WebSocket-Extensions", "permessage-deflate; harharhar")
+
+		_, err := Accept(w, r, nil)
+		assert.ErrorContains(t, "Accept", err, "unsupported permessage-deflate parameter")
+	})
+
 	t.Run("requireHttpHijacker", func(t *testing.T) {
 		t.Parallel()
 
@@ -35,6 +71,26 @@ func TestAccept(t *testing.T) {
 
 		_, err := Accept(w, r, nil)
 		assert.ErrorContains(t, "Accept", err, "http.ResponseWriter does not implement http.Hijacker")
+	})
+
+	t.Run("badHijack", func(t *testing.T) {
+		t.Parallel()
+
+		w := mockHijacker{
+			ResponseWriter: httptest.NewRecorder(),
+			hijack: func() (conn net.Conn, writer *bufio.ReadWriter, err error) {
+				return nil, nil, errors.New("haha")
+			},
+		}
+
+		r := httptest.NewRequest("GET", "/", nil)
+		r.Header.Set("Connection", "Upgrade")
+		r.Header.Set("Upgrade", "websocket")
+		r.Header.Set("Sec-WebSocket-Version", "13")
+		r.Header.Set("Sec-WebSocket-Key", "meow123")
+
+		_, err := Accept(w, r, nil)
+		assert.ErrorContains(t, "Accept", err, "failed to hijack connection")
 	})
 }
 
@@ -243,5 +299,89 @@ func Test_authenticateOrigin(t *testing.T) {
 }
 
 func Test_acceptCompression(t *testing.T) {
+	t.Parallel()
 
+	testCases := []struct {
+		name                       string
+		mode                       CompressionMode
+		reqSecWebSocketExtensions  string
+		respSecWebSocketExtensions string
+		expCopts                   *compressionOptions
+		error                      bool
+	}{
+		{
+			name:     "disabled",
+			mode:     CompressionDisabled,
+			expCopts: nil,
+		},
+		{
+			name:     "noClientSupport",
+			mode:     CompressionNoContextTakeover,
+			expCopts: nil,
+		},
+		{
+			name:                       "permessage-deflate",
+			mode:                       CompressionNoContextTakeover,
+			reqSecWebSocketExtensions:  "permessage-deflate; client_max_window_bits",
+			respSecWebSocketExtensions: "permessage-deflate; client_no_context_takeover; server_no_context_takeover",
+			expCopts: &compressionOptions{
+				clientNoContextTakeover: true,
+				serverNoContextTakeover: true,
+			},
+		},
+		{
+			name:                      "permessage-deflate/error",
+			mode:                      CompressionNoContextTakeover,
+			reqSecWebSocketExtensions: "permessage-deflate; meow",
+			error:                     true,
+		},
+		{
+			name:                       "x-webkit-deflate-frame",
+			mode:                       CompressionNoContextTakeover,
+			reqSecWebSocketExtensions:  "x-webkit-deflate-frame; no_context_takeover",
+			respSecWebSocketExtensions: "x-webkit-deflate-frame; no_context_takeover",
+			expCopts: &compressionOptions{
+				clientNoContextTakeover: true,
+				serverNoContextTakeover: true,
+			},
+		},
+		{
+			name:                      "x-webkit-deflate/error",
+			mode:                      CompressionNoContextTakeover,
+			reqSecWebSocketExtensions: "x-webkit-deflate-frame; max_window_bits",
+			error:                     true,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			r.Header.Set("Sec-WebSocket-Extensions", tc.reqSecWebSocketExtensions)
+
+			w := httptest.NewRecorder()
+			copts, err := acceptCompression(r, w, tc.mode)
+			if tc.error {
+				assert.Error(t, "acceptCompression", err)
+				return
+			}
+
+			assert.Success(t, "acceptCompression", err)
+			assert.Equal(t, "compresssionOpts", tc.expCopts, copts)
+			assert.Equal(t, "respHeader", tc.respSecWebSocketExtensions, w.Header().Get("Sec-WebSocket-Extensions"))
+		})
+	}
+}
+
+type mockHijacker struct {
+	http.ResponseWriter
+	hijack func() (net.Conn, *bufio.ReadWriter, error)
+}
+
+var _ http.Hijacker = mockHijacker{}
+
+func (mj mockHijacker) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return mj.hijack()
 }

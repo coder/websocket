@@ -136,8 +136,8 @@ func handshakeRequest(ctx context.Context, urls string, opts *DialOptions, secWe
 	if len(opts.Subprotocols) > 0 {
 		req.Header.Set("Sec-WebSocket-Protocol", strings.Join(opts.Subprotocols, ","))
 	}
-	if opts.CompressionMode != CompressionDisabled {
-		copts := opts.CompressionMode.opts()
+	if opts.CompressionOptions.Mode != CompressionDisabled {
+		copts := opts.CompressionOptions.Mode.opts()
 		copts.setHeader(req.Header)
 	}
 

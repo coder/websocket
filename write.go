@@ -64,7 +64,7 @@ func newMsgWriter(c *Conn) *msgWriter {
 
 func (mw *msgWriter) ensureFlateWriter() {
 	if mw.flateWriter == nil {
-		mw.flateWriter = getFlateWriter(mw.trimWriter)
+		mw.flateWriter = getFlateWriter(mw.trimWriter, nil)
 	}
 }
 
