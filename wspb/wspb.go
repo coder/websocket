@@ -13,14 +13,14 @@ import (
 	"nhooyr.io/websocket/internal/errd"
 )
 
-// Read reads a Protobuf message from c into v.
+// Read reads a protobuf message from c into v.
 // It will reuse buffers in between calls to avoid allocations.
 func Read(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 	return read(ctx, c, v)
 }
 
 func read(ctx context.Context, c *websocket.Conn, v proto.Message) (err error) {
-	defer errd.Wrap(&err, "failed to read Protobuf message")
+	defer errd.Wrap(&err, "failed to read protobuf message")
 
 	typ, r, err := c.Reader(ctx)
 	if err != nil {
@@ -29,7 +29,7 @@ func read(ctx context.Context, c *websocket.Conn, v proto.Message) (err error) {
 
 	if typ != websocket.MessageBinary {
 		c.Close(websocket.StatusUnsupportedData, "expected binary message")
-		return fmt.Errorf("expected binary message for Protobuf but got: %v", typ)
+		return fmt.Errorf("expected binary message for protobuf but got: %v", typ)
 	}
 
 	b := bpool.Get()
@@ -42,21 +42,21 @@ func read(ctx context.Context, c *websocket.Conn, v proto.Message) (err error) {
 
 	err = proto.Unmarshal(b.Bytes(), v)
 	if err != nil {
-		c.Close(websocket.StatusInvalidFramePayloadData, "failed to unmarshal Protobuf")
-		return fmt.Errorf("failed to unmarshal Protobuf: %w", err)
+		c.Close(websocket.StatusInvalidFramePayloadData, "failed to unmarshal protobuf")
+		return fmt.Errorf("failed to unmarshal protobuf: %w", err)
 	}
 
 	return nil
 }
 
-// Write writes the Protobuf message v to c.
+// Write writes the protobuf message v to c.
 // It will reuse buffers in between calls to avoid allocations.
 func Write(ctx context.Context, c *websocket.Conn, v proto.Message) error {
 	return write(ctx, c, v)
 }
 
 func write(ctx context.Context, c *websocket.Conn, v proto.Message) (err error) {
-	defer errd.Wrap(&err, "failed to write Protobuf message")
+	defer errd.Wrap(&err, "failed to write protobuf message")
 
 	b := bpool.Get()
 	pb := proto.NewBuffer(b.Bytes())
@@ -66,7 +66,7 @@ func write(ctx context.Context, c *websocket.Conn, v proto.Message) (err error) 
 
 	err = pb.Marshal(v)
 	if err != nil {
-		return fmt.Errorf("failed to marshal Protobuf: %w", err)
+		return fmt.Errorf("failed to marshal protobuf: %w", err)
 	}
 
 	return c.Write(ctx, websocket.MessageBinary, pb.Bytes())

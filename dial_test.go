@@ -4,58 +4,117 @@ package websocket
 
 import (
 	"context"
+	"crypto/rand"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"cdr.dev/slog/sloggers/slogtest/assert"
 )
 
 func TestBadDials(t *testing.T) {
 	t.Parallel()
 
-	testCases := []struct {
-		name string
-		url  string
-		opts *DialOptions
-	}{
-		{
-			name: "badURL",
-			url:  "://noscheme",
-		},
-		{
-			name: "badURLScheme",
-			url:  "ftp://nhooyr.io",
-		},
-		{
-			name: "badHTTPClient",
-			url:  "ws://nhooyr.io",
-			opts: &DialOptions{
-				HTTPClient: &http.Client{
-					Timeout: time.Minute,
+	t.Run("badReq", func(t *testing.T) {
+		t.Parallel()
+
+		testCases := []struct {
+			name string
+			url  string
+			opts *DialOptions
+			rand readerFunc
+		}{
+			{
+				name: "badURL",
+				url:  "://noscheme",
+			},
+			{
+				name: "badURLScheme",
+				url:  "ftp://nhooyr.io",
+			},
+			{
+				name: "badHTTPClient",
+				url:  "ws://nhooyr.io",
+				opts: &DialOptions{
+					HTTPClient: &http.Client{
+						Timeout: time.Minute,
+					},
 				},
 			},
-		},
-		{
-			name: "badTLS",
-			url:  "wss://totallyfake.nhooyr.io",
-		},
-	}
+			{
+				name: "badTLS",
+				url:  "wss://totallyfake.nhooyr.io",
+			},
+			{
+				name: "badReader",
+				rand: func(p []byte) (int, error) {
+					return 0, io.EOF
+				},
+			},
+		}
 
-	for _, tc := range testCases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+		for _, tc := range testCases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-			defer cancel()
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+				defer cancel()
 
-			_, _, err := Dial(ctx, tc.url, tc.opts)
-			if err == nil {
-				t.Fatalf("expected non nil error: %+v", err)
-			}
+				if tc.rand == nil {
+					tc.rand = rand.Reader.Read
+				}
+
+				_, _, err := dial(ctx, tc.url, tc.opts, tc.rand)
+				assert.Error(t, "dial", err)
+			})
+		}
+	})
+
+	t.Run("badResponse", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		_, _, err := Dial(ctx, "ws://example.com", &DialOptions{
+			HTTPClient: mockHTTPClient(func(*http.Request) (*http.Response, error) {
+				return &http.Response{
+					Body: ioutil.NopCloser(strings.NewReader("hi")),
+				}, nil
+			}),
 		})
-	}
+		assert.ErrorContains(t, "dial", err, "failed to WebSocket dial: expected handshake response status code 101 but got 0")
+	})
+
+	t.Run("badBody", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		rt := func(r *http.Request) (*http.Response, error) {
+			h := http.Header{}
+			h.Set("Connection", "Upgrade")
+			h.Set("Upgrade", "websocket")
+			h.Set("Sec-WebSocket-Accept", secWebSocketAccept(r.Header.Get("Sec-WebSocket-Key")))
+
+			return &http.Response{
+				StatusCode: http.StatusSwitchingProtocols,
+				Header:     h,
+				Body:       ioutil.NopCloser(strings.NewReader("hi")),
+			}, nil
+		}
+
+		_, _, err := Dial(ctx, "ws://example.com", &DialOptions{
+			HTTPClient: mockHTTPClient(rt),
+		})
+		assert.ErrorContains(t, "dial", err, "response body is not a io.ReadWriteCloser")
+	})
 }
 
 func Test_verifyServerHandshake(t *testing.T) {
@@ -111,6 +170,26 @@ func Test_verifyServerHandshake(t *testing.T) {
 			success: false,
 		},
 		{
+			name: "unsupportedExtension",
+			response: func(w http.ResponseWriter) {
+				w.Header().Set("Connection", "Upgrade")
+				w.Header().Set("Upgrade", "websocket")
+				w.Header().Set("Sec-WebSocket-Extensions", "meow")
+				w.WriteHeader(http.StatusSwitchingProtocols)
+			},
+			success: false,
+		},
+		{
+			name: "unsupportedDeflateParam",
+			response: func(w http.ResponseWriter) {
+				w.Header().Set("Connection", "Upgrade")
+				w.Header().Set("Upgrade", "websocket")
+				w.Header().Set("Sec-WebSocket-Extensions", "permessage-deflate; meow")
+				w.WriteHeader(http.StatusSwitchingProtocols)
+			},
+			success: false,
+		},
+		{
 			name: "success",
 			response: func(w http.ResponseWriter) {
 				w.Header().Set("Connection", "Upgrade")
@@ -131,7 +210,7 @@ func Test_verifyServerHandshake(t *testing.T) {
 			resp := w.Result()
 
 			r := httptest.NewRequest("GET", "/", nil)
-			key, err := secWebSocketKey()
+			key, err := secWebSocketKey(rand.Reader)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -150,4 +229,16 @@ func Test_verifyServerHandshake(t *testing.T) {
 			}
 		})
 	}
+}
+
+func mockHTTPClient(fn roundTripperFunc) *http.Client {
+	return &http.Client{
+		Transport: fn,
+	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
 }

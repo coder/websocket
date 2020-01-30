@@ -12,7 +12,7 @@
 //
 // The examples are the best way to understand how to correctly use the library.
 //
-// The wsjson and wspb subpackages contain helpers for JSON and Protobuf messages.
+// The wsjson and wspb subpackages contain helpers for JSON and protobuf messages.
 //
 // More documentation at https://nhooyr.io/websocket.
 //
@@ -28,5 +28,4 @@
 //  - Conn.Ping is no-op
 //  - HTTPClient, HTTPHeader and CompressionMode in DialOptions are no-op
 //  - *http.Response from Dial is &http.Response{} on success
-//
 package websocket // import "nhooyr.io/websocket"

@@ -22,7 +22,7 @@ type MessageType int
 const (
 	// MessageText is for UTF-8 encoded text messages like JSON.
 	MessageText MessageType = iota + 1
-	// MessageBinary is for binary messages like Protobufs.
+	// MessageBinary is for binary messages like protobufs.
 	MessageBinary
 )
 

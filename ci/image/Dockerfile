@@ -6,7 +6,7 @@ RUN apt-get install -y chromium
 ENV GOFLAGS="-mod=readonly"
 ENV PAGER=cat
 ENV CI=true
-ENV MAKEFLAGS="--jobs=8 --output-sync=target"
+ENV MAKEFLAGS="--jobs=16 --output-sync=target"
 
 RUN npm install -g prettier
 RUN go get golang.org/x/tools/cmd/stringer

@@ -50,10 +50,10 @@ type DialOptions struct {
 // in net/http to perform WebSocket handshakes.
 // See docs on the HTTPClient option and https://github.com/golang/go/issues/26937#issuecomment-415855861
 func Dial(ctx context.Context, u string, opts *DialOptions) (*Conn, *http.Response, error) {
-	return dial(ctx, u, opts)
+	return dial(ctx, u, opts, nil)
 }
 
-func dial(ctx context.Context, urls string, opts *DialOptions) (_ *Conn, _ *http.Response, err error) {
+func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (_ *Conn, _ *http.Response, err error) {
 	defer errd.Wrap(&err, "failed to WebSocket dial")
 
 	if opts == nil {
@@ -67,7 +67,7 @@ func dial(ctx context.Context, urls string, opts *DialOptions) (_ *Conn, _ *http
 		opts.HTTPHeader = http.Header{}
 	}
 
-	secWebSocketKey, err := secWebSocketKey()
+	secWebSocketKey, err := secWebSocketKey(rand)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate Sec-WebSocket-Key: %w", err)
 	}
@@ -148,9 +148,12 @@ func handshakeRequest(ctx context.Context, urls string, opts *DialOptions, secWe
 	return resp, nil
 }
 
-func secWebSocketKey() (string, error) {
+func secWebSocketKey(rr io.Reader) (string, error) {
+	if rr == nil {
+		rr = rand.Reader
+	}
 	b := make([]byte, 16)
-	_, err := io.ReadFull(rand.Reader, b)
+	_, err := io.ReadFull(rr, b)
 	if err != nil {
 		return "", fmt.Errorf("failed to read random data from rand.Reader: %w", err)
 	}
