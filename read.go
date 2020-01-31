@@ -4,13 +4,13 @@ package websocket
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket/internal/errd"
 )
@@ -79,10 +79,6 @@ func newMsgReader(c *Conn) *msgReader {
 	}
 
 	mr.limitReader = newLimitReader(c, readerFunc(mr.read), 32768)
-	if c.flate() && mr.flateContextTakeover() {
-		mr.initFlateReader()
-	}
-
 	return mr
 }
 
@@ -125,13 +121,13 @@ func (c *Conn) readLoop(ctx context.Context) (header, error) {
 		}
 
 		if h.rsv1 && c.readRSV1Illegal(h) || h.rsv2 || h.rsv3 {
-			err := fmt.Errorf("received header with unexpected rsv bits set: %v:%v:%v", h.rsv1, h.rsv2, h.rsv3)
+			err := xerrors.Errorf("received header with unexpected rsv bits set: %v:%v:%v", h.rsv1, h.rsv2, h.rsv3)
 			c.writeError(StatusProtocolError, err)
 			return header{}, err
 		}
 
 		if !c.client && !h.masked {
-			return header{}, errors.New("received unmasked frame from client")
+			return header{}, xerrors.New("received unmasked frame from client")
 		}
 
 		switch h.opcode {
@@ -142,12 +138,12 @@ func (c *Conn) readLoop(ctx context.Context) (header, error) {
 				if h.opcode == opClose && CloseStatus(err) != -1 {
 					return header{}, err
 				}
-				return header{}, fmt.Errorf("failed to handle control frame %v: %w", h.opcode, err)
+				return header{}, xerrors.Errorf("failed to handle control frame %v: %w", h.opcode, err)
 			}
 		case opContinuation, opText, opBinary:
 			return h, nil
 		default:
-			err := fmt.Errorf("received unknown opcode %v", h.opcode)
+			err := xerrors.Errorf("received unknown opcode %v", h.opcode)
 			c.writeError(StatusProtocolError, err)
 			return header{}, err
 		}
@@ -198,7 +194,7 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
 		case <-ctx.Done():
 			return n, ctx.Err()
 		default:
-			err = fmt.Errorf("failed to read frame payload: %w", err)
+			err = xerrors.Errorf("failed to read frame payload: %w", err)
 			c.close(err)
 			return n, err
 		}
@@ -215,13 +211,13 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
 
 func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 	if h.payloadLength < 0 || h.payloadLength > maxControlPayload {
-		err := fmt.Errorf("received control frame payload with invalid length: %d", h.payloadLength)
+		err := xerrors.Errorf("received control frame payload with invalid length: %d", h.payloadLength)
 		c.writeError(StatusProtocolError, err)
 		return err
 	}
 
 	if !h.fin {
-		err := errors.New("received fragmented control frame")
+		err := xerrors.New("received fragmented control frame")
 		c.writeError(StatusProtocolError, err)
 		return err
 	}
@@ -258,12 +254,12 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 
 	ce, err := parseClosePayload(b)
 	if err != nil {
-		err = fmt.Errorf("received invalid close payload: %w", err)
+		err = xerrors.Errorf("received invalid close payload: %w", err)
 		c.writeError(StatusProtocolError, err)
 		return err
 	}
 
-	err = fmt.Errorf("received close frame: %w", ce)
+	err = xerrors.Errorf("received close frame: %w", ce)
 	c.setCloseErr(err)
 	c.writeClose(ce.Code, ce.Reason)
 	c.close(err)
@@ -280,7 +276,7 @@ func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err erro
 	defer c.readMu.Unlock()
 
 	if !c.msgReader.fin {
-		return 0, nil, errors.New("previous message not read to completion")
+		return 0, nil, xerrors.New("previous message not read to completion")
 	}
 
 	h, err := c.readLoop(ctx)
@@ -289,7 +285,7 @@ func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err erro
 	}
 
 	if h.opcode == opContinuation {
-		err := errors.New("received continuation frame without text or binary frame")
+		err := xerrors.New("received continuation frame without text or binary frame")
 		c.writeError(StatusProtocolError, err)
 		return 0, nil, err
 	}
@@ -347,7 +343,7 @@ func (mr *msgReader) Read(p []byte) (n int, err error) {
 		}
 
 		errd.Wrap(&err, "failed to read")
-		if errors.Is(err, io.EOF) {
+		if xerrors.Is(err, io.EOF) {
 			err = io.EOF
 		}
 	}()
@@ -386,7 +382,7 @@ func (mr *msgReader) read(p []byte) (int, error) {
 			return 0, err
 		}
 		if h.opcode != opContinuation {
-			err := errors.New("received new data message without finishing the previous message")
+			err := xerrors.New("received new data message without finishing the previous message")
 			mr.c.writeError(StatusProtocolError, err)
 			return 0, err
 		}
@@ -434,7 +430,7 @@ func (lr *limitReader) reset() {
 
 func (lr *limitReader) Read(p []byte) (int, error) {
 	if lr.n <= 0 {
-		err := fmt.Errorf("read limited at %v bytes", lr.limit.Load())
+		err := xerrors.Errorf("read limited at %v bytes", lr.limit.Load())
 		lr.c.writeError(StatusMessageTooBig, err)
 		return 0, err
 	}
@@ -448,6 +444,8 @@ func (lr *limitReader) Read(p []byte) (int, error) {
 }
 
 type atomicInt64 struct {
+	// We do not use atomic.Load/StoreInt64 since it does not
+	// work on 32 bit computers but we need 64 bit integers.
 	i atomic.Value
 }
 

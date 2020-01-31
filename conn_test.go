@@ -4,7 +4,6 @@ package websocket_test
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"cdr.dev/slog/sloggers/slogtest/assert"
+	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
 )
@@ -67,9 +67,7 @@ func testServer(tb testing.TB, fn func(w http.ResponseWriter, r *http.Request), 
 	closeFn2 := wsgrace(s.Config)
 	return s, func() {
 		err := closeFn2()
-		if err != nil {
-			tb.Fatal(err)
-		}
+		assert.Success(tb, "closeFn", err)
 	}
 }
 
@@ -96,7 +94,7 @@ func wsgrace(s *http.Server) (closeFn func() error) {
 
 		err := s.Shutdown(ctx)
 		if err != nil {
-			return fmt.Errorf("server shutdown failed: %v", err)
+			return xerrors.Errorf("server shutdown failed: %v", err)
 		}
 
 		t := time.NewTicker(time.Millisecond * 10)
@@ -108,7 +106,7 @@ func wsgrace(s *http.Server) (closeFn func() error) {
 					return nil
 				}
 			case <-ctx.Done():
-				return fmt.Errorf("failed to wait for WebSocket connections: %v", ctx.Err())
+				return xerrors.Errorf("failed to wait for WebSocket connections: %v", ctx.Err())
 			}
 		}
 	}

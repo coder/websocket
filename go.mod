@@ -1,6 +1,6 @@
 module nhooyr.io/websocket
 
-go 1.13
+go 1.12
 
 require (
 	cdr.dev/slog v1.3.0
@@ -10,4 +10,5 @@ require (
 	github.com/golang/protobuf v1.3.2
 	github.com/gorilla/websocket v1.4.1
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
+	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
 )

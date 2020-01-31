@@ -1,14 +1,12 @@
 package errd
 
-import (
-	"fmt"
-)
+import "golang.org/x/xerrors"
 
-// Wrap wraps err with fmt.Errorf if err is non nil.
+// Wrap wraps err with xerrors.Errorf if err is non nil.
 // Intended for use with defer and a named error return.
 // Inspired by https://github.com/golang/go/issues/32676.
 func Wrap(err *error, f string, v ...interface{}) {
 	if *err != nil {
-		*err = fmt.Errorf(f+": %w", append(v, *err)...)
+		*err = xerrors.Errorf(f+": %w", append(v, *err)...)
 	}
 }

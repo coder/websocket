@@ -2,12 +2,13 @@ package websocket
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"math"
 	"net"
 	"sync"
 	"time"
+
+	"golang.org/x/xerrors"
 )
 
 // NetConn converts a *websocket.Conn into a net.Conn.
@@ -107,7 +108,7 @@ func (c *netConn) Read(p []byte) (int, error) {
 			return 0, err
 		}
 		if typ != c.msgType {
-			err := fmt.Errorf("unexpected frame type read (expected %v): %v", c.msgType, typ)
+			err := xerrors.Errorf("unexpected frame type read (expected %v): %v", c.msgType, typ)
 			c.c.Close(StatusUnsupportedData, err.Error())
 			return 0, err
 		}

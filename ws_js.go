@@ -3,13 +3,13 @@ package websocket // import "nhooyr.io/websocket"
 import (
 	"bytes"
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"reflect"
 	"runtime"
 	"sync"
 	"syscall/js"
+
+	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket/internal/bpool"
 	"nhooyr.io/websocket/internal/wsjs"
@@ -55,7 +55,7 @@ func (c *Conn) close(err error, wasClean bool) {
 		runtime.SetFinalizer(c, nil)
 
 		if !wasClean {
-			err = fmt.Errorf("unclean connection close: %w", err)
+			err = xerrors.Errorf("unclean connection close: %w", err)
 		}
 		c.setCloseErr(err)
 		c.closeWasClean = wasClean
@@ -100,7 +100,7 @@ func (c *Conn) init() {
 	})
 
 	runtime.SetFinalizer(c, func(c *Conn) {
-		c.setCloseErr(errors.New("connection garbage collected"))
+		c.setCloseErr(xerrors.New("connection garbage collected"))
 		c.closeWithInternal()
 	})
 }
@@ -113,15 +113,15 @@ func (c *Conn) closeWithInternal() {
 // The maximum time spent waiting is bounded by the context.
 func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 	if c.isReadClosed.Load() == 1 {
-		return 0, nil, errors.New("WebSocket connection read closed")
+		return 0, nil, xerrors.New("WebSocket connection read closed")
 	}
 
 	typ, p, err := c.read(ctx)
 	if err != nil {
-		return 0, nil, fmt.Errorf("failed to read: %w", err)
+		return 0, nil, xerrors.Errorf("failed to read: %w", err)
 	}
 	if int64(len(p)) > c.msgReadLimit.Load() {
-		err := fmt.Errorf("read limited at %v bytes", c.msgReadLimit)
+		err := xerrors.Errorf("read limited at %v bytes", c.msgReadLimit)
 		c.Close(StatusMessageTooBig, err.Error())
 		return 0, nil, err
 	}
@@ -174,7 +174,7 @@ func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 		// to match the Go API. It can only error if the message type
 		// is unexpected or the passed bytes contain invalid UTF-8 for
 		// MessageText.
-		err := fmt.Errorf("failed to write: %w", err)
+		err := xerrors.Errorf("failed to write: %w", err)
 		c.setCloseErr(err)
 		c.closeWithInternal()
 		return err
@@ -192,7 +192,7 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) error {
 	case MessageText:
 		return c.ws.SendText(string(p))
 	default:
-		return fmt.Errorf("unexpected message type: %v", typ)
+		return xerrors.Errorf("unexpected message type: %v", typ)
 	}
 }
 
@@ -203,7 +203,7 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) error {
 func (c *Conn) Close(code StatusCode, reason string) error {
 	err := c.exportedClose(code, reason)
 	if err != nil {
-		return fmt.Errorf("failed to close WebSocket: %w", err)
+		return xerrors.Errorf("failed to close WebSocket: %w", err)
 	}
 	return nil
 }
@@ -212,13 +212,13 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 	c.closingMu.Lock()
 	defer c.closingMu.Unlock()
 
-	ce := fmt.Errorf("sent close: %w", CloseError{
+	ce := xerrors.Errorf("sent close: %w", CloseError{
 		Code:   code,
 		Reason: reason,
 	})
 
 	if c.isClosed() {
-		return fmt.Errorf("tried to close with %q but connection already closed: %w", ce, c.closeErr)
+		return xerrors.Errorf("tried to close with %q but connection already closed: %w", ce, c.closeErr)
 	}
 
 	c.setCloseErr(ce)
@@ -253,7 +253,7 @@ type DialOptions struct {
 func Dial(ctx context.Context, url string, opts *DialOptions) (*Conn, error) {
 	c, err := dial(ctx, url, opts)
 	if err != nil {
-		return nil, resp, fmt.Errorf("failed to WebSocket dial %q: %w", url, err)
+		return nil, resp, xerrors.Errorf("failed to WebSocket dial %q: %w", url, err)
 	}
 	return c, nil
 }
@@ -325,25 +325,25 @@ type writer struct {
 
 func (w writer) Write(p []byte) (int, error) {
 	if w.closed {
-		return 0, errors.New("cannot write to closed writer")
+		return 0, xerrors.New("cannot write to closed writer")
 	}
 	n, err := w.b.Write(p)
 	if err != nil {
-		return n, fmt.Errorf("failed to write message: %w", err)
+		return n, xerrors.Errorf("failed to write message: %w", err)
 	}
 	return n, nil
 }
 
 func (w writer) Close() error {
 	if w.closed {
-		return errors.New("cannot close closed writer")
+		return xerrors.New("cannot close closed writer")
 	}
 	w.closed = true
 	defer bpool.Put(w.b)
 
 	err := w.c.Write(w.ctx, w.typ, w.b.Bytes())
 	if err != nil {
-		return fmt.Errorf("failed to close writer: %w", err)
+		return xerrors.Errorf("failed to close writer: %w", err)
 	}
 	return nil
 }
@@ -368,7 +368,7 @@ func (c *Conn) SetReadLimit(n int64) {
 
 func (c *Conn) setCloseErr(err error) {
 	c.closeErrOnce.Do(func() {
-		c.closeErr = fmt.Errorf("WebSocket closed: %w", err)
+		c.closeErr = xerrors.Errorf("WebSocket closed: %w", err)
 	})
 }
 

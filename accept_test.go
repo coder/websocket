@@ -4,7 +4,6 @@ package websocket
 
 import (
 	"bufio"
-	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +11,7 @@ import (
 	"testing"
 
 	"cdr.dev/slog/sloggers/slogtest/assert"
+	"golang.org/x/xerrors"
 )
 
 func TestAccept(t *testing.T) {
@@ -79,7 +79,7 @@ func TestAccept(t *testing.T) {
 		w := mockHijacker{
 			ResponseWriter: httptest.NewRecorder(),
 			hijack: func() (conn net.Conn, writer *bufio.ReadWriter, err error) {
-				return nil, nil, errors.New("haha")
+				return nil, nil, xerrors.New("haha")
 			},
 		}
 

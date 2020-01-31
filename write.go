@@ -8,10 +8,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"io"
 	"time"
+
+	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket/internal/errd"
 )
@@ -28,7 +28,7 @@ import (
 func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, error) {
 	w, err := c.writer(ctx, typ)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get writer: %w", err)
+		return nil, xerrors.Errorf("failed to get writer: %w", err)
 	}
 	return w, nil
 }
@@ -42,7 +42,7 @@ func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	_, err := c.write(ctx, typ, p)
 	if err != nil {
-		return fmt.Errorf("failed to write msg: %w", err)
+		return xerrors.Errorf("failed to write msg: %w", err)
 	}
 	return nil
 }
@@ -55,10 +55,6 @@ func newMsgWriter(c *Conn) *msgWriter {
 	mw.trimWriter = &trimLastFourBytesWriter{
 		w: writerFunc(mw.write),
 	}
-	if c.flate() && mw.flateContextTakeover() {
-		mw.ensureFlateWriter()
-	}
-
 	return mw
 }
 
@@ -92,7 +88,7 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) (int, error
 	if !c.flate() {
 		// Fast single frame path.
 		defer c.msgWriter.mu.Unlock()
-		return c.writeFrame(ctx, true, c.msgWriter.opcode, p)
+		return c.writeFrame(ctx, true, false, c.msgWriter.opcode, p)
 	}
 
 	n, err := mw.Write(p)
@@ -113,7 +109,6 @@ type msgWriter struct {
 	opcode opcode
 	closed bool
 
-	// TODO pass down into writeFrame
 	flate       bool
 	trimWriter  *trimLastFourBytesWriter
 	flateWriter *flate.Writer
@@ -137,7 +132,7 @@ func (mw *msgWriter) Write(p []byte) (_ int, err error) {
 	defer errd.Wrap(&err, "failed to write")
 
 	if mw.closed {
-		return 0, errors.New("cannot use closed writer")
+		return 0, xerrors.New("cannot use closed writer")
 	}
 
 	if mw.c.flate() {
@@ -157,9 +152,9 @@ func (mw *msgWriter) Write(p []byte) (_ int, err error) {
 }
 
 func (mw *msgWriter) write(p []byte) (int, error) {
-	n, err := mw.c.writeFrame(mw.ctx, false, mw.opcode, p)
+	n, err := mw.c.writeFrame(mw.ctx, false, mw.flate, mw.opcode, p)
 	if err != nil {
-		return n, fmt.Errorf("failed to write data frame: %w", err)
+		return n, xerrors.Errorf("failed to write data frame: %w", err)
 	}
 	mw.opcode = opContinuation
 	return n, nil
@@ -170,20 +165,20 @@ func (mw *msgWriter) Close() (err error) {
 	defer errd.Wrap(&err, "failed to close writer")
 
 	if mw.closed {
-		return errors.New("cannot use closed writer")
+		return xerrors.New("cannot use closed writer")
 	}
 	mw.closed = true
 
 	if mw.flate {
 		err = mw.flateWriter.Flush()
 		if err != nil {
-			return fmt.Errorf("failed to flush flate writer: %w", err)
+			return xerrors.Errorf("failed to flush flate writer: %w", err)
 		}
 	}
 
-	_, err = mw.c.writeFrame(mw.ctx, true, mw.opcode, nil)
+	_, err = mw.c.writeFrame(mw.ctx, true, mw.flate, mw.opcode, nil)
 	if err != nil {
-		return fmt.Errorf("failed to write fin frame: %w", err)
+		return xerrors.Errorf("failed to write fin frame: %w", err)
 	}
 
 	if mw.c.flate() && !mw.flateContextTakeover() && mw.flateWriter != nil {
@@ -207,15 +202,15 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
 	defer cancel()
 
-	_, err := c.writeFrame(ctx, true, opcode, p)
+	_, err := c.writeFrame(ctx, true, false, opcode, p)
 	if err != nil {
-		return fmt.Errorf("failed to write control frame %v: %w", opcode, err)
+		return xerrors.Errorf("failed to write control frame %v: %w", opcode, err)
 	}
 	return nil
 }
 
 // frame handles all writes to the connection.
-func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte) (int, error) {
+func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opcode, p []byte) (int, error) {
 	err := c.writeFrameMu.Lock(ctx)
 	if err != nil {
 		return 0, err
@@ -236,12 +231,12 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 		c.writeHeader.masked = true
 		err = binary.Read(rand.Reader, binary.LittleEndian, &c.writeHeader.maskKey)
 		if err != nil {
-			return 0, fmt.Errorf("failed to generate masking key: %w", err)
+			return 0, xerrors.Errorf("failed to generate masking key: %w", err)
 		}
 	}
 
 	c.writeHeader.rsv1 = false
-	if c.flate() && (opcode == opText || opcode == opBinary) {
+	if flate && (opcode == opText || opcode == opBinary) {
 		c.writeHeader.rsv1 = true
 	}
 
@@ -258,7 +253,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, opcode opcode, p []byte
 	if c.writeHeader.fin {
 		err = c.bw.Flush()
 		if err != nil {
-			return n, fmt.Errorf("failed to flush: %w", err)
+			return n, xerrors.Errorf("failed to flush: %w", err)
 		}
 	}
 

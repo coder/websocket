@@ -211,9 +211,7 @@ func Test_verifyServerHandshake(t *testing.T) {
 
 			r := httptest.NewRequest("GET", "/", nil)
 			key, err := secWebSocketKey(rand.Reader)
-			if err != nil {
-				t.Fatal(err)
-			}
+			assert.Success(t, "secWebSocketKey", err)
 			r.Header.Set("Sec-WebSocket-Key", key)
 
 			if resp.Header.Get("Sec-WebSocket-Accept") == "" {

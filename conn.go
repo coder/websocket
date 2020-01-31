@@ -5,13 +5,13 @@ package websocket
 import (
 	"bufio"
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
+
+	"golang.org/x/xerrors"
 )
 
 // MessageType represents the type of a WebSocket message.
@@ -108,7 +108,7 @@ func newConn(cfg connConfig) *Conn {
 	}
 
 	runtime.SetFinalizer(c, func(c *Conn) {
-		c.close(errors.New("connection garbage collected"))
+		c.close(xerrors.New("connection garbage collected"))
 	})
 
 	go c.timeoutLoop()
@@ -167,10 +167,10 @@ func (c *Conn) timeoutLoop() {
 		case readCtx = <-c.readTimeout:
 
 		case <-readCtx.Done():
-			c.setCloseErr(fmt.Errorf("read timed out: %w", readCtx.Err()))
-			go c.writeError(StatusPolicyViolation, errors.New("timed out"))
+			c.setCloseErr(xerrors.Errorf("read timed out: %w", readCtx.Err()))
+			go c.writeError(StatusPolicyViolation, xerrors.New("timed out"))
 		case <-writeCtx.Done():
-			c.close(fmt.Errorf("write timed out: %w", writeCtx.Err()))
+			c.close(xerrors.Errorf("write timed out: %w", writeCtx.Err()))
 			return
 		}
 	}
@@ -192,7 +192,7 @@ func (c *Conn) Ping(ctx context.Context) error {
 
 	err := c.ping(ctx, strconv.Itoa(int(p)))
 	if err != nil {
-		return fmt.Errorf("failed to ping: %w", err)
+		return xerrors.Errorf("failed to ping: %w", err)
 	}
 	return nil
 }
@@ -219,7 +219,7 @@ func (c *Conn) ping(ctx context.Context, p string) error {
 	case <-c.closed:
 		return c.closeErr
 	case <-ctx.Done():
-		err := fmt.Errorf("failed to wait for pong: %w", ctx.Err())
+		err := xerrors.Errorf("failed to wait for pong: %w", ctx.Err())
 		c.close(err)
 		return err
 	case <-pong:
@@ -244,7 +244,7 @@ func (m *mu) Lock(ctx context.Context) error {
 	case <-m.c.closed:
 		return m.c.closeErr
 	case <-ctx.Done():
-		err := fmt.Errorf("failed to acquire lock: %w", ctx.Err())
+		err := xerrors.Errorf("failed to acquire lock: %w", ctx.Err())
 		m.c.close(err)
 		return err
 	case m.ch <- struct{}{}:

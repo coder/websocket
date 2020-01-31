@@ -6,13 +6,13 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"encoding/base64"
-	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/textproto"
 	"net/url"
 	"strings"
+
+	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket/internal/errd"
 )
@@ -76,7 +76,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 
 	hj, ok := w.(http.Hijacker)
 	if !ok {
-		err = errors.New("http.ResponseWriter does not implement http.Hijacker")
+		err = xerrors.New("http.ResponseWriter does not implement http.Hijacker")
 		http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 
 	netConn, brw, err := hj.Hijack()
 	if err != nil {
-		err = fmt.Errorf("failed to hijack connection: %w", err)
+		err = xerrors.Errorf("failed to hijack connection: %w", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return nil, err
 	}
@@ -122,27 +122,27 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 
 func verifyClientRequest(r *http.Request) error {
 	if !r.ProtoAtLeast(1, 1) {
-		return fmt.Errorf("WebSocket protocol violation: handshake request must be at least HTTP/1.1: %q", r.Proto)
+		return xerrors.Errorf("WebSocket protocol violation: handshake request must be at least HTTP/1.1: %q", r.Proto)
 	}
 
 	if !headerContainsToken(r.Header, "Connection", "Upgrade") {
-		return fmt.Errorf("WebSocket protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
+		return xerrors.Errorf("WebSocket protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
 	}
 
 	if !headerContainsToken(r.Header, "Upgrade", "websocket") {
-		return fmt.Errorf("WebSocket protocol violation: Upgrade header %q does not contain websocket", r.Header.Get("Upgrade"))
+		return xerrors.Errorf("WebSocket protocol violation: Upgrade header %q does not contain websocket", r.Header.Get("Upgrade"))
 	}
 
 	if r.Method != "GET" {
-		return fmt.Errorf("WebSocket protocol violation: handshake request method is not GET but %q", r.Method)
+		return xerrors.Errorf("WebSocket protocol violation: handshake request method is not GET but %q", r.Method)
 	}
 
 	if r.Header.Get("Sec-WebSocket-Version") != "13" {
-		return fmt.Errorf("unsupported WebSocket protocol version (only 13 is supported): %q", r.Header.Get("Sec-WebSocket-Version"))
+		return xerrors.Errorf("unsupported WebSocket protocol version (only 13 is supported): %q", r.Header.Get("Sec-WebSocket-Version"))
 	}
 
 	if r.Header.Get("Sec-WebSocket-Key") == "" {
-		return errors.New("WebSocket protocol violation: missing Sec-WebSocket-Key")
+		return xerrors.New("WebSocket protocol violation: missing Sec-WebSocket-Key")
 	}
 
 	return nil
@@ -153,10 +153,10 @@ func authenticateOrigin(r *http.Request) error {
 	if origin != "" {
 		u, err := url.Parse(origin)
 		if err != nil {
-			return fmt.Errorf("failed to parse Origin header %q: %w", origin, err)
+			return xerrors.Errorf("failed to parse Origin header %q: %w", origin, err)
 		}
 		if !strings.EqualFold(u.Host, r.Host) {
-			return fmt.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host)
+			return xerrors.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host)
 		}
 	}
 	return nil
@@ -207,7 +207,7 @@ func acceptDeflate(w http.ResponseWriter, ext websocketExtension, mode Compressi
 			continue
 		}
 
-		err := fmt.Errorf("unsupported permessage-deflate parameter: %q", p)
+		err := xerrors.Errorf("unsupported permessage-deflate parameter: %q", p)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return nil, err
 	}
@@ -237,7 +237,7 @@ func acceptWebkitDeflate(w http.ResponseWriter, ext websocketExtension, mode Com
 		//
 		// Either way, we're only implementing this for webkit which never sends the max_window_bits
 		// parameter so we don't need to worry about it.
-		err := fmt.Errorf("unsupported x-webkit-deflate-frame parameter: %q", p)
+		err := xerrors.Errorf("unsupported x-webkit-deflate-frame parameter: %q", p)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return nil, err
 	}

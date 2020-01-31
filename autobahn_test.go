@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"cdr.dev/slog/sloggers/slogtest/assert"
+	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/errd"
@@ -166,7 +167,7 @@ func wstestClientServer(ctx context.Context) (url string, closeFn func(), err er
 		"exclude-cases": excludedAutobahnCases,
 	})
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to write spec: %w", err)
+		return "", nil, xerrors.Errorf("failed to write spec: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
@@ -184,7 +185,7 @@ func wstestClientServer(ctx context.Context) (url string, closeFn func(), err er
 	wstest := exec.CommandContext(ctx, "wstest", args...)
 	err = wstest.Start()
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to start wstest: %w", err)
+		return "", nil, xerrors.Errorf("failed to start wstest: %w", err)
 	}
 
 	return url, func() {
@@ -267,7 +268,7 @@ func unusedListenAddr() (_ string, err error) {
 func tempJSONFile(v interface{}) (string, error) {
 	f, err := ioutil.TempFile("", "temp.json")
 	if err != nil {
-		return "", fmt.Errorf("temp file: %w", err)
+		return "", xerrors.Errorf("temp file: %w", err)
 	}
 	defer f.Close()
 
@@ -275,12 +276,12 @@ func tempJSONFile(v interface{}) (string, error) {
 	e.SetIndent("", "\t")
 	err = e.Encode(v)
 	if err != nil {
-		return "", fmt.Errorf("json encode: %w", err)
+		return "", xerrors.Errorf("json encode: %w", err)
 	}
 
 	err = f.Close()
 	if err != nil {
-		return "", fmt.Errorf("close temp file: %w", err)
+		return "", xerrors.Errorf("close temp file: %w", err)
 	}
 
 	return f.Name(), nil
