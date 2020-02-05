@@ -72,25 +72,40 @@ func (c *Conn) SetReadLimit(n int64) {
 	c.msgReader.limitReader.limit.Store(n)
 }
 
+const defaultReadLimit = 32768
+
 func newMsgReader(c *Conn) *msgReader {
 	mr := &msgReader{
 		c:   c,
 		fin: true,
 	}
 
-	mr.limitReader = newLimitReader(c, readerFunc(mr.read), 32768)
+	mr.limitReader = newLimitReader(c, readerFunc(mr.read), defaultReadLimit)
 	return mr
 }
 
-func (mr *msgReader) initFlateReader() {
-	mr.flateReader = getFlateReader(readerFunc(mr.read))
+func (mr *msgReader) ensureFlate() {
+	if mr.flateContextTakeover() && mr.dict == nil {
+		mr.dict = newSlidingWindow(32768)
+	}
+
+	if mr.flateContextTakeover() {
+		mr.flateReader = getFlateReader(readerFunc(mr.read), mr.dict.buf)
+	} else {
+		mr.flateReader = getFlateReader(readerFunc(mr.read), nil)
+	}
 	mr.limitReader.r = mr.flateReader
+}
+
+func (mr *msgReader) returnFlateReader() {
+	if mr.flateReader != nil {
+		putFlateReader(mr.flateReader)
+		mr.flateReader = nil
+	}
 }
 
 func (mr *msgReader) close() {
 	mr.c.readMu.Lock(context.Background())
-	defer mr.c.readMu.Unlock()
-
 	mr.returnFlateReader()
 }
 
@@ -299,10 +314,11 @@ type msgReader struct {
 	c *Conn
 
 	ctx         context.Context
-	deflate     bool
+	flate       bool
 	flateReader io.Reader
-	deflateTail strings.Reader
+	flateTail   strings.Reader
 	limitReader *limitReader
+	dict        *slidingWindow
 
 	fin           bool
 	payloadLength int64
@@ -311,12 +327,10 @@ type msgReader struct {
 
 func (mr *msgReader) reset(ctx context.Context, h header) {
 	mr.ctx = ctx
-	mr.deflate = h.rsv1
-	if mr.deflate {
-		if !mr.flateContextTakeover() {
-			mr.initFlateReader()
-		}
-		mr.deflateTail.Reset(deflateMessageTail)
+	mr.flate = h.rsv1
+	if mr.flate {
+		mr.ensureFlate()
+		mr.flateTail.Reset(deflateMessageTail)
 	}
 
 	mr.limitReader.reset()
@@ -331,18 +345,10 @@ func (mr *msgReader) setFrame(h header) {
 
 func (mr *msgReader) Read(p []byte) (n int, err error) {
 	defer func() {
-		r := recover()
-		if r != nil {
-			if r != "ANMOL" {
-				panic(r)
-			}
-			err = io.EOF
-			if !mr.flateContextTakeover() {
-				mr.returnFlateReader()
-			}
-		}
-
 		errd.Wrap(&err, "failed to read")
+		if xerrors.Is(err, io.ErrUnexpectedEOF) && mr.fin && mr.flate {
+			err = io.EOF
+		}
 		if xerrors.Is(err, io.EOF) {
 			err = io.EOF
 		}
@@ -354,25 +360,23 @@ func (mr *msgReader) Read(p []byte) (n int, err error) {
 	}
 	defer mr.c.readMu.Unlock()
 
-	return mr.limitReader.Read(p)
-}
-
-func (mr *msgReader) returnFlateReader() {
-	if mr.flateReader != nil {
-		putFlateReader(mr.flateReader)
-		mr.flateReader = nil
+	n, err = mr.limitReader.Read(p)
+	if mr.flateContextTakeover() {
+		p = p[:n]
+		mr.dict.write(p)
 	}
+	return n, err
 }
 
 func (mr *msgReader) read(p []byte) (int, error) {
 	if mr.payloadLength == 0 {
 		if mr.fin {
-			if mr.deflate {
-				if mr.deflateTail.Len() == 0 {
-					panic("ANMOL")
+			if mr.flate {
+				n, err := mr.flateTail.Read(p)
+				if xerrors.Is(err, io.EOF) {
+					mr.returnFlateReader()
 				}
-				n, _ := mr.deflateTail.Read(p)
-				return n, nil
+				return n, err
 			}
 			return 0, io.EOF
 		}

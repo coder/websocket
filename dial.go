@@ -99,12 +99,13 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 	}
 
 	return newConn(connConfig{
-		subprotocol: resp.Header.Get("Sec-WebSocket-Protocol"),
-		rwc:         rwc,
-		client:      true,
-		copts:       copts,
-		br:          getBufioReader(rwc),
-		bw:          getBufioWriter(rwc),
+		subprotocol:    resp.Header.Get("Sec-WebSocket-Protocol"),
+		rwc:            rwc,
+		client:         true,
+		copts:          copts,
+		flateThreshold: opts.CompressionOptions.Threshold,
+		br:             getBufioReader(rwc),
+		bw:             getBufioWriter(rwc),
 	}), resp, nil
 }
 

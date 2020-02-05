@@ -27,13 +27,15 @@ func TestConn(t *testing.T) {
 				Subprotocols:       []string{"echo"},
 				InsecureSkipVerify: true,
 				CompressionOptions: websocket.CompressionOptions{
-					Mode: websocket.CompressionNoContextTakeover,
+					Mode:      websocket.CompressionContextTakeover,
+					Threshold: 1,
 				},
 			})
 			assert.Success(t, "accept", err)
 			defer c.Close(websocket.StatusInternalError, "")
 
 			err = echoLoop(r.Context(), c)
+			t.Logf("server: %v", err)
 			assertCloseStatus(t, websocket.StatusNormalClosure, err)
 		}, false)
 		defer closeFn()
@@ -46,7 +48,8 @@ func TestConn(t *testing.T) {
 		opts := &websocket.DialOptions{
 			Subprotocols: []string{"echo"},
 			CompressionOptions: websocket.CompressionOptions{
-				Mode: websocket.CompressionNoContextTakeover,
+				Mode:      websocket.CompressionContextTakeover,
+				Threshold: 1,
 			},
 		}
 		opts.HTTPClient = s.Client()

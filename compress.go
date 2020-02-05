@@ -148,12 +148,12 @@ func (tw *trimLastFourBytesWriter) Write(p []byte) (int, error) {
 
 var flateReaderPool sync.Pool
 
-func getFlateReader(r io.Reader) io.Reader {
+func getFlateReader(r io.Reader, dict []byte) io.Reader {
 	fr, ok := flateReaderPool.Get().(io.Reader)
 	if !ok {
-		return flate.NewReader(r)
+		return flate.NewReaderDict(r, dict)
 	}
-	fr.(flate.Resetter).Reset(r, nil)
+	fr.(flate.Resetter).Reset(r, dict)
 	return fr
 }
 
@@ -163,10 +163,10 @@ func putFlateReader(fr io.Reader) {
 
 var flateWriterPool sync.Pool
 
-func getFlateWriter(w io.Writer, dict []byte) *flate.Writer {
+func getFlateWriter(w io.Writer) *flate.Writer {
 	fw, ok := flateWriterPool.Get().(*flate.Writer)
 	if !ok {
-		fw, _ = flate.NewWriterDict(w, flate.BestSpeed, dict)
+		fw, _ = flate.NewWriter(w, flate.BestSpeed)
 		return fw
 	}
 	fw.Reset(w)
@@ -177,40 +177,32 @@ func putFlateWriter(w *flate.Writer) {
 	flateWriterPool.Put(w)
 }
 
-type slidingWindowReader struct {
-	window []byte
-
-	r io.Reader
+type slidingWindow struct {
+	r   io.Reader
+	buf []byte
 }
 
-func (r slidingWindowReader) Read(p []byte) (int, error) {
-	n, err := r.r.Read(p)
-	p = p[:n]
-
-	r.append(p)
-
-	return n, err
+func newSlidingWindow(n int) *slidingWindow {
+	return &slidingWindow{
+		buf: make([]byte, 0, n),
+	}
 }
 
-func (r slidingWindowReader) append(p []byte) {
-	if len(r.window) <= cap(r.window) {
-		r.window = append(r.window, p...)
+func (w *slidingWindow) write(p []byte) {
+	if len(p) >= cap(w.buf) {
+		w.buf = w.buf[:cap(w.buf)]
+		p = p[len(p)-cap(w.buf):]
+		copy(w.buf, p)
+		return
 	}
 
-	if len(p) > cap(r.window) {
-		p = p[len(p)-cap(r.window):]
+	left := cap(w.buf) - len(w.buf)
+	if left < len(p) {
+		// We need to shift spaceNeeded bytes from the end to make room for p at the end.
+		spaceNeeded := len(p) - left
+		copy(w.buf, w.buf[spaceNeeded:])
+		w.buf = w.buf[:len(w.buf)-spaceNeeded]
 	}
 
-	// p now contains at max the last window bytes
-	// so we need to be able to append all of it to r.window.
-	// Shift as many bytes from r.window as needed.
-
-	// Maximum window size minus current window minus extra gives
-	// us the number of bytes that need to be shifted.
-	off := len(r.window) + len(p) - cap(r.window)
-
-	r.window = append(r.window[:0], r.window[off:]...)
-	copy(r.window, r.window[off:])
-	copy(r.window[len(r.window)-len(p):], p)
-	return
+	w.buf = append(w.buf, p...)
 }

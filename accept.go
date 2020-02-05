@@ -111,12 +111,14 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	brw.Reader.Reset(io.MultiReader(bytes.NewReader(b), netConn))
 
 	return newConn(connConfig{
-		subprotocol: w.Header().Get("Sec-WebSocket-Protocol"),
-		rwc:         netConn,
-		client:      false,
-		copts:       copts,
-		br:          brw.Reader,
-		bw:          brw.Writer,
+		subprotocol:    w.Header().Get("Sec-WebSocket-Protocol"),
+		rwc:            netConn,
+		client:         false,
+		copts:          copts,
+		flateThreshold: opts.CompressionOptions.Threshold,
+
+		br: brw.Reader,
+		bw: brw.Writer,
 	}), nil
 }
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"cdr.dev/slog"
 	"cdr.dev/slog/sloggers/slogtest/assert"
 
 	"nhooyr.io/websocket"
@@ -33,7 +34,7 @@ func assertJSONEcho(t *testing.T, ctx context.Context, c *websocket.Conn, n int)
 }
 
 func assertJSONRead(t *testing.T, ctx context.Context, c *websocket.Conn, exp interface{}) {
-	t.Helper()
+	slog.Helper()
 
 	var act interface{}
 	err := wsjson.Read(ctx, c, &act)

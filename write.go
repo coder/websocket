@@ -37,8 +37,8 @@ func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 //
 // See the Writer method if you want to stream a message.
 //
-// If compression is disabled, then it is guaranteed to write the message
-// in a single frame.
+// If compression is disabled or the threshold is not met, then it
+// will write the message in a single frame.
 func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	_, err := c.write(ctx, typ, p)
 	if err != nil {
@@ -47,20 +47,38 @@ func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	return nil
 }
 
+type msgWriter struct {
+	c *Conn
+
+	mu *mu
+
+	ctx    context.Context
+	opcode opcode
+	closed bool
+	flate  bool
+
+	trimWriter  *trimLastFourBytesWriter
+	flateWriter *flate.Writer
+}
+
 func newMsgWriter(c *Conn) *msgWriter {
 	mw := &msgWriter{
 		c:  c,
 		mu: newMu(c),
 	}
-	mw.trimWriter = &trimLastFourBytesWriter{
-		w: writerFunc(mw.write),
-	}
 	return mw
 }
 
-func (mw *msgWriter) ensureFlateWriter() {
+func (mw *msgWriter) ensureFlate() {
 	if mw.flateWriter == nil {
-		mw.flateWriter = getFlateWriter(mw.trimWriter, nil)
+		if mw.trimWriter == nil {
+			mw.trimWriter = &trimLastFourBytesWriter{
+				w: writerFunc(mw.write),
+			}
+		}
+
+		mw.flateWriter = getFlateWriter(mw.trimWriter)
+		mw.flate = true
 	}
 }
 
@@ -85,8 +103,7 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) (int, error
 		return 0, err
 	}
 
-	if !c.flate() {
-		// Fast single frame path.
+	if !c.flate() || len(p) < c.flateThreshold {
 		defer c.msgWriter.mu.Unlock()
 		return c.writeFrame(ctx, true, false, c.msgWriter.opcode, p)
 	}
@@ -98,20 +115,6 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) (int, error
 
 	err = mw.Close()
 	return n, err
-}
-
-type msgWriter struct {
-	c *Conn
-
-	mu *mu
-
-	ctx    context.Context
-	opcode opcode
-	closed bool
-
-	flate       bool
-	trimWriter  *trimLastFourBytesWriter
-	flateWriter *flate.Writer
 }
 
 func (mw *msgWriter) reset(ctx context.Context, typ MessageType) error {
@@ -127,6 +130,13 @@ func (mw *msgWriter) reset(ctx context.Context, typ MessageType) error {
 	return nil
 }
 
+func (mw *msgWriter) returnFlateWriter() {
+	if mw.flateWriter != nil {
+		putFlateWriter(mw.flateWriter)
+		mw.flateWriter = nil
+	}
+}
+
 // Write writes the given bytes to the WebSocket connection.
 func (mw *msgWriter) Write(p []byte) (_ int, err error) {
 	defer errd.Wrap(&err, "failed to write")
@@ -135,16 +145,10 @@ func (mw *msgWriter) Write(p []byte) (_ int, err error) {
 		return 0, xerrors.New("cannot use closed writer")
 	}
 
-	if mw.c.flate() {
-		if !mw.flate {
-			mw.flate = true
-
-			if !mw.flateContextTakeover() {
-				mw.ensureFlateWriter()
-			}
-			mw.trimWriter.reset()
-		}
-
+	// TODO can make threshold detection robust across writes by writing to buffer
+	if mw.flate ||
+		mw.c.flate() && len(p) >= mw.c.flateThreshold {
+		mw.ensureFlate()
 		return mw.flateWriter.Write(p)
 	}
 
@@ -181,21 +185,16 @@ func (mw *msgWriter) Close() (err error) {
 		return xerrors.Errorf("failed to write fin frame: %w", err)
 	}
 
-	if mw.c.flate() && !mw.flateContextTakeover() && mw.flateWriter != nil {
-		putFlateWriter(mw.flateWriter)
-		mw.flateWriter = nil
+	if mw.c.flate() && !mw.flateContextTakeover() {
+		mw.returnFlateWriter()
 	}
-
 	mw.mu.Unlock()
 	return nil
 }
 
 func (mw *msgWriter) close() {
-	if mw.flateWriter != nil && mw.flateContextTakeover() {
-		mw.mu.Lock(context.Background())
-		putFlateWriter(mw.flateWriter)
-		mw.flateWriter = nil
-	}
+	mw.mu.Lock(context.Background())
+	mw.returnFlateWriter()
 }
 
 func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error {

@@ -38,12 +38,13 @@ const (
 // On any error from any method, the connection is closed
 // with an appropriate reason.
 type Conn struct {
-	subprotocol string
-	rwc         io.ReadWriteCloser
-	client      bool
-	copts       *compressionOptions
-	br          *bufio.Reader
-	bw          *bufio.Writer
+	subprotocol    string
+	rwc            io.ReadWriteCloser
+	client         bool
+	copts          *compressionOptions
+	flateThreshold int
+	br             *bufio.Reader
+	bw             *bufio.Writer
 
 	readTimeout  chan context.Context
 	writeTimeout chan context.Context
@@ -71,10 +72,11 @@ type Conn struct {
 }
 
 type connConfig struct {
-	subprotocol string
-	rwc         io.ReadWriteCloser
-	client      bool
-	copts       *compressionOptions
+	subprotocol    string
+	rwc            io.ReadWriteCloser
+	client         bool
+	copts          *compressionOptions
+	flateThreshold int
 
 	br *bufio.Reader
 	bw *bufio.Writer
@@ -82,10 +84,11 @@ type connConfig struct {
 
 func newConn(cfg connConfig) *Conn {
 	c := &Conn{
-		subprotocol: cfg.subprotocol,
-		rwc:         cfg.rwc,
-		client:      cfg.client,
-		copts:       cfg.copts,
+		subprotocol:    cfg.subprotocol,
+		rwc:            cfg.rwc,
+		client:         cfg.client,
+		copts:          cfg.copts,
+		flateThreshold: cfg.flateThreshold,
 
 		br: cfg.br,
 		bw: cfg.bw,
@@ -95,6 +98,12 @@ func newConn(cfg connConfig) *Conn {
 
 		closed:      make(chan struct{}),
 		activePings: make(map[string]chan<- struct{}),
+	}
+	if c.flateThreshold == 0 {
+		c.flateThreshold = 256
+		if c.writeNoContextTakeOver() {
+			c.flateThreshold = 512
+		}
 	}
 
 	c.readMu = newMu(c)
@@ -145,12 +154,10 @@ func (c *Conn) close(err error) {
 		}
 		c.msgWriter.close()
 
-		if c.client {
-			c.readMu.Lock(context.Background())
-			putBufioReader(c.br)
-			c.readMu.Unlock()
-		}
 		c.msgReader.close()
+		if c.client {
+			putBufioReader(c.br)
+		}
 	}()
 }
 
