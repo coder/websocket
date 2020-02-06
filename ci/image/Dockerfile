@@ -1,7 +1,7 @@
 FROM golang:1
 
 RUN apt-get update
-RUN apt-get install -y chromium
+RUN apt-get install -y chromium npm
 
 ENV GOFLAGS="-mod=readonly"
 ENV PAGER=cat

@@ -45,6 +45,7 @@ func assertJSONRead(t *testing.T, ctx context.Context, c *websocket.Conn, exp in
 
 func randString(t *testing.T, n int) string {
 	s := strings.ToValidUTF8(string(randBytes(t, n)), "_")
+	s = strings.ReplaceAll(s, "\x00", "_")
 	if len(s) > n {
 		return s[:n]
 	}

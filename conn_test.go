@@ -18,29 +18,56 @@ import (
 	"nhooyr.io/websocket"
 )
 
+func TestFuzz(t *testing.T) {
+	t.Parallel()
+
+	s, closeFn := testServer(t, func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			CompressionOptions: websocket.CompressionOptions{
+				Mode: websocket.CompressionContextTakeover,
+			},
+		})
+		assert.Success(t, "accept", err)
+		defer c.Close(websocket.StatusInternalError, "")
+
+		err = echoLoop(r.Context(), c)
+		assertCloseStatus(t, websocket.StatusNormalClosure, err)
+	}, false)
+	defer closeFn()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	opts := &websocket.DialOptions{
+		CompressionOptions: websocket.CompressionOptions{
+			Mode: websocket.CompressionContextTakeover,
+		},
+	}
+	opts.HTTPClient = s.Client()
+
+	c, _, err := websocket.Dial(ctx, wsURL(s), opts)
+	assert.Success(t, "dial", err)
+	assertJSONEcho(t, ctx, c, 8393)
+}
+
 func TestConn(t *testing.T) {
 	t.Parallel()
 
 	t.Run("json", func(t *testing.T) {
 		s, closeFn := testServer(t, func(w http.ResponseWriter, r *http.Request) {
 			c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-				Subprotocols:       []string{"echo"},
-				InsecureSkipVerify: true,
+				Subprotocols: []string{"echo"},
 				CompressionOptions: websocket.CompressionOptions{
-					Mode:      websocket.CompressionContextTakeover,
-					Threshold: 1,
+					Mode: websocket.CompressionContextTakeover,
 				},
 			})
 			assert.Success(t, "accept", err)
 			defer c.Close(websocket.StatusInternalError, "")
 
 			err = echoLoop(r.Context(), c)
-			t.Logf("server: %v", err)
 			assertCloseStatus(t, websocket.StatusNormalClosure, err)
 		}, false)
 		defer closeFn()
-
-		wsURL := strings.Replace(s.URL, "http", "ws", 1)
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
@@ -48,15 +75,14 @@ func TestConn(t *testing.T) {
 		opts := &websocket.DialOptions{
 			Subprotocols: []string{"echo"},
 			CompressionOptions: websocket.CompressionOptions{
-				Mode:      websocket.CompressionContextTakeover,
-				Threshold: 1,
+				Mode: websocket.CompressionContextTakeover,
 			},
 		}
 		opts.HTTPClient = s.Client()
 
-		c, _, err := websocket.Dial(ctx, wsURL, opts)
+		c, _, err := websocket.Dial(ctx, wsURL(s), opts)
 		assert.Success(t, "dial", err)
-		assertJSONEcho(t, ctx, c, 2)
+		assertJSONEcho(t, ctx, c, 8393)
 	})
 }
 
@@ -148,4 +174,8 @@ func echoLoop(ctx context.Context, c *websocket.Conn) error {
 			return err
 		}
 	}
+}
+
+func wsURL(s *httptest.Server) string {
+	return strings.Replace(s.URL, "http", "ws", 1)
 }

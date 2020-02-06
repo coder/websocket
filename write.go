@@ -145,7 +145,7 @@ func (mw *msgWriter) Write(p []byte) (_ int, err error) {
 		return 0, xerrors.New("cannot use closed writer")
 	}
 
-	// TODO can make threshold detection robust across writes by writing to buffer
+	// TODO can make threshold detection robust across writes by writing to bufio writer
 	if mw.flate ||
 		mw.c.flate() && len(p) >= mw.c.flateThreshold {
 		mw.ensureFlate()
