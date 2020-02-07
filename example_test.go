@@ -33,8 +33,6 @@ func ExampleAccept() {
 			return
 		}
 
-		log.Printf("received: %v", v)
-
 		c.Close(websocket.StatusNormalClosure, "")
 	})
 

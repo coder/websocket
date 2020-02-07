@@ -95,6 +95,7 @@ func (mr *msgReader) ensureFlate() {
 		mr.flateReader = getFlateReader(readerFunc(mr.read), nil)
 	}
 	mr.limitReader.r = mr.flateReader
+	mr.flateTail.Reset(deflateMessageTail)
 }
 
 func (mr *msgReader) returnFlateReader() {
@@ -328,12 +329,12 @@ type msgReader struct {
 func (mr *msgReader) reset(ctx context.Context, h header) {
 	mr.ctx = ctx
 	mr.flate = h.rsv1
+	mr.limitReader.reset(readerFunc(mr.read))
+
 	if mr.flate {
 		mr.ensureFlate()
-		mr.flateTail.Reset(deflateMessageTail)
 	}
 
-	mr.limitReader.reset()
 	mr.setFrame(h)
 }
 
@@ -423,13 +424,13 @@ func newLimitReader(c *Conn, r io.Reader, limit int64) *limitReader {
 		c: c,
 	}
 	lr.limit.Store(limit)
-	lr.r = r
-	lr.reset()
+	lr.reset(r)
 	return lr
 }
 
-func (lr *limitReader) reset() {
+func (lr *limitReader) reset(r io.Reader) {
 	lr.n = lr.limit.Load()
+	lr.r = r
 }
 
 func (lr *limitReader) Read(p []byte) (int, error) {

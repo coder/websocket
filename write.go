@@ -76,6 +76,7 @@ func (mw *msgWriter) ensureFlate() {
 				w: writerFunc(mw.write),
 			}
 		}
+		mw.trimWriter.reset()
 
 		mw.flateWriter = getFlateWriter(mw.trimWriter)
 		mw.flate = true

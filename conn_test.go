@@ -4,7 +4,9 @@ package websocket_test
 
 import (
 	"context"
+	"crypto/rand"
 	"io"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,77 +20,32 @@ import (
 	"nhooyr.io/websocket"
 )
 
-func TestFuzz(t *testing.T) {
-	t.Parallel()
-
-	s, closeFn := testServer(t, func(w http.ResponseWriter, r *http.Request) {
-		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			CompressionOptions: websocket.CompressionOptions{
-				Mode: websocket.CompressionContextTakeover,
-			},
-		})
-		assert.Success(t, "accept", err)
-		defer c.Close(websocket.StatusInternalError, "")
-
-		err = echoLoop(r.Context(), c)
-		assertCloseStatus(t, websocket.StatusNormalClosure, err)
-	}, false)
-	defer closeFn()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
-	opts := &websocket.DialOptions{
-		CompressionOptions: websocket.CompressionOptions{
-			Mode: websocket.CompressionContextTakeover,
-		},
-	}
-	opts.HTTPClient = s.Client()
-
-	c, _, err := websocket.Dial(ctx, wsURL(s), opts)
-	assert.Success(t, "dial", err)
-	assertJSONEcho(t, ctx, c, 8393)
-}
-
 func TestConn(t *testing.T) {
 	t.Parallel()
 
 	t.Run("json", func(t *testing.T) {
-		s, closeFn := testServer(t, func(w http.ResponseWriter, r *http.Request) {
-			c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-				Subprotocols: []string{"echo"},
-				CompressionOptions: websocket.CompressionOptions{
-					Mode: websocket.CompressionContextTakeover,
-				},
-			})
-			assert.Success(t, "accept", err)
-			defer c.Close(websocket.StatusInternalError, "")
+		t.Parallel()
 
-			err = echoLoop(r.Context(), c)
-			assertCloseStatus(t, websocket.StatusNormalClosure, err)
-		}, false)
+		s, closeFn := testEchoLoop(t)
 		defer closeFn()
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
+		c, _ := dialWebSocket(t, s, nil)
+		defer c.Close(websocket.StatusInternalError, "")
 
-		opts := &websocket.DialOptions{
-			Subprotocols: []string{"echo"},
-			CompressionOptions: websocket.CompressionOptions{
-				Mode: websocket.CompressionContextTakeover,
-			},
+		c.SetReadLimit(1 << 30)
+
+		for i := 0; i < 10; i++ {
+			n := randInt(t, 1_048_576)
+			echoJSON(t, c, n)
 		}
-		opts.HTTPClient = s.Client()
 
-		c, _, err := websocket.Dial(ctx, wsURL(s), opts)
-		assert.Success(t, "dial", err)
-		assertJSONEcho(t, ctx, c, 8393)
+		c.Close(websocket.StatusNormalClosure, "")
 	})
 }
 
-func testServer(tb testing.TB, fn func(w http.ResponseWriter, r *http.Request), tls bool) (s *httptest.Server, closeFn func()) {
+func testServer(tb testing.TB, fn func(w http.ResponseWriter, r *http.Request)) (s *httptest.Server, closeFn func()) {
 	h := http.HandlerFunc(fn)
-	if tls {
+	if randInt(tb, 2) == 1 {
 		s = httptest.NewTLSServer(h)
 	} else {
 		s = httptest.NewServer(h)
@@ -178,4 +135,20 @@ func echoLoop(ctx context.Context, c *websocket.Conn) error {
 
 func wsURL(s *httptest.Server) string {
 	return strings.Replace(s.URL, "http", "ws", 1)
+}
+
+func testEchoLoop(t testing.TB) (*httptest.Server, func()) {
+	return testServer(t, func(w http.ResponseWriter, r *http.Request) {
+		c := acceptWebSocket(t, r, w, nil)
+		defer c.Close(websocket.StatusInternalError, "")
+
+		err := echoLoop(r.Context(), c)
+		assertCloseStatus(t, websocket.StatusNormalClosure, err)
+	})
+}
+
+func randInt(t testing.TB, max int) int {
+	x, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	assert.Success(t, "rand.Int", err)
+	return int(x.Int64())
 }

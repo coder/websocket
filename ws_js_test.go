@@ -24,7 +24,7 @@ func TestEcho(t *testing.T) {
 
 	assertSubprotocol(t, c, "echo")
 	assert.Equalf(t, &http.Response{}, resp, "http.Response")
-	assertJSONEcho(t, ctx, c, 1024)
+	echoJSON(t, ctx, c, 1024)
 	assertEcho(t, ctx, c, websocket.MessageBinary, 1024)
 
 	err = c.Close(websocket.StatusNormalClosure, "")

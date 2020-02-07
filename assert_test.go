@@ -3,10 +3,15 @@ package websocket_test
 import (
 	"context"
 	"crypto/rand"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"cdr.dev/slog"
+	"cdr.dev/slog/sloggers/slogtest"
 	"cdr.dev/slog/sloggers/slogtest/assert"
 
 	"nhooyr.io/websocket"
@@ -20,26 +25,31 @@ func randBytes(t *testing.T, n int) []byte {
 	return b
 }
 
-func assertJSONEcho(t *testing.T, ctx context.Context, c *websocket.Conn, n int) {
-	t.Helper()
-	defer c.Close(websocket.StatusInternalError, "")
+func echoJSON(t *testing.T, c *websocket.Conn, n int) {
+	slog.Helper()
 
-	exp := randString(t, n)
-	err := wsjson.Write(ctx, c, exp)
-	assert.Success(t, "wsjson.Write", err)
-
-	assertJSONRead(t, ctx, c, exp)
-
-	c.Close(websocket.StatusNormalClosure, "")
+	s := randString(t, n)
+	writeJSON(t, c, s)
+	readJSON(t, c, s)
 }
 
-func assertJSONRead(t *testing.T, ctx context.Context, c *websocket.Conn, exp interface{}) {
+func writeJSON(t *testing.T, c *websocket.Conn, v interface{}) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	err := wsjson.Write(ctx, c, v)
+	assert.Success(t, "wsjson.Write", err)
+}
+
+func readJSON(t *testing.T, c *websocket.Conn, exp interface{}) {
 	slog.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
 
 	var act interface{}
 	err := wsjson.Read(ctx, c, &act)
 	assert.Success(t, "wsjson.Read", err)
-
 	assert.Equal(t, "json", exp, act)
 }
 
@@ -58,7 +68,7 @@ func randString(t *testing.T, n int) string {
 }
 
 func assertEcho(t *testing.T, ctx context.Context, c *websocket.Conn, typ websocket.MessageType, n int) {
-	t.Helper()
+	slog.Helper()
 
 	p := randBytes(t, n)
 	err := c.Write(ctx, typ, p)
@@ -72,17 +82,46 @@ func assertEcho(t *testing.T, ctx context.Context, c *websocket.Conn, typ websoc
 }
 
 func assertSubprotocol(t *testing.T, c *websocket.Conn, exp string) {
-	t.Helper()
+	slog.Helper()
 
 	assert.Equal(t, "subprotocol", exp, c.Subprotocol())
 }
 
-func assertCloseStatus(t *testing.T, exp websocket.StatusCode, err error) {
-	t.Helper()
-	defer func() {
-		if t.Failed() {
-			t.Logf("error: %+v", err)
-		}
-	}()
-	assert.Equal(t, "closeStatus", exp, websocket.CloseStatus(err))
+func assertCloseStatus(t testing.TB, exp websocket.StatusCode, err error) {
+	slog.Helper()
+
+	if websocket.CloseStatus(err) == -1 {
+		slogtest.Fatal(t, "expected websocket.CloseError", slogType(err), slog.Error(err))
+	}
+	if websocket.CloseStatus(err) != exp {
+		slogtest.Error(t, "unexpected close status",
+			slog.F("exp", exp),
+			slog.F("act", err),
+		)
+	}
+
+}
+
+func acceptWebSocket(t testing.TB, r *http.Request, w http.ResponseWriter, opts *websocket.AcceptOptions) *websocket.Conn {
+	c, err := websocket.Accept(w, r, opts)
+	assert.Success(t, "websocket.Accept", err)
+	return c
+}
+
+func dialWebSocket(t testing.TB, s *httptest.Server, opts *websocket.DialOptions) (*websocket.Conn, *http.Response) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	if opts == nil {
+		opts = &websocket.DialOptions{}
+	}
+	opts.HTTPClient = s.Client()
+
+	c, resp, err := websocket.Dial(ctx, wsURL(s), opts)
+	assert.Success(t, "websocket.Dial", err)
+	return c, resp
+}
+
+func slogType(v interface{}) slog.Field {
+	return slog.F("type", fmt.Sprintf("%T", v))
 }

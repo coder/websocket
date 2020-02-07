@@ -26,7 +26,7 @@ go get nhooyr.io/websocket
 - [net.Conn](https://godoc.org/nhooyr.io/websocket#NetConn) wrapper
 - [Ping pong](https://godoc.org/nhooyr.io/websocket#Conn.Ping) API
 - [RFC 7692](https://tools.ietf.org/html/rfc7692) permessage-deflate compression
-- Can target [Wasm](https://godoc.org/nhooyr.io/websocket#hdr-Wasm)
+- Compile to [Wasm](https://godoc.org/nhooyr.io/websocket#hdr-Wasm)
 
 ## Roadmap
 

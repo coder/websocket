@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"strconv"
@@ -53,15 +54,18 @@ func TestAutobahn(t *testing.T) {
 func testServerAutobahn(t *testing.T) {
 	t.Parallel()
 
-	s, closeFn := testServer(t, func(w http.ResponseWriter, r *http.Request) {
-		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c := acceptWebSocket(t, r, w, &websocket.AcceptOptions{
 			Subprotocols: []string{"echo"},
 		})
-		assert.Success(t, "accept", err)
-		err = echoLoop(r.Context(), c)
+		err := echoLoop(r.Context(), c)
 		assertCloseStatus(t, websocket.StatusNormalClosure, err)
-	}, false)
-	defer closeFn()
+	}))
+	closeFn := wsgrace(s.Config)
+	defer func() {
+		err := closeFn()
+		assert.Success(t, "closeFn", err)
+	}()
 
 	specFile, err := tempJSONFile(map[string]interface{}{
 		"outdir": "ci/out/wstestServerReports",
