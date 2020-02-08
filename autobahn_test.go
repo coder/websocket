@@ -8,9 +8,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"net/http"
-	"net/http/httptest"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -32,69 +29,14 @@ var excludedAutobahnCases = []string{
 	// We skip the tests related to requestMaxWindowBits as that is unimplemented due
 	// to limitations in compress/flate. See https://github.com/golang/go/issues/3155
 	"13.3.*", "13.4.*", "13.5.*", "13.6.*",
-
-	"12.*",
-	"13.*",
 }
 
 var autobahnCases = []string{"*"}
 
-// https://github.com/crossbario/autobahn-python/tree/master/wstest
 func TestAutobahn(t *testing.T) {
 	t.Parallel()
 
-	if os.Getenv("AUTOBAHN") == "" {
-		t.Skip("Set $AUTOBAHN to run tests against the autobahn test suite")
-	}
-
-	t.Run("server", testServerAutobahn)
-	t.Run("client", testClientAutobahn)
-}
-
-func testServerAutobahn(t *testing.T) {
-	t.Parallel()
-
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c := acceptWebSocket(t, r, w, &websocket.AcceptOptions{
-			Subprotocols: []string{"echo"},
-		})
-		err := echoLoop(r.Context(), c)
-		assertCloseStatus(t, websocket.StatusNormalClosure, err)
-	}))
-	closeFn := wsgrace(s.Config)
-	defer func() {
-		err := closeFn()
-		assert.Success(t, "closeFn", err)
-	}()
-
-	specFile, err := tempJSONFile(map[string]interface{}{
-		"outdir": "ci/out/wstestServerReports",
-		"servers": []interface{}{
-			map[string]interface{}{
-				"agent": "main",
-				"url":   strings.Replace(s.URL, "http", "ws", 1),
-			},
-		},
-		"cases":         autobahnCases,
-		"exclude-cases": excludedAutobahnCases,
-	})
-	assert.Success(t, "tempJSONFile", err)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
-	defer cancel()
-
-	args := []string{"--mode", "fuzzingclient", "--spec", specFile}
-	wstest := exec.CommandContext(ctx, "wstest", args...)
-	_, err = wstest.CombinedOutput()
-	assert.Success(t, "wstest", err)
-
-	checkWSTestIndex(t, "./ci/out/wstestServerReports/index.json")
-}
-
-func testClientAutobahn(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*15)
 	defer cancel()
 
 	wstestURL, closeFn, err := wstestClientServer(ctx)
@@ -108,27 +50,17 @@ func testClientAutobahn(t *testing.T) {
 	assert.Success(t, "wstestCaseCount", err)
 
 	t.Run("cases", func(t *testing.T) {
-		// Max 8 cases running at a time.
-		mu := make(chan struct{}, 8)
-
 		for i := 1; i <= cases; i++ {
 			i := i
 			t.Run("", func(t *testing.T) {
-				t.Parallel()
-
-				mu <- struct{}{}
-				defer func() {
-					<-mu
-				}()
-
-				ctx, cancel := context.WithTimeout(ctx, time.Second*45)
+				ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 				defer cancel()
 
 				c, _, err := websocket.Dial(ctx, fmt.Sprintf(wstestURL+"/runCase?case=%v&agent=main", i), nil)
 				assert.Success(t, "autobahn dial", err)
 
 				err = echoLoop(ctx, c)
-				t.Logf("echoLoop: %+v", err)
+				t.Logf("echoLoop: %v", err)
 			})
 		}
 	})
@@ -174,7 +106,7 @@ func wstestClientServer(ctx context.Context) (url string, closeFn func(), err er
 		return "", nil, xerrors.Errorf("failed to write spec: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*15)
 	defer func() {
 		if err != nil {
 			cancel()

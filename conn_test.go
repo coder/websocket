@@ -3,22 +3,33 @@
 package websocket_test
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"io"
 	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
-	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"cdr.dev/slog/sloggers/slogtest/assert"
-	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
 )
+
+func goFn(fn func()) func() {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fn()
+	}()
+
+	return func() {
+		<-done
+	}
+}
 
 func TestConn(t *testing.T) {
 	t.Parallel()
@@ -26,76 +37,36 @@ func TestConn(t *testing.T) {
 	t.Run("json", func(t *testing.T) {
 		t.Parallel()
 
-		s, closeFn := testEchoLoop(t)
-		defer closeFn()
+		for i := 0; i < 1; i++ {
+			t.Run("", func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				defer cancel()
 
-		c, _ := dialWebSocket(t, s, nil)
-		defer c.Close(websocket.StatusInternalError, "")
+				c1, c2 := websocketPipe(t)
 
-		c.SetReadLimit(1 << 30)
+				wait := goFn(func() {
+					err := echoLoop(ctx, c1)
+					assertCloseStatus(t, websocket.StatusNormalClosure, err)
+				})
+				defer wait()
 
-		for i := 0; i < 10; i++ {
-			n := randInt(t, 1_048_576)
-			echoJSON(t, c, n)
-		}
+				c2.SetReadLimit(1 << 30)
 
-		c.Close(websocket.StatusNormalClosure, "")
-	})
-}
-
-func testServer(tb testing.TB, fn func(w http.ResponseWriter, r *http.Request)) (s *httptest.Server, closeFn func()) {
-	h := http.HandlerFunc(fn)
-	if randInt(tb, 2) == 1 {
-		s = httptest.NewTLSServer(h)
-	} else {
-		s = httptest.NewServer(h)
-	}
-	closeFn2 := wsgrace(s.Config)
-	return s, func() {
-		err := closeFn2()
-		assert.Success(tb, "closeFn", err)
-	}
-}
-
-// grace wraps s.Handler to gracefully shutdown WebSocket connections.
-// The returned function must be used to close the server instead of s.Close.
-func wsgrace(s *http.Server) (closeFn func() error) {
-	h := s.Handler
-	var conns int64
-	s.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt64(&conns, 1)
-		defer atomic.AddInt64(&conns, -1)
-
-		ctx, cancel := context.WithTimeout(r.Context(), time.Second*5)
-		defer cancel()
-
-		r = r.WithContext(ctx)
-
-		h.ServeHTTP(w, r)
-	})
-
-	return func() error {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
-
-		err := s.Shutdown(ctx)
-		if err != nil {
-			return xerrors.Errorf("server shutdown failed: %v", err)
-		}
-
-		t := time.NewTicker(time.Millisecond * 10)
-		defer t.Stop()
-		for {
-			select {
-			case <-t.C:
-				if atomic.LoadInt64(&conns) == 0 {
-					return nil
+				for i := 0; i < 10; i++ {
+					n := randInt(t, 131_072)
+					echoJSON(t, c2, n)
 				}
-			case <-ctx.Done():
-				return xerrors.Errorf("failed to wait for WebSocket connections: %v", ctx.Err())
-			}
+
+				c2.Close(websocket.StatusNormalClosure, "")
+			})
 		}
-	}
+	})
+}
+
+type writerFunc func(p []byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) {
+	return f(p)
 }
 
 // echoLoop echos every msg received from c until an error
@@ -133,22 +104,74 @@ func echoLoop(ctx context.Context, c *websocket.Conn) error {
 	}
 }
 
-func wsURL(s *httptest.Server) string {
-	return strings.Replace(s.URL, "http", "ws", 1)
-}
-
-func testEchoLoop(t testing.TB) (*httptest.Server, func()) {
-	return testServer(t, func(w http.ResponseWriter, r *http.Request) {
-		c := acceptWebSocket(t, r, w, nil)
-		defer c.Close(websocket.StatusInternalError, "")
-
-		err := echoLoop(r.Context(), c)
-		assertCloseStatus(t, websocket.StatusNormalClosure, err)
-	})
+func randBool(t testing.TB) bool  {
+	return randInt(t, 2) == 1
 }
 
 func randInt(t testing.TB, max int) int {
 	x, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
 	assert.Success(t, "rand.Int", err)
 	return int(x.Int64())
+}
+
+type testHijacker struct {
+	*httptest.ResponseRecorder
+	serverConn net.Conn
+	hijacked chan struct{}
+}
+
+var _ http.Hijacker = testHijacker{}
+
+func (hj testHijacker) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	close(hj.hijacked)
+	return hj.serverConn, bufio.NewReadWriter(bufio.NewReader(hj.serverConn), bufio.NewWriter(hj.serverConn)), nil
+}
+
+func websocketPipe(t *testing.T) (*websocket.Conn, *websocket.Conn) {
+	var serverConn *websocket.Conn
+	tt := testTransport{
+		h: func(w http.ResponseWriter, r *http.Request) {
+			serverConn = acceptWebSocket(t, r, w, nil)
+		},
+	}
+
+	dialOpts := &websocket.DialOptions{
+		HTTPClient: &http.Client{
+			Transport: tt,
+		},
+	}
+
+	clientConn, _, err := websocket.Dial(context.Background(), "ws://example.com", dialOpts)
+	assert.Success(t, "websocket.Dial", err)
+
+	if randBool(t) {
+		return serverConn, clientConn
+	}
+	return clientConn, serverConn
+}
+
+type testTransport struct {
+	h http.HandlerFunc
+}
+
+func (t testTransport) RoundTrip(r *http.Request) (*http.Response, error)  {
+	clientConn, serverConn := net.Pipe()
+
+	hj := testHijacker{
+		ResponseRecorder: httptest.NewRecorder(),
+		serverConn:       serverConn,
+		hijacked:         make(chan struct{}),
+	}
+
+	done := make(chan struct{})
+	t.h.ServeHTTP(hj, r)
+
+	select {
+	case <-hj.hijacked:
+		resp := hj.ResponseRecorder.Result()
+		resp.Body = clientConn
+		return resp, nil
+	case <-done:
+		return hj.ResponseRecorder.Result(), nil
+	}
 }

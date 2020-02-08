@@ -84,7 +84,7 @@ func newMsgReader(c *Conn) *msgReader {
 	return mr
 }
 
-func (mr *msgReader) ensureFlate() {
+func (mr *msgReader) resetFlate() {
 	if mr.flateContextTakeover() && mr.dict == nil {
 		mr.dict = newSlidingWindow(32768)
 	}
@@ -332,7 +332,7 @@ func (mr *msgReader) reset(ctx context.Context, h header) {
 	mr.limitReader.reset(readerFunc(mr.read))
 
 	if mr.flate {
-		mr.ensureFlate()
+		mr.resetFlate()
 	}
 
 	mr.setFrame(h)
@@ -362,7 +362,7 @@ func (mr *msgReader) Read(p []byte) (n int, err error) {
 	defer mr.c.readMu.Unlock()
 
 	n, err = mr.limitReader.Read(p)
-	if mr.flateContextTakeover() {
+	if mr.flate && mr.flateContextTakeover() {
 		p = p[:n]
 		mr.dict.write(p)
 	}

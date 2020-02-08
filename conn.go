@@ -99,7 +99,7 @@ func newConn(cfg connConfig) *Conn {
 		closed:      make(chan struct{}),
 		activePings: make(map[string]chan<- struct{}),
 	}
-	if c.flateThreshold == 0 {
+	if c.flate() && c.flateThreshold == 0 {
 		c.flateThreshold = 256
 		if c.writeNoContextTakeOver() {
 			c.flateThreshold = 512

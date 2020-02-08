@@ -70,17 +70,17 @@ func newMsgWriter(c *Conn) *msgWriter {
 }
 
 func (mw *msgWriter) ensureFlate() {
-	if mw.flateWriter == nil {
-		if mw.trimWriter == nil {
-			mw.trimWriter = &trimLastFourBytesWriter{
-				w: writerFunc(mw.write),
-			}
+	if mw.trimWriter == nil {
+		mw.trimWriter = &trimLastFourBytesWriter{
+			w: writerFunc(mw.write),
 		}
-		mw.trimWriter.reset()
-
-		mw.flateWriter = getFlateWriter(mw.trimWriter)
-		mw.flate = true
 	}
+
+	if mw.flateWriter == nil {
+		mw.flateWriter = getFlateWriter(mw.trimWriter)
+	}
+
+	mw.flate = true
 }
 
 func (mw *msgWriter) flateContextTakeover() bool {
@@ -128,6 +128,11 @@ func (mw *msgWriter) reset(ctx context.Context, typ MessageType) error {
 	mw.ctx = ctx
 	mw.opcode = opcode(typ)
 	mw.flate = false
+
+	if mw.trimWriter != nil {
+		mw.trimWriter.reset()
+	}
+
 	return nil
 }
 
@@ -146,9 +151,8 @@ func (mw *msgWriter) Write(p []byte) (_ int, err error) {
 		return 0, xerrors.New("cannot use closed writer")
 	}
 
-	// TODO can make threshold detection robust across writes by writing to bufio writer
-	if mw.flate ||
-		mw.c.flate() && len(p) >= mw.c.flateThreshold {
+	// TODO Write to buffer to detect whether to enable flate or not for this message.
+	if mw.c.flate() {
 		mw.ensureFlate()
 		return mw.flateWriter.Write(p)
 	}
@@ -172,7 +176,6 @@ func (mw *msgWriter) Close() (err error) {
 	if mw.closed {
 		return xerrors.New("cannot use closed writer")
 	}
-	mw.closed = true
 
 	if mw.flate {
 		err = mw.flateWriter.Flush()
@@ -181,12 +184,16 @@ func (mw *msgWriter) Close() (err error) {
 		}
 	}
 
+	// We set closed after flushing the flate writer to ensure Write
+	// can succeed.
+	mw.closed = true
+
 	_, err = mw.c.writeFrame(mw.ctx, true, mw.flate, mw.opcode, nil)
 	if err != nil {
 		return xerrors.Errorf("failed to write fin frame: %w", err)
 	}
 
-	if mw.c.flate() && !mw.flateContextTakeover() {
+	if mw.flate && !mw.flateContextTakeover() {
 		mw.returnFlateWriter()
 	}
 	mw.mu.Unlock()

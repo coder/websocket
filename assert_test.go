@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -106,20 +105,6 @@ func acceptWebSocket(t testing.TB, r *http.Request, w http.ResponseWriter, opts 
 	c, err := websocket.Accept(w, r, opts)
 	assert.Success(t, "websocket.Accept", err)
 	return c
-}
-
-func dialWebSocket(t testing.TB, s *httptest.Server, opts *websocket.DialOptions) (*websocket.Conn, *http.Response) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	if opts == nil {
-		opts = &websocket.DialOptions{}
-	}
-	opts.HTTPClient = s.Client()
-
-	c, resp, err := websocket.Dial(ctx, wsURL(s), opts)
-	assert.Success(t, "websocket.Dial", err)
-	return c, resp
 }
 
 func slogType(v interface{}) slog.Field {
