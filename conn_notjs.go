@@ -127,9 +127,9 @@ func (c *Conn) close(err error) {
 	if c.isClosed() {
 		return
 	}
+	c.setCloseErrLocked(err)
 	close(c.closed)
 	runtime.SetFinalizer(c, nil)
-	c.setCloseErrLocked(err)
 
 	// Have to close after c.closed is closed to ensure any goroutine that wakes up
 	// from the connection being closed also sees that c.closed is closed and returns

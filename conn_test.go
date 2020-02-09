@@ -55,7 +55,7 @@ func TestConn(t *testing.T) {
 				defer c2.Close(websocket.StatusInternalError, "")
 				defer c1.Close(websocket.StatusInternalError, "")
 
-				ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 				defer cancel()
 
 				echoLoopErr := xsync.Go(func() error {
@@ -142,7 +142,7 @@ func TestConn(t *testing.T) {
 		defer c1.Close(websocket.StatusInternalError, "")
 		defer c2.Close(websocket.StatusInternalError, "")
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 
 		c2.CloseRead(ctx)
@@ -242,7 +242,7 @@ func TestConn(t *testing.T) {
 		defer c2.Close(websocket.StatusInternalError, "")
 		defer c1.Close(websocket.StatusInternalError, "")
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 
 		n1 := websocket.NetConn(ctx, c1, websocket.MessageBinary)
@@ -298,7 +298,7 @@ func TestConn(t *testing.T) {
 		defer c2.Close(websocket.StatusInternalError, "")
 		defer c1.Close(websocket.StatusInternalError, "")
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 
 		n1 := websocket.NetConn(ctx, c1, websocket.MessageBinary)
@@ -333,7 +333,7 @@ func TestConn(t *testing.T) {
 		defer c2.Close(websocket.StatusInternalError, "")
 		defer c1.Close(websocket.StatusInternalError, "")
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 
 		echoLoopErr := xsync.Go(func() error {
@@ -381,7 +381,7 @@ func TestConn(t *testing.T) {
 		defer c2.Close(websocket.StatusInternalError, "")
 		defer c1.Close(websocket.StatusInternalError, "")
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 
 		echoLoopErr := xsync.Go(func() error {
