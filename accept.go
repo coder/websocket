@@ -39,7 +39,7 @@ type AcceptOptions struct {
 
 	// CompressionOptions controls the compression options.
 	// See docs on the CompressionOptions type.
-	CompressionOptions CompressionOptions
+	CompressionOptions *CompressionOptions
 }
 
 // Accept accepts a WebSocket handshake from a client and upgrades the
@@ -58,6 +58,11 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 
 	if opts == nil {
 		opts = &AcceptOptions{}
+	}
+	opts = &*opts
+
+	if opts.CompressionOptions == nil {
+		opts.CompressionOptions = &CompressionOptions{}
 	}
 
 	err = verifyClientRequest(r)

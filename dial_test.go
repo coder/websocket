@@ -223,7 +223,7 @@ func Test_verifyServerHandshake(t *testing.T) {
 			}
 			_, err = verifyServerResponse(opts, key, resp)
 			if (err == nil) != tc.success {
-				t.Fatalf("unexpected error: %+v", err)
+				t.Fatalf("unexpected error: %v", err)
 			}
 		})
 	}

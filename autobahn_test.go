@@ -15,11 +15,11 @@ import (
 	"testing"
 	"time"
 
-	"cdr.dev/slog/sloggers/slogtest/assert"
 	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/errd"
+	"nhooyr.io/websocket/internal/test/wstest"
 )
 
 var excludedAutobahnCases = []string{
@@ -45,14 +45,20 @@ func TestAutobahn(t *testing.T) {
 	defer cancel()
 
 	wstestURL, closeFn, err := wstestClientServer(ctx)
-	assert.Success(t, "wstestClient", err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer closeFn()
 
 	err = waitWS(ctx, wstestURL)
-	assert.Success(t, "waitWS", err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	cases, err := wstestCaseCount(ctx, wstestURL)
-	assert.Success(t, "wstestCaseCount", err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Run("cases", func(t *testing.T) {
 		for i := 1; i <= cases; i++ {
@@ -62,16 +68,19 @@ func TestAutobahn(t *testing.T) {
 				defer cancel()
 
 				c, _, err := websocket.Dial(ctx, fmt.Sprintf(wstestURL+"/runCase?case=%v&agent=main", i), nil)
-				assert.Success(t, "autobahn dial", err)
-
-				err = echoLoop(ctx, c)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = wstest.EchoLoop(ctx, c)
 				t.Logf("echoLoop: %v", err)
 			})
 		}
 	})
 
 	c, _, err := websocket.Dial(ctx, fmt.Sprintf(wstestURL+"/updateReports?agent=main"), nil)
-	assert.Success(t, "dial", err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	c.Close(websocket.StatusNormalClosure, "")
 
 	checkWSTestIndex(t, "./ci/out/wstestClientReports/index.json")
@@ -163,14 +172,18 @@ func wstestCaseCount(ctx context.Context, url string) (cases int, err error) {
 
 func checkWSTestIndex(t *testing.T, path string) {
 	wstestOut, err := ioutil.ReadFile(path)
-	assert.Success(t, "ioutil.ReadFile", err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	var indexJSON map[string]map[string]struct {
 		Behavior      string `json:"behavior"`
 		BehaviorClose string `json:"behaviorClose"`
 	}
 	err = json.Unmarshal(wstestOut, &indexJSON)
-	assert.Success(t, "json.Unmarshal", err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for _, tests := range indexJSON {
 		for test, result := range tests {

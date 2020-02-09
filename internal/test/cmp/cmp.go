@@ -2,6 +2,7 @@ package cmp
 
 import (
 	"reflect"
+	"strings"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -19,4 +20,12 @@ func Diff(v1, v2 interface{}) string {
 	return cmp.Diff(v1, v2, cmpopts.EquateErrors(), cmp.Exporter(func(r reflect.Type) bool {
 		return true
 	}))
+}
+
+// ErrorContains returns whether err.Error() contains sub.
+func ErrorContains(err error, sub string) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), sub)
 }

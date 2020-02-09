@@ -7,12 +7,12 @@ import (
 	"io"
 	"io/ioutil"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket/internal/errd"
+	"nhooyr.io/websocket/internal/xsync"
 )
 
 // Reader reads from the connection until until there is a WebSocket
@@ -415,7 +415,7 @@ func (mr *msgReader) read(p []byte) (int, error) {
 type limitReader struct {
 	c     *Conn
 	r     io.Reader
-	limit atomicInt64
+	limit xsync.Int64
 	n     int64
 }
 
@@ -446,21 +446,6 @@ func (lr *limitReader) Read(p []byte) (int, error) {
 	n, err := lr.r.Read(p)
 	lr.n -= int64(n)
 	return n, err
-}
-
-type atomicInt64 struct {
-	// We do not use atomic.Load/StoreInt64 since it does not
-	// work on 32 bit computers but we need 64 bit integers.
-	i atomic.Value
-}
-
-func (v *atomicInt64) Load() int64 {
-	i, _ := v.i.Load().(int64)
-	return i
-}
-
-func (v *atomicInt64) Store(i int64) {
-	v.i.Store(i)
 }
 
 type readerFunc func(p []byte) (int, error)

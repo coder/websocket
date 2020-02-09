@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net/http"
 	"reflect"
 	"runtime"
 	"sync"
@@ -13,6 +14,7 @@ import (
 
 	"nhooyr.io/websocket/internal/bpool"
 	"nhooyr.io/websocket/internal/wsjs"
+	"nhooyr.io/websocket/internal/xsync"
 )
 
 // MessageType represents the type of a WebSocket message.
@@ -32,10 +34,10 @@ type Conn struct {
 	ws wsjs.WebSocket
 
 	// read limit for a message in bytes.
-	msgReadLimit atomicInt64
+	msgReadLimit xsync.Int64
 
 	closingMu     sync.Mutex
-	isReadClosed  atomicInt64
+	isReadClosed  xsync.Int64
 	closeOnce     sync.Once
 	closed        chan struct{}
 	closeErrOnce  sync.Once
@@ -67,10 +69,7 @@ func (c *Conn) init() {
 	c.closed = make(chan struct{})
 	c.readSignal = make(chan struct{}, 1)
 
-	c.msgReadLimit = &wssync.Int64{}
 	c.msgReadLimit.Store(32768)
-
-	c.isReadClosed = &wssync.Int64{}
 
 	c.releaseOnClose = c.ws.OnClose(func(e wsjs.CloseEvent) {
 		err := CloseError{
@@ -121,7 +120,7 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 		return 0, nil, xerrors.Errorf("failed to read: %w", err)
 	}
 	if int64(len(p)) > c.msgReadLimit.Load() {
-		err := xerrors.Errorf("read limited at %v bytes", c.msgReadLimit)
+		err := xerrors.Errorf("read limited at %v bytes", c.msgReadLimit.Load())
 		c.Close(StatusMessageTooBig, err.Error())
 		return 0, nil, err
 	}
@@ -248,17 +247,17 @@ type DialOptions struct {
 
 // Dial creates a new WebSocket connection to the given url with the given options.
 // The passed context bounds the maximum time spent waiting for the connection to open.
-// The returned *http.Response is always nil or the zero value. It's only in the signature
+// The returned *http.Response is always nil or a mock. It's only in the signature
 // to match the core API.
-func Dial(ctx context.Context, url string, opts *DialOptions) (*Conn, error) {
-	c, err := dial(ctx, url, opts)
+func Dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Response, error) {
+	c, resp, err := dial(ctx, url, opts)
 	if err != nil {
-		return nil, resp, xerrors.Errorf("failed to WebSocket dial %q: %w", url, err)
+		return nil, nil, xerrors.Errorf("failed to WebSocket dial %q: %w", url, err)
 	}
-	return c, nil
+	return c, resp, nil
 }
 
-func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, error) {
+func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Response, error) {
 	if opts == nil {
 		opts = &DialOptions{}
 	}
@@ -284,11 +283,12 @@ func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, error) {
 		c.Close(StatusPolicyViolation, "dial timed out")
 		return nil, nil, ctx.Err()
 	case <-opench:
+		return c, &http.Response{
+			StatusCode: http.StatusSwitchingProtocols,
+		}, nil
 	case <-c.closed:
-		return c, nil, c.closeErr
+		return nil, nil, c.closeErr
 	}
-
-	return c, nil
 }
 
 // Reader attempts to read a message from the connection.

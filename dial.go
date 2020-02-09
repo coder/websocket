@@ -35,8 +35,7 @@ type DialOptions struct {
 
 	// CompressionOptions controls the compression options.
 	// See docs on the CompressionOptions type.
-	// TODO make *
-	CompressionOptions CompressionOptions
+	CompressionOptions *CompressionOptions
 }
 
 // Dial performs a WebSocket handshake on url.
@@ -60,12 +59,16 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 	if opts == nil {
 		opts = &DialOptions{}
 	}
+
 	opts = &*opts
 	if opts.HTTPClient == nil {
 		opts.HTTPClient = http.DefaultClient
 	}
 	if opts.HTTPHeader == nil {
 		opts.HTTPHeader = http.Header{}
+	}
+	if opts.CompressionOptions == nil {
+		opts.CompressionOptions = &CompressionOptions{}
 	}
 
 	secWebSocketKey, err := secWebSocketKey(rand)

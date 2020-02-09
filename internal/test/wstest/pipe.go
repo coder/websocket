@@ -1,3 +1,5 @@
+// +build !js
+
 package wstest
 
 import (
@@ -30,6 +32,7 @@ func Pipe(dialOpts *websocket.DialOptions, acceptOpts *websocket.AcceptOptions) 
 	if dialOpts == nil {
 		dialOpts = &websocket.DialOptions{}
 	}
+	dialOpts = &*dialOpts
 	dialOpts.HTTPClient = &http.Client{
 		Transport: tt,
 	}
