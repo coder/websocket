@@ -47,7 +47,7 @@ jobs:
         with:
           args: make test
         env:
-          COVERALLS_TOKEN: ${{ secrets.github_token }}
+          COVERALLS_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
       - name: Upload coverage.html
         uses: actions/upload-artifact@master
         with:
