@@ -35,7 +35,7 @@ func (c *Conn) closeHandshake(code StatusCode, reason string) (err error) {
 	defer errd.Wrap(&err, "failed to close WebSocket")
 
 	err = c.writeClose(code, reason)
-	if CloseStatus(err) == -1 {
+	if err != nil && CloseStatus(err) == -1 {
 		return err
 	}
 
@@ -63,16 +63,19 @@ func (c *Conn) writeClose(code StatusCode, reason string) error {
 	c.setCloseErr(xerrors.Errorf("sent close frame: %w", ce))
 
 	var p []byte
+	var err error
 	if ce.Code != StatusNoStatusRcvd {
-		var err error
 		p, err = ce.bytes()
 		if err != nil {
 			log.Printf("websocket: %v", err)
-			return err
 		}
 	}
 
-	return c.writeControl(context.Background(), opClose, p)
+	werr := c.writeControl(context.Background(), opClose, p)
+	if err != nil {
+		return err
+	}
+	return werr
 }
 
 func (c *Conn) waitCloseHandshake() error {
