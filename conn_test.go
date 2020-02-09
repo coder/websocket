@@ -39,7 +39,7 @@ func TestConn(t *testing.T) {
 
 		for i := 0; i < 1; i++ {
 			t.Run("", func(t *testing.T) {
-				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 				defer cancel()
 
 				c1, c2 := websocketPipe(t)
@@ -49,6 +49,7 @@ func TestConn(t *testing.T) {
 					assertCloseStatus(t, websocket.StatusNormalClosure, err)
 				})
 				defer wait()
+				defer cancel()
 
 				c2.SetReadLimit(1 << 30)
 
@@ -61,12 +62,6 @@ func TestConn(t *testing.T) {
 			})
 		}
 	})
-}
-
-type writerFunc func(p []byte) (int, error)
-
-func (f writerFunc) Write(p []byte) (int, error) {
-	return f(p)
 }
 
 // echoLoop echos every msg received from c until an error
@@ -104,7 +99,7 @@ func echoLoop(ctx context.Context, c *websocket.Conn) error {
 	}
 }
 
-func randBool(t testing.TB) bool  {
+func randBool(t testing.TB) bool {
 	return randInt(t, 2) == 1
 }
 
@@ -117,7 +112,7 @@ func randInt(t testing.TB, max int) int {
 type testHijacker struct {
 	*httptest.ResponseRecorder
 	serverConn net.Conn
-	hijacked chan struct{}
+	hijacked   chan struct{}
 }
 
 var _ http.Hijacker = testHijacker{}
@@ -154,7 +149,7 @@ type testTransport struct {
 	h http.HandlerFunc
 }
 
-func (t testTransport) RoundTrip(r *http.Request) (*http.Response, error)  {
+func (t testTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	clientConn, serverConn := net.Pipe()
 
 	hj := testHijacker{

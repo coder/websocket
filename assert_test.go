@@ -28,7 +28,7 @@ func echoJSON(t *testing.T, c *websocket.Conn, n int) {
 	slog.Helper()
 
 	s := randString(t, n)
-	writeJSON(t, c, s)
+	go writeJSON(t, c, s)
 	readJSON(t, c, s)
 }
 

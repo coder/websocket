@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -35,6 +36,10 @@ var autobahnCases = []string{"*"}
 
 func TestAutobahn(t *testing.T) {
 	t.Parallel()
+
+	if os.Getenv("AUTOBAHN_TEST") == "" {
+		t.SkipNow()
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*15)
 	defer cancel()
