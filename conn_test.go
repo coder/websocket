@@ -142,7 +142,7 @@ func TestConn(t *testing.T) {
 		defer c1.Close(websocket.StatusInternalError, "")
 		defer c2.Close(websocket.StatusInternalError, "")
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 		defer cancel()
 
 		c2.CloseRead(ctx)
@@ -163,7 +163,7 @@ func TestConn(t *testing.T) {
 		defer c2.Close(websocket.StatusInternalError, "")
 		defer c1.Close(websocket.StatusInternalError, "")
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 		defer cancel()
 
 		discardLoopErr := xsync.Go(func() error {
@@ -242,7 +242,7 @@ func TestConn(t *testing.T) {
 		defer c2.Close(websocket.StatusInternalError, "")
 		defer c1.Close(websocket.StatusInternalError, "")
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 		defer cancel()
 
 		n1 := websocket.NetConn(ctx, c1, websocket.MessageBinary)
@@ -298,7 +298,7 @@ func TestConn(t *testing.T) {
 		defer c2.Close(websocket.StatusInternalError, "")
 		defer c1.Close(websocket.StatusInternalError, "")
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 		defer cancel()
 
 		n1 := websocket.NetConn(ctx, c1, websocket.MessageBinary)
@@ -333,7 +333,7 @@ func TestConn(t *testing.T) {
 		defer c2.Close(websocket.StatusInternalError, "")
 		defer c1.Close(websocket.StatusInternalError, "")
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 		defer cancel()
 
 		echoLoopErr := xsync.Go(func() error {
@@ -351,10 +351,10 @@ func TestConn(t *testing.T) {
 		c1.SetReadLimit(131072)
 
 		exp := xrand.String(xrand.Int(131072))
-		err = wsjson.Write(ctx, c1, exp)
-		if err != nil {
-			t.Fatal(err)
-		}
+
+		werr := xsync.Go(func() error {
+			return wsjson.Write(ctx, c1, exp)
+		})
 
 		var act interface{}
 		err = wsjson.Read(ctx, c1, &act)
@@ -363,6 +363,11 @@ func TestConn(t *testing.T) {
 		}
 		if exp != act {
 			t.Fatal(cmp.Diff(exp, act))
+		}
+
+		err = <-werr
+		if err != nil {
+			t.Fatal(err)
 		}
 
 		err = c1.Close(websocket.StatusNormalClosure, "")
@@ -381,7 +386,7 @@ func TestConn(t *testing.T) {
 		defer c2.Close(websocket.StatusInternalError, "")
 		defer c1.Close(websocket.StatusInternalError, "")
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 		defer cancel()
 
 		echoLoopErr := xsync.Go(func() error {

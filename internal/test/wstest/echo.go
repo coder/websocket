@@ -1,6 +1,7 @@
 package wstest
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"time"
@@ -75,7 +76,7 @@ func Echo(ctx context.Context, c *websocket.Conn, max int) error {
 		return xerrors.Errorf("unexpected message typ (%v): %v", expType, actType)
 	}
 
-	if !cmp.Equal(msg, act) {
+	if !bytes.Equal(msg, act) {
 		return xerrors.Errorf("unexpected msg read: %v", cmp.Diff(msg, act))
 	}
 
