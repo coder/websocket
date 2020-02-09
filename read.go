@@ -352,6 +352,8 @@ func (mr *msgReader) Read(p []byte) (n int, err error) {
 		}
 		if xerrors.Is(err, io.EOF) {
 			err = io.EOF
+
+			mr.returnFlateReader()
 		}
 	}()
 
@@ -373,11 +375,7 @@ func (mr *msgReader) read(p []byte) (int, error) {
 	if mr.payloadLength == 0 {
 		if mr.fin {
 			if mr.flate {
-				n, err := mr.flateTail.Read(p)
-				if xerrors.Is(err, io.EOF) {
-					mr.returnFlateReader()
-				}
-				return n, err
+				return mr.flateTail.Read(p)
 			}
 			return 0, io.EOF
 		}
