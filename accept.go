@@ -65,9 +65,9 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 		opts.CompressionOptions = &CompressionOptions{}
 	}
 
-	err = verifyClientRequest(r)
+	errCode, err := verifyClientRequest(w, r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), errCode)
 		return nil, err
 	}
 
@@ -127,32 +127,37 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	}), nil
 }
 
-func verifyClientRequest(r *http.Request) error {
+func verifyClientRequest(w http.ResponseWriter, r *http.Request) (errCode int, _ error) {
 	if !r.ProtoAtLeast(1, 1) {
-		return xerrors.Errorf("WebSocket protocol violation: handshake request must be at least HTTP/1.1: %q", r.Proto)
+		return http.StatusUpgradeRequired, xerrors.Errorf("WebSocket protocol violation: handshake request must be at least HTTP/1.1: %q", r.Proto)
 	}
 
 	if !headerContainsToken(r.Header, "Connection", "Upgrade") {
-		return xerrors.Errorf("WebSocket protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
+		w.Header().Set("Connection", "Upgrade")
+		w.Header().Set("Upgrade", "websocket")
+		return http.StatusUpgradeRequired, xerrors.Errorf("WebSocket protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
 	}
 
 	if !headerContainsToken(r.Header, "Upgrade", "websocket") {
-		return xerrors.Errorf("WebSocket protocol violation: Upgrade header %q does not contain websocket", r.Header.Get("Upgrade"))
+		w.Header().Set("Connection", "Upgrade")
+		w.Header().Set("Upgrade", "websocket")
+		return http.StatusUpgradeRequired, xerrors.Errorf("WebSocket protocol violation: Upgrade header %q does not contain websocket", r.Header.Get("Upgrade"))
 	}
 
 	if r.Method != "GET" {
-		return xerrors.Errorf("WebSocket protocol violation: handshake request method is not GET but %q", r.Method)
+		return http.StatusMethodNotAllowed, xerrors.Errorf("WebSocket protocol violation: handshake request method is not GET but %q", r.Method)
 	}
 
 	if r.Header.Get("Sec-WebSocket-Version") != "13" {
-		return xerrors.Errorf("unsupported WebSocket protocol version (only 13 is supported): %q", r.Header.Get("Sec-WebSocket-Version"))
+		w.Header().Set("Sec-WebSocket-Version", "13")
+		return http.StatusBadRequest, xerrors.Errorf("unsupported WebSocket protocol version (only 13 is supported): %q", r.Header.Get("Sec-WebSocket-Version"))
 	}
 
 	if r.Header.Get("Sec-WebSocket-Key") == "" {
-		return xerrors.New("WebSocket protocol violation: missing Sec-WebSocket-Key")
+		return http.StatusBadRequest, xerrors.New("WebSocket protocol violation: missing Sec-WebSocket-Key")
 	}
 
-	return nil
+	return 0, nil
 }
 
 func authenticateOrigin(r *http.Request) error {

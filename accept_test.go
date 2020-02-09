@@ -192,7 +192,7 @@ func Test_verifyClientHandshake(t *testing.T) {
 				r.Header.Set(k, v)
 			}
 
-			err := verifyClientRequest(r)
+			_, err := verifyClientRequest(httptest.NewRecorder(), r)
 			if tc.success != (err == nil) {
 				t.Fatalf("unexpected error value: %v", err)
 			}
