@@ -14,13 +14,17 @@ import (
 	"nhooyr.io/websocket/internal/test/cmp"
 	"nhooyr.io/websocket/internal/test/wstest"
 	"nhooyr.io/websocket/internal/test/xrand"
-	"nhooyr.io/websocket/wsjson"
 )
 
 func goFn(fn func() error) chan error {
 	errs := make(chan error)
 	go func() {
-		defer close(errs)
+		defer func() {
+			r := recover()
+			if r != nil {
+				errs <- xerrors.Errorf("panic in gofn: %v", r)
+			}
+		}()
 		errs <- fn()
 	}()
 
@@ -33,7 +37,7 @@ func TestConn(t *testing.T) {
 	t.Run("data", func(t *testing.T) {
 		t.Parallel()
 
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 5; i++ {
 			t.Run("", func(t *testing.T) {
 				t.Parallel()
 
@@ -41,7 +45,7 @@ func TestConn(t *testing.T) {
 				defer cancel()
 
 				copts := websocket.CompressionOptions{
-					Mode:      websocket.CompressionMode(xrand.Int(int(websocket.CompressionDisabled))),
+					Mode:      websocket.CompressionMode(xrand.Int(int(websocket.CompressionDisabled) + 1)),
 					Threshold: xrand.Int(9999),
 				}
 
@@ -70,17 +74,21 @@ func TestConn(t *testing.T) {
 
 				c2.SetReadLimit(1 << 30)
 
-				for i := 0; i < 10; i++ {
+				for i := 0; i < 5; i++ {
 					n := xrand.Int(131_072)
 
-					msg := xrand.String(n)
+					msg := xrand.Bytes(n)
+
+					expType := websocket.MessageBinary
+					if xrand.Bool() {
+						expType = websocket.MessageText
+					}
 
 					writeErr := goFn(func() error {
-						return wsjson.Write(ctx, c2, msg)
+						return c2.Write(ctx, expType, msg)
 					})
 
-					var act interface{}
-					err := wsjson.Read(ctx, c2, &act)
+					actType, act, err := c2.Read(ctx)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -88,6 +96,10 @@ func TestConn(t *testing.T) {
 					err = <-writeErr
 					if err != nil {
 						t.Fatal(err)
+					}
+
+					if expType != actType {
+						t.Fatalf("unexpected message typ (%v): %v", expType, actType)
 					}
 
 					if !cmp.Equal(msg, act) {

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"cdr.dev/slog/sloggers/slogtest/assert"
+	"nhooyr.io/websocket/internal/test/cmp"
 )
 
 func TestCloseError(t *testing.T) {
@@ -51,13 +51,23 @@ func TestCloseError(t *testing.T) {
 			t.Parallel()
 
 			_, err := tc.ce.bytesErr()
-			if tc.success {
-				assert.Success(t, "CloseError.bytesErr", err)
-			} else {
-				assert.Error(t, "CloseError.bytesErr", err)
+			if tc.success != (err == nil) {
+				t.Fatalf("unexpected error value (wanted err == nil == %v): %v", tc.success, err)
 			}
 		})
 	}
+
+	t.Run("Error", func(t *testing.T) {
+		exp := `status = StatusInternalError and reason = "meow"`
+		act := CloseError{
+			Code:   StatusInternalError,
+			Reason: "meow",
+		}.Error()
+
+		if (act) != exp {
+			t.Fatal(cmp.Diff(exp, act))
+		}
+	})
 }
 
 func Test_parseClosePayload(t *testing.T) {
@@ -104,10 +114,14 @@ func Test_parseClosePayload(t *testing.T) {
 
 			ce, err := parseClosePayload(tc.p)
 			if tc.success {
-				assert.Success(t, "parse err", err)
-				assert.Equal(t, "ce", tc.ce, ce)
-			} else {
-				assert.Error(t, "parse err", err)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !cmp.Equal(tc.ce, ce) {
+					t.Fatalf("expected %v but got %v", tc.ce, ce)
+				}
+			} else if err == nil {
+				t.Errorf("expected error: %v %v", ce, err)
 			}
 		})
 	}
@@ -153,7 +167,10 @@ func Test_validWireCloseCode(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equal(t, "valid", tc.valid, validWireCloseCode(tc.code))
+			act := validWireCloseCode(tc.code)
+			if !cmp.Equal(tc.valid, act) {
+				t.Fatalf("unexpected valid: %v", cmp.Diff(tc.valid, act))
+			}
 		})
 	}
 }
@@ -190,7 +207,10 @@ func TestCloseStatus(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equal(t, "closeStatus", tc.exp, CloseStatus(tc.in))
+			act := CloseStatus(tc.in)
+			if !cmp.Equal(tc.exp, act) {
+				t.Fatalf("unexpected closeStatus: %v", cmp.Diff(tc.exp, act))
+			}
 		})
 	}
 }

@@ -43,7 +43,7 @@ func Pipe(dialOpts *websocket.DialOptions, acceptOpts *websocket.AcceptOptions) 
 		return nil, nil, xerrors.Errorf("failed to get server conn from fake transport: %w", acceptErr)
 	}
 
-	if xrand.True() {
+	if xrand.Bool() {
 		return serverConn, clientConn, nil
 	}
 	return clientConn, serverConn, nil

@@ -32,8 +32,8 @@ func String(n int) string {
 	return s
 }
 
-// True returns a randomly generated boolean.
-func True() bool {
+// Bool returns a randomly generated boolean.
+func Bool() bool {
 	return Int(2) == 1
 }
 
