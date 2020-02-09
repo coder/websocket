@@ -15,6 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
+	"github.com/golang/protobuf/ptypes/duration"
 	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
@@ -22,12 +25,14 @@ import (
 	"nhooyr.io/websocket/internal/test/wstest"
 	"nhooyr.io/websocket/internal/test/xrand"
 	"nhooyr.io/websocket/internal/xsync"
+	"nhooyr.io/websocket/wsjson"
+	"nhooyr.io/websocket/wspb"
 )
 
 func TestConn(t *testing.T) {
 	t.Parallel()
 
-	t.Run("data", func(t *testing.T) {
+	t.Run("fuzzData", func(t *testing.T) {
 		t.Parallel()
 
 		for i := 0; i < 5; i++ {
@@ -317,6 +322,102 @@ func TestConn(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+
+	t.Run("wsjson", func(t *testing.T) {
+		t.Parallel()
+
+		c1, c2, err := wstest.Pipe(nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c2.Close(websocket.StatusInternalError, "")
+		defer c1.Close(websocket.StatusInternalError, "")
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		echoLoopErr := xsync.Go(func() error {
+			err := wstest.EchoLoop(ctx, c2)
+			return assertCloseStatus(websocket.StatusNormalClosure, err)
+		})
+		defer func() {
+			err := <-echoLoopErr
+			if err != nil {
+				t.Errorf("echo loop error: %v", err)
+			}
+		}()
+		defer cancel()
+
+		c1.SetReadLimit(131072)
+
+		exp := xrand.String(xrand.Int(131072))
+		err = wsjson.Write(ctx, c1, exp)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var act interface{}
+		err = wsjson.Read(ctx, c1, &act)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if exp != act {
+			t.Fatal(cmp.Diff(exp, act))
+		}
+
+		err = c1.Close(websocket.StatusNormalClosure, "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("wspb", func(t *testing.T) {
+		t.Parallel()
+
+		c1, c2, err := wstest.Pipe(nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c2.Close(websocket.StatusInternalError, "")
+		defer c1.Close(websocket.StatusInternalError, "")
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		echoLoopErr := xsync.Go(func() error {
+			err := wstest.EchoLoop(ctx, c2)
+			return assertCloseStatus(websocket.StatusNormalClosure, err)
+		})
+		defer func() {
+			err := <-echoLoopErr
+			if err != nil {
+				t.Errorf("echo loop error: %v", err)
+			}
+		}()
+		defer cancel()
+
+		c1.SetReadLimit(131072)
+
+		exp := ptypes.DurationProto(100)
+		err = wspb.Write(ctx, c1, exp)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		act := &duration.Duration{}
+		err = wspb.Read(ctx, c1, act)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !proto.Equal(exp, act) {
+			t.Fatal(cmp.Diff(exp, act))
+		}
+
+		err = c1.Close(websocket.StatusNormalClosure, "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
 }
 
 func TestWasm(t *testing.T) {
@@ -345,7 +446,7 @@ func TestWasm(t *testing.T) {
 	defer wg.Wait()
 	defer s.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "go", "test", "-exec=wasmbrowsertest", "./...")
