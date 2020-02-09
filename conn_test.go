@@ -55,7 +55,7 @@ func TestConn(t *testing.T) {
 				defer c2.Close(websocket.StatusInternalError, "")
 				defer c1.Close(websocket.StatusInternalError, "")
 
-				ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 				defer cancel()
 
 				echoLoopErr := xsync.Go(func() error {
@@ -163,7 +163,7 @@ func TestConn(t *testing.T) {
 		defer c2.Close(websocket.StatusInternalError, "")
 		defer c1.Close(websocket.StatusInternalError, "")
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
 		discardLoopErr := xsync.Go(func() error {
@@ -288,7 +288,7 @@ func TestConn(t *testing.T) {
 		}
 	})
 
-	t.Run("netConn", func(t *testing.T) {
+	t.Run("netConn/BadMsg", func(t *testing.T) {
 		t.Parallel()
 
 		c1, c2, err := wstest.Pipe(nil, nil)
@@ -333,7 +333,7 @@ func TestConn(t *testing.T) {
 		defer c2.Close(websocket.StatusInternalError, "")
 		defer c1.Close(websocket.StatusInternalError, "")
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
 		echoLoopErr := xsync.Go(func() error {
@@ -381,7 +381,7 @@ func TestConn(t *testing.T) {
 		defer c2.Close(websocket.StatusInternalError, "")
 		defer c1.Close(websocket.StatusInternalError, "")
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 		defer cancel()
 
 		echoLoopErr := xsync.Go(func() error {
