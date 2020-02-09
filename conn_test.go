@@ -5,6 +5,8 @@ package websocket_test
 import (
 	"context"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -198,6 +200,121 @@ func TestConn(t *testing.T) {
 		err = c1.Close(websocket.StatusNormalClosure, "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("concurrentWriteError", func(t *testing.T) {
+		t.Parallel()
+
+		c1, c2, err := wstest.Pipe(nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c2.Close(websocket.StatusInternalError, "")
+		defer c1.Close(websocket.StatusInternalError, "")
+
+		_, err = c1.Writer(context.Background(), websocket.MessageText)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+		defer cancel()
+
+		err = c1.Write(ctx, websocket.MessageText, []byte("x"))
+		if !xerrors.Is(err, context.DeadlineExceeded) {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("netConn", func(t *testing.T) {
+		t.Parallel()
+
+		c1, c2, err := wstest.Pipe(nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c2.Close(websocket.StatusInternalError, "")
+		defer c1.Close(websocket.StatusInternalError, "")
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		n1 := websocket.NetConn(ctx, c1, websocket.MessageBinary)
+		n2 := websocket.NetConn(ctx, c2, websocket.MessageBinary)
+
+		// Does not give any confidence but at least ensures no crashes.
+		d, _ := ctx.Deadline()
+		n1.SetDeadline(d)
+		n1.SetDeadline(time.Time{})
+
+		if n1.RemoteAddr() != n1.LocalAddr() {
+			t.Fatal()
+		}
+		if n1.RemoteAddr().String() != "websocket/unknown-addr" || n1.RemoteAddr().Network() != "websocket" {
+			t.Fatal(n1.RemoteAddr())
+		}
+
+		errs := xsync.Go(func() error {
+			_, err := n2.Write([]byte("hello"))
+			if err != nil {
+				return err
+			}
+			return n2.Close()
+		})
+
+		b, err := ioutil.ReadAll(n1)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = n1.Read(nil)
+		if err != io.EOF {
+			t.Fatalf("expected EOF: %v", err)
+		}
+
+		err = <-errs
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !cmp.Equal([]byte("hello"), b) {
+			t.Fatalf("unexpected msg: %v", cmp.Diff([]byte("hello"), b))
+		}
+	})
+
+	t.Run("netConn", func(t *testing.T) {
+		t.Parallel()
+
+		c1, c2, err := wstest.Pipe(nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c2.Close(websocket.StatusInternalError, "")
+		defer c1.Close(websocket.StatusInternalError, "")
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		n1 := websocket.NetConn(ctx, c1, websocket.MessageBinary)
+		n2 := websocket.NetConn(ctx, c2, websocket.MessageText)
+
+		errs := xsync.Go(func() error {
+			_, err := n2.Write([]byte("hello"))
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+
+		_, err = ioutil.ReadAll(n1)
+		if !cmp.ErrorContains(err, `unexpected frame type read (expected MessageBinary): MessageText`) {
+			t.Fatal(err)
+		}
+
+		err = <-errs
+		if err != nil {
+			t.Fatal(err)
 		}
 	})
 }
