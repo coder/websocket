@@ -16,6 +16,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/internal/test/cmp"
 	"nhooyr.io/websocket/internal/test/wstest"
 	"nhooyr.io/websocket/internal/test/xrand"
 	"nhooyr.io/websocket/internal/xsync"
@@ -31,9 +32,6 @@ func TestConn(t *testing.T) {
 			t.Run("", func(t *testing.T) {
 				t.Parallel()
 
-				ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-				defer cancel()
-
 				copts := &websocket.CompressionOptions{
 					Mode:      websocket.CompressionMode(xrand.Int(int(websocket.CompressionDisabled) + 1)),
 					Threshold: xrand.Int(9999),
@@ -47,11 +45,14 @@ func TestConn(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer c1.Close(websocket.StatusInternalError, "")
 				defer c2.Close(websocket.StatusInternalError, "")
+				defer c1.Close(websocket.StatusInternalError, "")
+
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+				defer cancel()
 
 				echoLoopErr := xsync.Go(func() error {
-					err := wstest.EchoLoop(ctx, c1)
+					err := wstest.EchoLoop(ctx, c2)
 					return assertCloseStatus(websocket.StatusNormalClosure, err)
 				})
 				defer func() {
@@ -62,17 +63,141 @@ func TestConn(t *testing.T) {
 				}()
 				defer cancel()
 
-				c2.SetReadLimit(131072)
+				c1.SetReadLimit(131072)
 
 				for i := 0; i < 5; i++ {
-					err := wstest.Echo(ctx, c2, 131072)
+					err := wstest.Echo(ctx, c1, 131072)
 					if err != nil {
 						t.Fatal(err)
 					}
 				}
 
-				c2.Close(websocket.StatusNormalClosure, "")
+				err = c1.Close(websocket.StatusNormalClosure, "")
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
 			})
+		}
+	})
+
+	t.Run("badClose", func(t *testing.T) {
+		t.Parallel()
+
+		c1, c2, err := wstest.Pipe(nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c1.Close(websocket.StatusInternalError, "")
+		defer c2.Close(websocket.StatusInternalError, "")
+
+		err = c1.Close(-1, "")
+		if !cmp.ErrorContains(err, "failed to marshal close frame: status code StatusCode(-1) cannot be set") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("ping", func(t *testing.T) {
+		t.Parallel()
+
+		c1, c2, err := wstest.Pipe(nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c1.Close(websocket.StatusInternalError, "")
+		defer c2.Close(websocket.StatusInternalError, "")
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+		defer cancel()
+
+		c2.CloseRead(ctx)
+		c1.CloseRead(ctx)
+
+		for i := 0; i < 10; i++ {
+			err = c1.Ping(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		err = c1.Close(websocket.StatusNormalClosure, "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("badPing", func(t *testing.T) {
+		t.Parallel()
+
+		c1, c2, err := wstest.Pipe(nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c1.Close(websocket.StatusInternalError, "")
+		defer c2.Close(websocket.StatusInternalError, "")
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		c2.CloseRead(ctx)
+
+		err = c1.Ping(ctx)
+		if !cmp.ErrorContains(err, "failed to wait for pong") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("concurrentWrite", func(t *testing.T) {
+		t.Parallel()
+
+		c1, c2, err := wstest.Pipe(nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c2.Close(websocket.StatusInternalError, "")
+		defer c1.Close(websocket.StatusInternalError, "")
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+
+		discardLoopErr := xsync.Go(func() error {
+			for {
+				_, _, err := c2.Read(ctx)
+				if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+			}
+		})
+		defer func() {
+			err := <-discardLoopErr
+			if err != nil {
+				t.Errorf("discard loop error: %v", err)
+			}
+		}()
+		defer cancel()
+
+		msg := xrand.Bytes(xrand.Int(9999))
+		const count = 100
+		errs := make(chan error, count)
+
+		for i := 0; i < count; i++ {
+			go func() {
+				errs <- c1.Write(ctx, websocket.MessageBinary, msg)
+			}()
+		}
+
+		for i := 0; i < count; i++ {
+			err := <-errs
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		err = c1.Close(websocket.StatusNormalClosure, "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 }

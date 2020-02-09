@@ -87,12 +87,6 @@ func newConn(cfg connConfig) *Conn {
 		closed:      make(chan struct{}),
 		activePings: make(map[string]chan<- struct{}),
 	}
-	if c.flate() && c.flateThreshold == 0 {
-		c.flateThreshold = 256
-		if c.writeNoContextTakeOver() {
-			c.flateThreshold = 512
-		}
-	}
 
 	c.readMu = newMu(c)
 	c.writeFrameMu = newMu(c)
@@ -102,6 +96,13 @@ func newConn(cfg connConfig) *Conn {
 	c.msgWriter = newMsgWriter(c)
 	if c.client {
 		c.writeBuf = extractBufioWriterBuf(c.bw, c.rwc)
+	}
+
+	if c.flate() && c.flateThreshold == 0 {
+		c.flateThreshold = 256
+		if !c.msgWriter.flateContextTakeover() {
+			c.flateThreshold = 512
+		}
 	}
 
 	runtime.SetFinalizer(c, func(c *Conn) {
@@ -244,15 +245,6 @@ func (m *mu) Lock(ctx context.Context) error {
 		return err
 	case m.ch <- struct{}{}:
 		return nil
-	}
-}
-
-func (m *mu) TryLock() bool {
-	select {
-	case m.ch <- struct{}{}:
-		return true
-	default:
-		return false
 	}
 }
 

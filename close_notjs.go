@@ -35,7 +35,7 @@ func (c *Conn) closeHandshake(code StatusCode, reason string) (err error) {
 	defer errd.Wrap(&err, "failed to close WebSocket")
 
 	err = c.writeClose(code, reason)
-	if err != nil {
+	if CloseStatus(err) == -1 {
 		return err
 	}
 
@@ -44,12 +44,6 @@ func (c *Conn) closeHandshake(code StatusCode, reason string) (err error) {
 		return err
 	}
 	return nil
-}
-
-func (c *Conn) writeError(code StatusCode, err error) {
-	c.setCloseErr(err)
-	c.writeClose(code, err.Error())
-	c.close(nil)
 }
 
 func (c *Conn) writeClose(code StatusCode, reason string) error {
@@ -70,7 +64,12 @@ func (c *Conn) writeClose(code StatusCode, reason string) error {
 
 	var p []byte
 	if ce.Code != StatusNoStatusRcvd {
-		p = ce.bytes()
+		var err error
+		p, err = ce.bytes()
+		if err != nil {
+			log.Printf("websocket: %v", err)
+			return err
+		}
 	}
 
 	return c.writeControl(context.Background(), opClose, p)
@@ -148,16 +147,16 @@ func validWireCloseCode(code StatusCode) bool {
 	return false
 }
 
-func (ce CloseError) bytes() []byte {
+func (ce CloseError) bytes() ([]byte, error) {
 	p, err := ce.bytesErr()
 	if err != nil {
-		log.Printf("websocket: failed to marshal close frame: %v", err)
+		err = xerrors.Errorf("failed to marshal close frame: %w", err)
 		ce = CloseError{
 			Code: StatusInternalError,
 		}
 		p, _ = ce.bytesErr()
 	}
-	return p
+	return p, err
 }
 
 const maxCloseReason = maxControlPayload - 2

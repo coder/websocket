@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"cdr.dev/slog/sloggers/slogtest/assert"
+	"nhooyr.io/websocket/internal/test/cmp"
 )
 
 func TestBadDials(t *testing.T) {
@@ -70,7 +70,9 @@ func TestBadDials(t *testing.T) {
 				}
 
 				_, _, err := dial(ctx, tc.url, tc.opts, tc.rand)
-				assert.Error(t, "dial", err)
+				if err == nil {
+					t.Fatalf("expected error")
+				}
 			})
 		}
 	})
@@ -88,7 +90,9 @@ func TestBadDials(t *testing.T) {
 				}, nil
 			}),
 		})
-		assert.ErrorContains(t, "dial", err, "failed to WebSocket dial: expected handshake response status code 101 but got 0")
+		if !cmp.ErrorContains(err, "failed to WebSocket dial: expected handshake response status code 101 but got 0") {
+			t.Fatal(err)
+		}
 	})
 
 	t.Run("badBody", func(t *testing.T) {
@@ -113,7 +117,9 @@ func TestBadDials(t *testing.T) {
 		_, _, err := Dial(ctx, "ws://example.com", &DialOptions{
 			HTTPClient: mockHTTPClient(rt),
 		})
-		assert.ErrorContains(t, "dial", err, "response body is not a io.ReadWriteCloser")
+		if !cmp.ErrorContains(err, "response body is not a io.ReadWriteCloser") {
+			t.Fatal(err)
+		}
 	})
 }
 
@@ -211,7 +217,9 @@ func Test_verifyServerHandshake(t *testing.T) {
 
 			r := httptest.NewRequest("GET", "/", nil)
 			key, err := secWebSocketKey(rand.Reader)
-			assert.Success(t, "secWebSocketKey", err)
+			if err != nil {
+				t.Fatal(err)
+			}
 			r.Header.Set("Sec-WebSocket-Key", key)
 
 			if resp.Header.Get("Sec-WebSocket-Accept") == "" {

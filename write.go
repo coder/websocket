@@ -335,3 +335,9 @@ func extractBufioWriterBuf(bw *bufio.Writer, w io.Writer) []byte {
 
 	return writeBuf
 }
+
+func (c *Conn) writeError(code StatusCode, err error) {
+	c.setCloseErr(err)
+	c.writeClose(code, err.Error())
+	c.close(nil)
+}

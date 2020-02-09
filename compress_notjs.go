@@ -10,9 +10,6 @@ import (
 )
 
 func (m CompressionMode) opts() *compressionOptions {
-	if m == CompressionDisabled {
-		return nil
-	}
 	return &compressionOptions{
 		clientNoContextTakeover: m == CompressionNoContextTakeover,
 		serverNoContextTakeover: m == CompressionNoContextTakeover,
@@ -41,14 +38,6 @@ func (copts *compressionOptions) setHeader(h http.Header) {
 // we need to add them back otherwise flate.Reader keeps
 // trying to return more bytes.
 const deflateMessageTail = "\x00\x00\xff\xff"
-
-func (c *Conn) writeNoContextTakeOver() bool {
-	return c.client && c.copts.clientNoContextTakeover || !c.client && c.copts.serverNoContextTakeover
-}
-
-func (c *Conn) readNoContextTakeOver() bool {
-	return !c.client && c.copts.clientNoContextTakeover || c.client && c.copts.serverNoContextTakeover
-}
 
 type trimLastFourBytesWriter struct {
 	w    io.Writer
