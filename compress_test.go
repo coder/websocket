@@ -1,13 +1,12 @@
 package websocket
 
 import (
-	"crypto/rand"
-	"encoding/base64"
-	"math/big"
 	"strings"
 	"testing"
 
 	"cdr.dev/slog/sloggers/slogtest/assert"
+
+	"nhooyr.io/websocket/internal/test/xrand"
 )
 
 func Test_slidingWindow(t *testing.T) {
@@ -16,8 +15,8 @@ func Test_slidingWindow(t *testing.T) {
 	const testCount = 99
 	const maxWindow = 99999
 	for i := 0; i < testCount; i++ {
-		input := randStr(t, maxWindow)
-		windowLength := randInt(t, maxWindow)
+		input := xrand.String(maxWindow)
+		windowLength := xrand.Int(maxWindow)
 		r := newSlidingWindow(windowLength)
 		r.write([]byte(input))
 
@@ -26,20 +25,4 @@ func Test_slidingWindow(t *testing.T) {
 		}
 		assert.True(t, "hasSuffix", strings.HasSuffix(input, string(r.buf)))
 	}
-}
-
-func randStr(t *testing.T, max int) string {
-	n := randInt(t, max)
-
-	b := make([]byte, n)
-	_, err := rand.Read(b)
-	assert.Success(t, "rand.Read", err)
-
-	return base64.StdEncoding.EncodeToString(b)
-}
-
-func randInt(t *testing.T, max int) int {
-	x, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
-	assert.Success(t, "rand.Int", err)
-	return int(x.Int64())
 }

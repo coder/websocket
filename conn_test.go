@@ -3,65 +3,112 @@
 package websocket_test
 
 import (
-	"bufio"
 	"context"
-	"crypto/rand"
 	"io"
-	"math/big"
-	"net"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
-	"cdr.dev/slog/sloggers/slogtest/assert"
+	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/internal/test/cmp"
+	"nhooyr.io/websocket/internal/test/wstest"
+	"nhooyr.io/websocket/internal/test/xrand"
+	"nhooyr.io/websocket/wsjson"
 )
 
-func goFn(fn func()) func() {
-	done := make(chan struct{})
+func goFn(fn func() error) chan error {
+	errs := make(chan error)
 	go func() {
-		defer close(done)
-		fn()
+		defer close(errs)
+		errs <- fn()
 	}()
 
-	return func() {
-		<-done
-	}
+	return errs
 }
 
 func TestConn(t *testing.T) {
 	t.Parallel()
 
-	t.Run("json", func(t *testing.T) {
+	t.Run("data", func(t *testing.T) {
 		t.Parallel()
 
-		for i := 0; i < 1; i++ {
+		for i := 0; i < 10; i++ {
 			t.Run("", func(t *testing.T) {
-				ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+				t.Parallel()
+
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 				defer cancel()
 
-				c1, c2 := websocketPipe(t)
+				copts := websocket.CompressionOptions{
+					Mode:      websocket.CompressionMode(xrand.Int(int(websocket.CompressionDisabled))),
+					Threshold: xrand.Int(9999),
+				}
 
-				wait := goFn(func() {
-					err := echoLoop(ctx, c1)
-					assertCloseStatus(t, websocket.StatusNormalClosure, err)
+				c1, c2, err := wstest.Pipe(&websocket.DialOptions{
+					CompressionOptions: copts,
+				}, &websocket.AcceptOptions{
+					CompressionOptions: copts,
 				})
-				defer wait()
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer c1.Close(websocket.StatusInternalError, "")
+				defer c2.Close(websocket.StatusInternalError, "")
+
+				echoLoopErr := goFn(func() error {
+					err := echoLoop(ctx, c1)
+					return assertCloseStatus(websocket.StatusNormalClosure, err)
+				})
+				defer func() {
+					err := <-echoLoopErr
+					if err != nil {
+						t.Errorf("echo loop error: %v", err)
+					}
+				}()
 				defer cancel()
 
 				c2.SetReadLimit(1 << 30)
 
 				for i := 0; i < 10; i++ {
-					n := randInt(t, 131_072)
-					echoJSON(t, c2, n)
+					n := xrand.Int(131_072)
+
+					msg := xrand.String(n)
+
+					writeErr := goFn(func() error {
+						return wsjson.Write(ctx, c2, msg)
+					})
+
+					var act interface{}
+					err := wsjson.Read(ctx, c2, &act)
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					err = <-writeErr
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					if !cmp.Equal(msg, act) {
+						t.Fatalf("unexpected msg read: %v", cmp.Diff(msg, act))
+					}
 				}
 
 				c2.Close(websocket.StatusNormalClosure, "")
 			})
 		}
 	})
+}
+
+func assertCloseStatus(exp websocket.StatusCode, err error) error {
+	if websocket.CloseStatus(err) == -1 {
+		return xerrors.Errorf("expected websocket.CloseError: %T %v", err, err)
+	}
+	if websocket.CloseStatus(err) != exp {
+		return xerrors.Errorf("unexpected close status (%v):%v", exp, err)
+	}
+	return nil
 }
 
 // echoLoop echos every msg received from c until an error
@@ -96,77 +143,5 @@ func echoLoop(ctx context.Context, c *websocket.Conn) error {
 		if err != nil {
 			return err
 		}
-	}
-}
-
-func randBool(t testing.TB) bool {
-	return randInt(t, 2) == 1
-}
-
-func randInt(t testing.TB, max int) int {
-	x, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
-	assert.Success(t, "rand.Int", err)
-	return int(x.Int64())
-}
-
-type testHijacker struct {
-	*httptest.ResponseRecorder
-	serverConn net.Conn
-	hijacked   chan struct{}
-}
-
-var _ http.Hijacker = testHijacker{}
-
-func (hj testHijacker) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	close(hj.hijacked)
-	return hj.serverConn, bufio.NewReadWriter(bufio.NewReader(hj.serverConn), bufio.NewWriter(hj.serverConn)), nil
-}
-
-func websocketPipe(t *testing.T) (*websocket.Conn, *websocket.Conn) {
-	var serverConn *websocket.Conn
-	tt := testTransport{
-		h: func(w http.ResponseWriter, r *http.Request) {
-			serverConn = acceptWebSocket(t, r, w, nil)
-		},
-	}
-
-	dialOpts := &websocket.DialOptions{
-		HTTPClient: &http.Client{
-			Transport: tt,
-		},
-	}
-
-	clientConn, _, err := websocket.Dial(context.Background(), "ws://example.com", dialOpts)
-	assert.Success(t, "websocket.Dial", err)
-
-	if randBool(t) {
-		return serverConn, clientConn
-	}
-	return clientConn, serverConn
-}
-
-type testTransport struct {
-	h http.HandlerFunc
-}
-
-func (t testTransport) RoundTrip(r *http.Request) (*http.Response, error) {
-	clientConn, serverConn := net.Pipe()
-
-	hj := testHijacker{
-		ResponseRecorder: httptest.NewRecorder(),
-		serverConn:       serverConn,
-		hijacked:         make(chan struct{}),
-	}
-
-	done := make(chan struct{})
-	t.h.ServeHTTP(hj, r)
-
-	select {
-	case <-hj.hijacked:
-		resp := hj.ResponseRecorder.Result()
-		resp.Body = clientConn
-		return resp, nil
-	case <-done:
-		return hj.ResponseRecorder.Result(), nil
 	}
 }

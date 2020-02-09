@@ -11,7 +11,7 @@ require (
 	github.com/gobwas/ws v1.0.2
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.3.3
-	github.com/google/go-cmp v0.4.0 // indirect
+	github.com/google/go-cmp v0.4.0
 	github.com/gorilla/websocket v1.4.1
 	github.com/mattn/go-isatty v0.0.12 // indirect
 	go.opencensus.io v0.22.3 // indirect

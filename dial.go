@@ -35,6 +35,7 @@ type DialOptions struct {
 
 	// CompressionOptions controls the compression options.
 	// See docs on the CompressionOptions type.
+	// TODO make *
 	CompressionOptions CompressionOptions
 }
 
