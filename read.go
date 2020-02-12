@@ -120,7 +120,7 @@ func (mr *msgReader) flateContextTakeover() bool {
 }
 
 func (c *Conn) readRSV1Illegal(h header) bool {
-	// If compression is enabled, rsv1 is always illegal.
+	// If compression is disabled, rsv1 is always illegal.
 	if !c.flate() {
 		return true
 	}

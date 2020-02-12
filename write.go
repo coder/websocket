@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"io"
+	"sync"
 	"time"
 
 	"golang.org/x/xerrors"
@@ -50,8 +51,8 @@ func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 type msgWriter struct {
 	c *Conn
 
-	mu       *mu
-	activeMu *mu
+	mu      *mu
+	writeMu sync.Mutex
 
 	ctx    context.Context
 	opcode opcode
@@ -64,9 +65,8 @@ type msgWriter struct {
 
 func newMsgWriter(c *Conn) *msgWriter {
 	mw := &msgWriter{
-		c:        c,
-		mu:       newMu(c),
-		activeMu: newMu(c),
+		c:  c,
+		mu: newMu(c),
 	}
 	return mw
 }
@@ -149,21 +149,17 @@ func (mw *msgWriter) returnFlateWriter() {
 func (mw *msgWriter) Write(p []byte) (_ int, err error) {
 	defer errd.Wrap(&err, "failed to write")
 
-	err = mw.activeMu.Lock(mw.ctx)
-	if err != nil {
-		return 0, err
-	}
-	defer mw.activeMu.Unlock()
+	mw.writeMu.Lock()
+	defer mw.writeMu.Unlock()
 
 	if mw.closed {
 		return 0, xerrors.New("cannot use closed writer")
 	}
 
-	if mw.opcode != opContinuation {
-		// First frame needs to be written.
-		if len(p) >= mw.c.flateThreshold {
-			// Only enables flate if the length crosses the
-			// threshold on the first write.
+	if mw.c.flate() {
+		// Only enables flate if the length crosses the
+		// threshold on the first frame
+		if mw.opcode != opContinuation && len(p) >= mw.c.flateThreshold {
 			mw.ensureFlate()
 		}
 	}
@@ -188,11 +184,8 @@ func (mw *msgWriter) write(p []byte) (int, error) {
 func (mw *msgWriter) Close() (err error) {
 	defer errd.Wrap(&err, "failed to close writer")
 
-	err = mw.activeMu.Lock(mw.ctx)
-	if err != nil {
-		return err
-	}
-	defer mw.activeMu.Unlock()
+	mw.writeMu.Lock()
+	defer mw.writeMu.Unlock()
 
 	if mw.closed {
 		return xerrors.New("cannot use closed writer")
@@ -222,7 +215,7 @@ func (mw *msgWriter) Close() (err error) {
 }
 
 func (mw *msgWriter) close() {
-	mw.activeMu.Lock(context.Background())
+	mw.writeMu.Lock()
 	mw.returnFlateWriter()
 }
 
