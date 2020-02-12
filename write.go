@@ -106,7 +106,7 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) (int, error
 		return 0, err
 	}
 
-	if !c.flate() || len(p) < c.flateThreshold {
+	if !c.flate() {
 		defer c.msgWriter.mu.Unlock()
 		return c.writeFrame(ctx, true, false, c.msgWriter.opcode, p)
 	}
@@ -159,9 +159,16 @@ func (mw *msgWriter) Write(p []byte) (_ int, err error) {
 		return 0, xerrors.New("cannot use closed writer")
 	}
 
-	// TODO Write to buffer to detect whether to enable flate or not for this message.
-	if mw.c.flate() {
-		mw.ensureFlate()
+	if mw.opcode != opContinuation {
+		// First frame needs to be written.
+		if len(p) >= mw.c.flateThreshold {
+			// Only enables flate if the length crosses the
+			// threshold on the first write.
+			mw.ensureFlate()
+		}
+	}
+
+	if mw.flate {
 		return mw.flateWriter.Write(p)
 	}
 
