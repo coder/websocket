@@ -50,7 +50,8 @@ func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 type msgWriter struct {
 	c *Conn
 
-	mu *mu
+	mu       *mu
+	activeMu *mu
 
 	ctx    context.Context
 	opcode opcode
@@ -63,8 +64,9 @@ type msgWriter struct {
 
 func newMsgWriter(c *Conn) *msgWriter {
 	mw := &msgWriter{
-		c:  c,
-		mu: newMu(c),
+		c:        c,
+		mu:       newMu(c),
+		activeMu: newMu(c),
 	}
 	return mw
 }
@@ -147,6 +149,12 @@ func (mw *msgWriter) returnFlateWriter() {
 func (mw *msgWriter) Write(p []byte) (_ int, err error) {
 	defer errd.Wrap(&err, "failed to write")
 
+	err = mw.activeMu.Lock(mw.ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer mw.activeMu.Unlock()
+
 	if mw.closed {
 		return 0, xerrors.New("cannot use closed writer")
 	}
@@ -172,6 +180,12 @@ func (mw *msgWriter) write(p []byte) (int, error) {
 // Close flushes the frame to the connection.
 func (mw *msgWriter) Close() (err error) {
 	defer errd.Wrap(&err, "failed to close writer")
+
+	err = mw.activeMu.Lock(mw.ctx)
+	if err != nil {
+		return err
+	}
+	defer mw.activeMu.Unlock()
 
 	if mw.closed {
 		return xerrors.New("cannot use closed writer")
@@ -201,7 +215,7 @@ func (mw *msgWriter) Close() (err error) {
 }
 
 func (mw *msgWriter) close() {
-	mw.mu.Lock(context.Background())
+	mw.activeMu.Lock(context.Background())
 	mw.returnFlateWriter()
 }
 

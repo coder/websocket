@@ -69,7 +69,9 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 //
 // When the limit is hit, the connection will be closed with StatusMessageTooBig.
 func (c *Conn) SetReadLimit(n int64) {
-	c.msgReader.limitReader.limit.Store(n)
+	// We add read one more byte than the limit in case
+	// there is a fin frame that needs to be read.
+	c.msgReader.limitReader.limit.Store(n + 1)
 }
 
 const defaultReadLimit = 32768
@@ -80,7 +82,7 @@ func newMsgReader(c *Conn) *msgReader {
 		fin: true,
 	}
 
-	mr.limitReader = newLimitReader(c, readerFunc(mr.read), defaultReadLimit)
+	mr.limitReader = newLimitReader(c, readerFunc(mr.read), defaultReadLimit+1)
 	return mr
 }
 

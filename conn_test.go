@@ -348,7 +348,7 @@ func TestConn(t *testing.T) {
 		}()
 		defer cancel()
 
-		c1.SetReadLimit(131072)
+		c1.SetReadLimit(1 << 30)
 
 		exp := xrand.String(xrand.Int(131072))
 
@@ -400,8 +400,6 @@ func TestConn(t *testing.T) {
 			}
 		}()
 		defer cancel()
-
-		c1.SetReadLimit(131072)
 
 		exp := ptypes.DurationProto(100)
 		err = wspb.Write(ctx, c1, exp)
