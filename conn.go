@@ -1,5 +1,3 @@
-// +build !js
-
 package websocket
 
 // MessageType represents the type of a WebSocket message.
