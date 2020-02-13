@@ -115,14 +115,29 @@ func putFlateWriter(w *flate.Writer) {
 }
 
 type slidingWindow struct {
-	r   io.Reader
 	buf []byte
 }
 
+var swPool = map[int]*sync.Pool{}
+
 func newSlidingWindow(n int) *slidingWindow {
+	p, ok := swPool[n]
+	if !ok {
+		p = &sync.Pool{}
+		swPool[n] = p
+	}
+	sw, ok := p.Get().(*slidingWindow)
+	if ok {
+		return sw
+	}
 	return &slidingWindow{
 		buf: make([]byte, 0, n),
 	}
+}
+
+func returnSlidingWindow(sw *slidingWindow) {
+	sw.buf = sw.buf[:0]
+	swPool[cap(sw.buf)].Put(sw)
 }
 
 func (w *slidingWindow) write(p []byte) {

@@ -110,6 +110,10 @@ func (mr *msgReader) returnFlateReader() {
 func (mr *msgReader) close() {
 	mr.c.readMu.Lock(context.Background())
 	mr.returnFlateReader()
+
+	if mr.dict != nil {
+		returnSlidingWindow(mr.dict)
+	}
 }
 
 func (mr *msgReader) flateContextTakeover() bool {
