@@ -95,7 +95,10 @@ func TestConn(t *testing.T) {
 
 		c2.CloseRead(tt.ctx)
 
-		err := c1.Ping(tt.ctx)
+		ctx, cancel := context.WithTimeout(tt.ctx, time.Millisecond*100)
+		defer cancel()
+
+		err := c1.Ping(ctx)
 		assert.Contains(t, err, "failed to wait for pong")
 	})
 
