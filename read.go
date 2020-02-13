@@ -87,15 +87,11 @@ func newMsgReader(c *Conn) *msgReader {
 }
 
 func (mr *msgReader) resetFlate() {
-	if mr.flateContextTakeover() && mr.dict == nil {
-		mr.dict = newSlidingWindow(32768)
+	if mr.flateContextTakeover() {
+		mr.dict.init(32768)
 	}
 
-	if mr.flateContextTakeover() {
-		mr.flateReader = getFlateReader(readerFunc(mr.read), mr.dict.buf)
-	} else {
-		mr.flateReader = getFlateReader(readerFunc(mr.read), nil)
-	}
+	mr.flateReader = getFlateReader(readerFunc(mr.read), mr.dict.buf)
 	mr.limitReader.r = mr.flateReader
 	mr.flateTail.Reset(deflateMessageTail)
 }
@@ -111,9 +107,7 @@ func (mr *msgReader) close() {
 	mr.c.readMu.Lock(context.Background())
 	mr.returnFlateReader()
 
-	if mr.dict != nil {
-		returnSlidingWindow(mr.dict)
-	}
+	mr.dict.close()
 }
 
 func (mr *msgReader) flateContextTakeover() bool {
@@ -325,7 +319,7 @@ type msgReader struct {
 	flateReader io.Reader
 	flateTail   strings.Reader
 	limitReader *limitReader
-	dict        *slidingWindow
+	dict        slidingWindow
 
 	fin           bool
 	payloadLength int64

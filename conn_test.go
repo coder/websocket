@@ -351,13 +351,12 @@ func (tt *connTest) goDiscardLoop(c *websocket.Conn) {
 	ctx, cancel := context.WithCancel(tt.ctx)
 
 	discardLoopErr := xsync.Go(func() error {
+		defer c.Close(websocket.StatusInternalError, "")
+
 		for {
 			_, _, err := c.Read(ctx)
-			if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
-				return nil
-			}
 			if err != nil {
-				return err
+				return assertCloseStatus(websocket.StatusNormalClosure, err)
 			}
 		}
 	})

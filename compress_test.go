@@ -21,12 +21,13 @@ func Test_slidingWindow(t *testing.T) {
 
 			input := xrand.String(maxWindow)
 			windowLength := xrand.Int(maxWindow)
-			r := newSlidingWindow(windowLength)
-			r.write([]byte(input))
+			var sw slidingWindow
+			sw.init(windowLength)
+			sw.write([]byte(input))
 
-			assert.Equal(t, "window length", windowLength, cap(r.buf))
-			if !strings.HasSuffix(input, string(r.buf)) {
-				t.Fatalf("r.buf is not a suffix of input: %q and %q", input, r.buf)
+			assert.Equal(t, "window length", windowLength, cap(sw.buf))
+			if !strings.HasSuffix(input, string(sw.buf)) {
+				t.Fatalf("r.buf is not a suffix of input: %q and %q", input, sw.buf)
 			}
 		})
 	}

@@ -120,41 +120,48 @@ type slidingWindow struct {
 
 var swPool = map[int]*sync.Pool{}
 
-func newSlidingWindow(n int) *slidingWindow {
+func (sw *slidingWindow) init(n int) {
+	if sw.buf != nil {
+		return
+	}
+
 	p, ok := swPool[n]
 	if !ok {
 		p = &sync.Pool{}
 		swPool[n] = p
 	}
-	sw, ok := p.Get().(*slidingWindow)
+	buf, ok := p.Get().([]byte)
 	if ok {
-		return sw
-	}
-	return &slidingWindow{
-		buf: make([]byte, 0, n),
+		sw.buf = buf[:0]
+	} else {
+		sw.buf = make([]byte, 0, n)
 	}
 }
 
-func returnSlidingWindow(sw *slidingWindow) {
-	sw.buf = sw.buf[:0]
-	swPool[cap(sw.buf)].Put(sw)
-}
-
-func (w *slidingWindow) write(p []byte) {
-	if len(p) >= cap(w.buf) {
-		w.buf = w.buf[:cap(w.buf)]
-		p = p[len(p)-cap(w.buf):]
-		copy(w.buf, p)
+func (sw *slidingWindow) close() {
+	if sw.buf == nil {
 		return
 	}
 
-	left := cap(w.buf) - len(w.buf)
+	swPool[cap(sw.buf)].Put(sw.buf)
+	sw.buf = nil
+}
+
+func (sw *slidingWindow) write(p []byte) {
+	if len(p) >= cap(sw.buf) {
+		sw.buf = sw.buf[:cap(sw.buf)]
+		p = p[len(p)-cap(sw.buf):]
+		copy(sw.buf, p)
+		return
+	}
+
+	left := cap(sw.buf) - len(sw.buf)
 	if left < len(p) {
 		// We need to shift spaceNeeded bytes from the end to make room for p at the end.
 		spaceNeeded := len(p) - left
-		copy(w.buf, w.buf[spaceNeeded:])
-		w.buf = w.buf[:len(w.buf)-spaceNeeded]
+		copy(sw.buf, sw.buf[spaceNeeded:])
+		sw.buf = sw.buf[:len(sw.buf)-spaceNeeded]
 	}
 
-	w.buf = append(w.buf, p...)
+	sw.buf = append(sw.buf, p...)
 }
