@@ -86,7 +86,8 @@ func testHeader(t *testing.T, h header) {
 	err = w.Flush()
 	assert.Success(t, err)
 
-	h2, err := readFrameHeader(r)
+	var h2 header
+	err = readFrameHeader(&h2, r)
 	assert.Success(t, err)
 
 	assert.Equal(t, "read header", h, h2)

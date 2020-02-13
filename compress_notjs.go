@@ -118,12 +118,16 @@ type slidingWindow struct {
 	buf []byte
 }
 
+var swPoolMu sync.Mutex
 var swPool = map[int]*sync.Pool{}
 
 func (sw *slidingWindow) init(n int) {
 	if sw.buf != nil {
 		return
 	}
+
+	swPoolMu.Lock()
+	defer swPoolMu.Unlock()
 
 	p, ok := swPool[n]
 	if !ok {
@@ -142,6 +146,9 @@ func (sw *slidingWindow) close() {
 	if sw.buf == nil {
 		return
 	}
+
+	swPoolMu.Lock()
+	defer swPoolMu.Unlock()
 
 	swPool[cap(sw.buf)].Put(sw.buf)
 	sw.buf = nil

@@ -3,7 +3,9 @@
 package websocket_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -48,7 +50,7 @@ func TestConn(t *testing.T) {
 				}, &websocket.AcceptOptions{
 					CompressionOptions: copts(),
 				})
-				defer tt.done()
+				defer tt.cleanup()
 
 				tt.goEchoLoop(c2)
 
@@ -67,7 +69,7 @@ func TestConn(t *testing.T) {
 
 	t.Run("badClose", func(t *testing.T) {
 		tt, c1, _ := newConnTest(t, nil, nil)
-		defer tt.done()
+		defer tt.cleanup()
 
 		err := c1.Close(-1, "")
 		assert.Contains(t, err, "failed to marshal close frame: status code StatusCode(-1) cannot be set")
@@ -75,7 +77,7 @@ func TestConn(t *testing.T) {
 
 	t.Run("ping", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
-		defer tt.done()
+		defer tt.cleanup()
 
 		c1.CloseRead(tt.ctx)
 		c2.CloseRead(tt.ctx)
@@ -91,7 +93,7 @@ func TestConn(t *testing.T) {
 
 	t.Run("badPing", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
-		defer tt.done()
+		defer tt.cleanup()
 
 		c2.CloseRead(tt.ctx)
 
@@ -104,7 +106,7 @@ func TestConn(t *testing.T) {
 
 	t.Run("concurrentWrite", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
-		defer tt.done()
+		defer tt.cleanup()
 
 		tt.goDiscardLoop(c2)
 
@@ -129,7 +131,7 @@ func TestConn(t *testing.T) {
 
 	t.Run("concurrentWriteError", func(t *testing.T) {
 		tt, c1, _ := newConnTest(t, nil, nil)
-		defer tt.done()
+		defer tt.cleanup()
 
 		_, err := c1.Writer(tt.ctx, websocket.MessageText)
 		assert.Success(t, err)
@@ -143,7 +145,7 @@ func TestConn(t *testing.T) {
 
 	t.Run("netConn", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
-		defer tt.done()
+		defer tt.cleanup()
 
 		n1 := websocket.NetConn(tt.ctx, c1, websocket.MessageBinary)
 		n2 := websocket.NetConn(tt.ctx, c2, websocket.MessageBinary)
@@ -179,7 +181,7 @@ func TestConn(t *testing.T) {
 
 	t.Run("netConn/BadMsg", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
-		defer tt.done()
+		defer tt.cleanup()
 
 		n1 := websocket.NetConn(tt.ctx, c1, websocket.MessageBinary)
 		n2 := websocket.NetConn(tt.ctx, c2, websocket.MessageText)
@@ -201,7 +203,7 @@ func TestConn(t *testing.T) {
 
 	t.Run("wsjson", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
-		defer tt.done()
+		defer tt.cleanup()
 
 		tt.goEchoLoop(c2)
 
@@ -227,7 +229,7 @@ func TestConn(t *testing.T) {
 
 	t.Run("wspb", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
-		defer tt.done()
+		defer tt.cleanup()
 
 		tt.goEchoLoop(c2)
 
@@ -297,14 +299,16 @@ func assertCloseStatus(exp websocket.StatusCode, err error) error {
 }
 
 type connTest struct {
-	t   *testing.T
+	t   testing.TB
 	ctx context.Context
 
 	doneFuncs []func()
 }
 
-func newConnTest(t *testing.T, dialOpts *websocket.DialOptions, acceptOpts *websocket.AcceptOptions) (tt *connTest, c1, c2 *websocket.Conn) {
-	t.Parallel()
+func newConnTest(t testing.TB, dialOpts *websocket.DialOptions, acceptOpts *websocket.AcceptOptions) (tt *connTest, c1, c2 *websocket.Conn) {
+	if t, ok := t.(*testing.T); ok {
+		t.Parallel()
+	}
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
@@ -325,7 +329,7 @@ func (tt *connTest) appendDone(f func()) {
 	tt.doneFuncs = append(tt.doneFuncs, f)
 }
 
-func (tt *connTest) done() {
+func (tt *connTest) cleanup() {
 	for i := len(tt.doneFuncs) - 1; i >= 0; i-- {
 		tt.doneFuncs[i]()
 	}
@@ -367,4 +371,96 @@ func (tt *connTest) goDiscardLoop(c *websocket.Conn) {
 			tt.t.Errorf("discard loop error: %v", err)
 		}
 	})
+}
+
+func BenchmarkConn(b *testing.B) {
+	var benchCases = []struct {
+		name string
+		mode websocket.CompressionMode
+	}{
+		{
+			name: "compressionDisabled",
+			mode: websocket.CompressionDisabled,
+		},
+		{
+			name: "compression",
+			mode: websocket.CompressionContextTakeover,
+		},
+		{
+			name: "noContextCompression",
+			mode: websocket.CompressionNoContextTakeover,
+		},
+	}
+	for _, bc := range benchCases {
+		b.Run(bc.name, func(b *testing.B) {
+			bb, c1, c2 := newConnTest(b, &websocket.DialOptions{
+				CompressionOptions: &websocket.CompressionOptions{Mode: bc.mode},
+			}, nil)
+			defer bb.cleanup()
+
+			bb.goEchoLoop(c2)
+
+			const n = 32768
+			writeBuf := make([]byte, n)
+			readBuf := make([]byte, n)
+			writes := make(chan websocket.MessageType)
+			defer close(writes)
+			werrs := make(chan error)
+
+			go func() {
+				for typ := range writes {
+					werrs <- c1.Write(bb.ctx, typ, writeBuf)
+				}
+			}()
+			b.SetBytes(n)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_, err := rand.Reader.Read(writeBuf)
+				if err != nil {
+					b.Fatal(err)
+				}
+
+				expType := websocket.MessageBinary
+				if writeBuf[0]%2 == 1 {
+					expType = websocket.MessageText
+				}
+				writes <- expType
+
+				typ, r, err := c1.Reader(bb.ctx)
+				if err != nil {
+					b.Fatal(err)
+				}
+				if expType != typ {
+					assert.Equal(b, "data type", expType, typ)
+				}
+
+				_, err = io.ReadFull(r, readBuf)
+				if err != nil {
+					b.Fatal(err)
+				}
+
+				n2, err := r.Read(readBuf)
+				if err != io.EOF {
+					assert.Equal(b, "read err", io.EOF, err)
+				}
+				if n2 != 0 {
+					assert.Equal(b, "n2", 0, n2)
+				}
+
+				if !bytes.Equal(writeBuf, readBuf) {
+					assert.Equal(b, "msg", writeBuf, readBuf)
+				}
+
+				err = <-werrs
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+			b.StopTimer()
+
+			err := c1.Close(websocket.StatusNormalClosure, "")
+			assert.Success(b, err)
+		})
+	}
 }

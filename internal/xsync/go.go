@@ -6,7 +6,7 @@ import (
 
 // Go allows running a function in another goroutine
 // and waiting for its error.
-func Go(fn func() error) chan error {
+func Go(fn func() error) <- chan error {
 	errs := make(chan error, 1)
 	go func() {
 		defer func() {

@@ -39,6 +39,7 @@ type Conn struct {
 
 	// Read state.
 	readMu            *mu
+	readHeader        header
 	readControlBuf    [maxControlPayload]byte
 	msgReader         *msgReader
 	readCloseFrameErr error

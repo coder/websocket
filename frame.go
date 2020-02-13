@@ -46,15 +46,14 @@ type header struct {
 
 // readFrameHeader reads a header from the reader.
 // See https://tools.ietf.org/html/rfc6455#section-5.2.
-func readFrameHeader(r *bufio.Reader) (_ header, err error) {
+func readFrameHeader(h *header, r *bufio.Reader) (err error) {
 	defer errd.Wrap(&err, "failed to read frame header")
 
 	b, err := r.ReadByte()
 	if err != nil {
-		return header{}, err
+		return err
 	}
 
-	var h header
 	h.fin = b&(1<<7) != 0
 	h.rsv1 = b&(1<<6) != 0
 	h.rsv2 = b&(1<<5) != 0
@@ -64,7 +63,7 @@ func readFrameHeader(r *bufio.Reader) (_ header, err error) {
 
 	b, err = r.ReadByte()
 	if err != nil {
-		return header{}, err
+		return err
 	}
 
 	h.masked = b&(1<<7) != 0
@@ -81,17 +80,17 @@ func readFrameHeader(r *bufio.Reader) (_ header, err error) {
 		err = binary.Read(r, binary.BigEndian, &h.payloadLength)
 	}
 	if err != nil {
-		return header{}, err
+		return err
 	}
 
 	if h.masked {
 		err = binary.Read(r, binary.LittleEndian, &h.maskKey)
 		if err != nil {
-			return header{}, err
+			return err
 		}
 	}
 
-	return h, nil
+	return nil
 }
 
 // maxControlPayload is the maximum length of a control frame payload.

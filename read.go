@@ -173,7 +173,7 @@ func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 	case c.readTimeout <- ctx:
 	}
 
-	h, err := readFrameHeader(c.br)
+	err := readFrameHeader(&c.readHeader, c.br)
 	if err != nil {
 		select {
 		case <-c.closed:
@@ -192,7 +192,7 @@ func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 	case c.readTimeout <- context.Background():
 	}
 
-	return h, nil
+	return c.readHeader, nil
 }
 
 func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
@@ -390,6 +390,8 @@ func (mr *msgReader) read(p []byte) (int, error) {
 			return 0, err
 		}
 		mr.setFrame(h)
+
+		return mr.read(p)
 	}
 
 	if int64(len(p)) > mr.payloadLength {

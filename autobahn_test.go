@@ -59,8 +59,6 @@ func TestAutobahn(t *testing.T) {
 		for i := 1; i <= cases; i++ {
 			i := i
 			t.Run("", func(t *testing.T) {
-				t.Parallel()
-
 				ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 				defer cancel()
 
