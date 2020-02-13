@@ -20,7 +20,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/internal/test/cmp"
+	"nhooyr.io/websocket/internal/test/assert"
 	"nhooyr.io/websocket/internal/test/wstest"
 	"nhooyr.io/websocket/internal/test/xrand"
 	"nhooyr.io/websocket/internal/xsync"
@@ -34,26 +34,21 @@ func TestConn(t *testing.T) {
 	t.Run("fuzzData", func(t *testing.T) {
 		t.Parallel()
 
+		copts := func() *websocket.CompressionOptions {
+			return &websocket.CompressionOptions{
+				Mode:      websocket.CompressionMode(xrand.Int(int(websocket.CompressionDisabled) + 1)),
+				Threshold: xrand.Int(9999),
+			}
+		}
+
 		for i := 0; i < 5; i++ {
 			t.Run("", func(t *testing.T) {
-				tt := newTest(t)
-				defer tt.done()
-
-				dialCopts := &websocket.CompressionOptions{
-					Mode:      websocket.CompressionMode(xrand.Int(int(websocket.CompressionDisabled) + 1)),
-					Threshold: xrand.Int(9999),
-				}
-
-				acceptCopts := &websocket.CompressionOptions{
-					Mode:      websocket.CompressionMode(xrand.Int(int(websocket.CompressionDisabled) + 1)),
-					Threshold: xrand.Int(9999),
-				}
-
-				c1, c2 := tt.pipe(&websocket.DialOptions{
-					CompressionOptions: dialCopts,
+				tt, c1, c2 := newConnTest(t, &websocket.DialOptions{
+					CompressionOptions: copts(),
 				}, &websocket.AcceptOptions{
-					CompressionOptions: acceptCopts,
+					CompressionOptions: copts(),
 				})
+				defer tt.done()
 
 				tt.goEchoLoop(c2)
 
@@ -61,60 +56,53 @@ func TestConn(t *testing.T) {
 
 				for i := 0; i < 5; i++ {
 					err := wstest.Echo(tt.ctx, c1, 131072)
-					tt.success(err)
+					assert.Success(t, err)
 				}
 
 				err := c1.Close(websocket.StatusNormalClosure, "")
-				tt.success(err)
+				assert.Success(t, err)
 			})
 		}
 	})
 
 	t.Run("badClose", func(t *testing.T) {
-		tt := newTest(t)
+		tt, c1, _ := newConnTest(t, nil, nil)
 		defer tt.done()
 
-		c1, _ := tt.pipe(nil, nil)
-
 		err := c1.Close(-1, "")
-		tt.errContains(err, "failed to marshal close frame: status code StatusCode(-1) cannot be set")
+		assert.Contains(t, err, "failed to marshal close frame: status code StatusCode(-1) cannot be set")
 	})
 
 	t.Run("ping", func(t *testing.T) {
-		tt := newTest(t)
+		tt, c1, c2 := newConnTest(t, nil, nil)
 		defer tt.done()
-
-		c1, c2 := tt.pipe(nil, nil)
 
 		c1.CloseRead(tt.ctx)
 		c2.CloseRead(tt.ctx)
 
 		for i := 0; i < 10; i++ {
 			err := c1.Ping(tt.ctx)
-			tt.success(err)
+			assert.Success(t, err)
 		}
 
 		err := c1.Close(websocket.StatusNormalClosure, "")
-		tt.success(err)
+		assert.Success(t, err)
 	})
 
 	t.Run("badPing", func(t *testing.T) {
-		tt := newTest(t)
+		tt, c1, c2 := newConnTest(t, nil, nil)
 		defer tt.done()
-
-		c1, c2 := tt.pipe(nil, nil)
 
 		c2.CloseRead(tt.ctx)
 
 		err := c1.Ping(tt.ctx)
-		tt.errContains(err, "failed to wait for pong")
+		assert.Contains(t, err, "failed to wait for pong")
 	})
 
 	t.Run("concurrentWrite", func(t *testing.T) {
-		tt := newTest(t)
+		tt, c1, c2 := newConnTest(t, nil, nil)
 		defer tt.done()
 
-		c1, c2 := tt.pipe(nil, nil)
 		tt.goDiscardLoop(c2)
 
 		msg := xrand.Bytes(xrand.Int(9999))
@@ -129,34 +117,30 @@ func TestConn(t *testing.T) {
 
 		for i := 0; i < count; i++ {
 			err := <-errs
-			tt.success(err)
+			assert.Success(t, err)
 		}
 
 		err := c1.Close(websocket.StatusNormalClosure, "")
-		tt.success(err)
+		assert.Success(t, err)
 	})
 
 	t.Run("concurrentWriteError", func(t *testing.T) {
-		tt := newTest(t)
+		tt, c1, _ := newConnTest(t, nil, nil)
 		defer tt.done()
 
-		c1, _ := tt.pipe(nil, nil)
-
 		_, err := c1.Writer(tt.ctx, websocket.MessageText)
-		tt.success(err)
+		assert.Success(t, err)
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
 		defer cancel()
 
 		err = c1.Write(ctx, websocket.MessageText, []byte("x"))
-		tt.eq(context.DeadlineExceeded, err)
+		assert.Equal(t, "write error", context.DeadlineExceeded, err)
 	})
 
 	t.Run("netConn", func(t *testing.T) {
-		tt := newTest(t)
+		tt, c1, c2 := newConnTest(t, nil, nil)
 		defer tt.done()
-
-		c1, c2 := tt.pipe(nil, nil)
 
 		n1 := websocket.NetConn(tt.ctx, c1, websocket.MessageBinary)
 		n2 := websocket.NetConn(tt.ctx, c2, websocket.MessageBinary)
@@ -166,9 +150,9 @@ func TestConn(t *testing.T) {
 		n1.SetDeadline(d)
 		n1.SetDeadline(time.Time{})
 
-		tt.eq(n1.RemoteAddr(), n1.LocalAddr())
-		tt.eq("websocket/unknown-addr", n1.RemoteAddr().String())
-		tt.eq("websocket", n1.RemoteAddr().Network())
+		assert.Equal(t, "remote addr", n1.RemoteAddr(), n1.LocalAddr())
+		assert.Equal(t, "remote addr string", "websocket/unknown-addr", n1.RemoteAddr().String())
+		assert.Equal(t, "remote addr network", "websocket", n1.RemoteAddr().Network())
 
 		errs := xsync.Go(func() error {
 			_, err := n2.Write([]byte("hello"))
@@ -179,22 +163,20 @@ func TestConn(t *testing.T) {
 		})
 
 		b, err := ioutil.ReadAll(n1)
-		tt.success(err)
+		assert.Success(t, err)
 
 		_, err = n1.Read(nil)
-		tt.eq(err, io.EOF)
+		assert.Equal(t, "read error", err, io.EOF)
 
 		err = <-errs
-		tt.success(err)
+		assert.Success(t, err)
 
-		tt.eq([]byte("hello"), b)
+		assert.Equal(t, "read msg", []byte("hello"), b)
 	})
 
 	t.Run("netConn/BadMsg", func(t *testing.T) {
-		tt := newTest(t)
+		tt, c1, c2 := newConnTest(t, nil, nil)
 		defer tt.done()
-
-		c1, c2 := tt.pipe(nil, nil)
 
 		n1 := websocket.NetConn(tt.ctx, c1, websocket.MessageBinary)
 		n2 := websocket.NetConn(tt.ctx, c2, websocket.MessageText)
@@ -208,17 +190,15 @@ func TestConn(t *testing.T) {
 		})
 
 		_, err := ioutil.ReadAll(n1)
-		tt.errContains(err, `unexpected frame type read (expected MessageBinary): MessageText`)
+		assert.Contains(t, err, `unexpected frame type read (expected MessageBinary): MessageText`)
 
 		err = <-errs
-		tt.success(err)
+		assert.Success(t, err)
 	})
 
 	t.Run("wsjson", func(t *testing.T) {
-		tt := newTest(t)
+		tt, c1, c2 := newConnTest(t, nil, nil)
 		defer tt.done()
-
-		c1, c2 := tt.pipe(nil, nil)
 
 		tt.goEchoLoop(c2)
 
@@ -232,35 +212,33 @@ func TestConn(t *testing.T) {
 
 		var act interface{}
 		err := wsjson.Read(tt.ctx, c1, &act)
-		tt.success(err)
-		tt.eq(exp, act)
+		assert.Success(t, err)
+		assert.Equal(t, "read msg", exp, act)
 
 		err = <-werr
-		tt.success(err)
+		assert.Success(t, err)
 
 		err = c1.Close(websocket.StatusNormalClosure, "")
-		tt.success(err)
+		assert.Success(t, err)
 	})
 
 	t.Run("wspb", func(t *testing.T) {
-		tt := newTest(t)
+		tt, c1, c2 := newConnTest(t, nil, nil)
 		defer tt.done()
-
-		c1, c2 := tt.pipe(nil, nil)
 
 		tt.goEchoLoop(c2)
 
 		exp := ptypes.DurationProto(100)
 		err := wspb.Write(tt.ctx, c1, exp)
-		tt.success(err)
+		assert.Success(t, err)
 
 		act := &duration.Duration{}
 		err = wspb.Read(tt.ctx, c1, act)
-		tt.success(err)
-		tt.eq(exp, act)
+		assert.Success(t, err)
+		assert.Equal(t, "read msg", exp, act)
 
 		err = c1.Close(websocket.StatusNormalClosure, "")
-		tt.success(err)
+		assert.Success(t, err)
 	})
 }
 
@@ -277,14 +255,17 @@ func TestWasm(t *testing.T) {
 			InsecureSkipVerify: true,
 		})
 		if err != nil {
-			t.Error(err)
+			t.Errorf("echo server failed: %v", err)
 			return
 		}
 		defer c.Close(websocket.StatusInternalError, "")
 
 		err = wstest.EchoLoop(r.Context(), c)
-		if websocket.CloseStatus(err) != websocket.StatusNormalClosure {
-			t.Errorf("echoLoop failed: %v", err)
+
+		err = assertCloseStatus(websocket.StatusNormalClosure, err)
+		if err != nil {
+			t.Errorf("echo server failed: %v", err)
+			return
 		}
 	}))
 	defer wg.Wait()
@@ -307,38 +288,47 @@ func assertCloseStatus(exp websocket.StatusCode, err error) error {
 		return xerrors.Errorf("expected websocket.CloseError: %T %v", err, err)
 	}
 	if websocket.CloseStatus(err) != exp {
-		return xerrors.Errorf("unexpected close status (%v):%v", exp, err)
+		return xerrors.Errorf("expected close status %v but got ", exp, err)
 	}
 	return nil
 }
 
-type test struct {
+type connTest struct {
 	t   *testing.T
 	ctx context.Context
 
 	doneFuncs []func()
 }
 
-func newTest(t *testing.T) *test {
+func newConnTest(t *testing.T, dialOpts *websocket.DialOptions, acceptOpts *websocket.AcceptOptions) (tt *connTest, c1, c2 *websocket.Conn) {
 	t.Parallel()
+	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	tt := &test{t: t, ctx: ctx}
+	tt = &connTest{t: t, ctx: ctx}
 	tt.appendDone(cancel)
-	return tt
+
+	c1, c2, err := wstest.Pipe(dialOpts, acceptOpts)
+	assert.Success(tt.t, err)
+	tt.appendDone(func() {
+		c2.Close(websocket.StatusInternalError, "")
+		c1.Close(websocket.StatusInternalError, "")
+	})
+
+	return tt, c1, c2
 }
 
-func (tt *test) appendDone(f func()) {
+func (tt *connTest) appendDone(f func()) {
 	tt.doneFuncs = append(tt.doneFuncs, f)
 }
 
-func (tt *test) done() {
+func (tt *connTest) done() {
 	for i := len(tt.doneFuncs) - 1; i >= 0; i-- {
 		tt.doneFuncs[i]()
 	}
 }
 
-func (tt *test) goEchoLoop(c *websocket.Conn) {
+func (tt *connTest) goEchoLoop(c *websocket.Conn) {
 	ctx, cancel := context.WithCancel(tt.ctx)
 
 	echoLoopErr := xsync.Go(func() error {
@@ -354,7 +344,7 @@ func (tt *test) goEchoLoop(c *websocket.Conn) {
 	})
 }
 
-func (tt *test) goDiscardLoop(c *websocket.Conn) {
+func (tt *connTest) goDiscardLoop(c *websocket.Conn) {
 	ctx, cancel := context.WithCancel(tt.ctx)
 
 	discardLoopErr := xsync.Go(func() error {
@@ -375,39 +365,4 @@ func (tt *test) goDiscardLoop(c *websocket.Conn) {
 			tt.t.Errorf("discard loop error: %v", err)
 		}
 	})
-}
-
-func (tt *test) pipe(dialOpts *websocket.DialOptions, acceptOpts *websocket.AcceptOptions) (c1, c2 *websocket.Conn) {
-	tt.t.Helper()
-
-	c1, c2, err := wstest.Pipe(dialOpts, acceptOpts)
-	if err != nil {
-		tt.t.Fatal(err)
-	}
-	tt.appendDone(func() {
-		c2.Close(websocket.StatusInternalError, "")
-		c1.Close(websocket.StatusInternalError, "")
-	})
-	return c1, c2
-}
-
-func (tt *test) success(err error) {
-	tt.t.Helper()
-	if err != nil {
-		tt.t.Fatal(err)
-	}
-}
-
-func (tt *test) errContains(err error, sub string) {
-	tt.t.Helper()
-	if !cmp.ErrorContains(err, sub) {
-		tt.t.Fatalf("error does not contain %q: %v", sub, err)
-	}
-}
-
-func (tt *test) eq(exp, act interface{}) {
-	tt.t.Helper()
-	if !cmp.Equal(exp, act) {
-		tt.t.Fatalf(cmp.Diff(exp, act))
-	}
 }

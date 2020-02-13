@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"nhooyr.io/websocket/internal/test/assert"
 	"nhooyr.io/websocket/internal/test/xrand"
 )
 
@@ -23,10 +24,7 @@ func Test_slidingWindow(t *testing.T) {
 			r := newSlidingWindow(windowLength)
 			r.write([]byte(input))
 
-			if cap(r.buf) != windowLength {
-				t.Fatalf("sliding window length changed somehow: %q and windowLength %d", input, windowLength)
-			}
-
+			assert.Equal(t, "window length", windowLength, cap(r.buf))
 			if !strings.HasSuffix(input, string(r.buf)) {
 				t.Fatalf("r.buf is not a suffix of input: %q and %q", input, r.buf)
 			}

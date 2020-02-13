@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/internal/test/cmp"
+	"nhooyr.io/websocket/internal/test/assert"
 	"nhooyr.io/websocket/internal/test/wstest"
 )
 
@@ -21,28 +21,18 @@ func TestWasm(t *testing.T) {
 	c, resp, err := websocket.Dial(ctx, os.Getenv("WS_ECHO_SERVER_URL"), &websocket.DialOptions{
 		Subprotocols: []string{"echo"},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Success(t, err)
 	defer c.Close(websocket.StatusInternalError, "")
 
-	if !cmp.Equal("echo", c.Subprotocol()) {
-		t.Fatalf("unexpected subprotocol: %v", cmp.Diff("echo", c.Subprotocol()))
-	}
-	if !cmp.Equal(http.StatusSwitchingProtocols, resp.StatusCode) {
-		t.Fatalf("unexpected status code: %v", cmp.Diff(http.StatusSwitchingProtocols, resp.StatusCode))
-	}
+	assert.Equal(t, "subprotocol", "echo", c.Subprotocol())
+	assert.Equal(t, "response code", http.StatusSwitchingProtocols, resp.StatusCode)
 
 	c.SetReadLimit(65536)
 	for i := 0; i < 10; i++ {
 		err = wstest.Echo(ctx, c, 65536)
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.Success(t, err)
 	}
 
 	err = c.Close(websocket.StatusNormalClosure, "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Success(t, err)
 }

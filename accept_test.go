@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/xerrors"
 
-	"nhooyr.io/websocket/internal/test/cmp"
+	"nhooyr.io/websocket/internal/test/assert"
 )
 
 func TestAccept(t *testing.T) {
@@ -25,9 +25,7 @@ func TestAccept(t *testing.T) {
 		r := httptest.NewRequest("GET", "/", nil)
 
 		_, err := Accept(w, r, nil)
-		if !cmp.ErrorContains(err, "protocol violation") {
-			t.Fatal(err)
-		}
+		assert.Contains(t, err, "protocol violation")
 	})
 
 	t.Run("badOrigin", func(t *testing.T) {
@@ -42,9 +40,7 @@ func TestAccept(t *testing.T) {
 		r.Header.Set("Origin", "harhar.com")
 
 		_, err := Accept(w, r, nil)
-		if !cmp.ErrorContains(err, `request Origin "harhar.com" is not authorized for Host`) {
-			t.Fatal(err)
-		}
+		assert.Contains(t, err, `request Origin "harhar.com" is not authorized for Host`)
 	})
 
 	t.Run("badCompression", func(t *testing.T) {
@@ -61,9 +57,7 @@ func TestAccept(t *testing.T) {
 		r.Header.Set("Sec-WebSocket-Extensions", "permessage-deflate; harharhar")
 
 		_, err := Accept(w, r, nil)
-		if !cmp.ErrorContains(err, `unsupported permessage-deflate parameter`) {
-			t.Fatal(err)
-		}
+		assert.Contains(t, err, `unsupported permessage-deflate parameter`)
 	})
 
 	t.Run("requireHttpHijacker", func(t *testing.T) {
@@ -77,9 +71,7 @@ func TestAccept(t *testing.T) {
 		r.Header.Set("Sec-WebSocket-Key", "meow123")
 
 		_, err := Accept(w, r, nil)
-		if !cmp.ErrorContains(err, `http.ResponseWriter does not implement http.Hijacker`) {
-			t.Fatal(err)
-		}
+		assert.Contains(t, err, `http.ResponseWriter does not implement http.Hijacker`)
 	})
 
 	t.Run("badHijack", func(t *testing.T) {
@@ -99,9 +91,7 @@ func TestAccept(t *testing.T) {
 		r.Header.Set("Sec-WebSocket-Key", "meow123")
 
 		_, err := Accept(w, r, nil)
-		if !cmp.ErrorContains(err, `failed to hijack connection`) {
-			t.Fatal(err)
-		}
+		assert.Contains(t, err, `failed to hijack connection`)
 	})
 }
 
@@ -193,8 +183,10 @@ func Test_verifyClientHandshake(t *testing.T) {
 			}
 
 			_, err := verifyClientRequest(httptest.NewRecorder(), r)
-			if tc.success != (err == nil) {
-				t.Fatalf("unexpected error value: %v", err)
+			if tc.success {
+				assert.Success(t, err)
+			} else {
+				assert.Error(t, err)
 			}
 		})
 	}
@@ -244,9 +236,7 @@ func Test_selectSubprotocol(t *testing.T) {
 			r.Header.Set("Sec-WebSocket-Protocol", strings.Join(tc.clientProtocols, ","))
 
 			negotiated := selectSubprotocol(r, tc.serverProtocols)
-			if !cmp.Equal(tc.negotiated, negotiated) {
-				t.Fatalf("unexpected negotiated: %v", cmp.Diff(tc.negotiated, negotiated))
-			}
+			assert.Equal(t, "negotiated", tc.negotiated, negotiated)
 		})
 	}
 }
@@ -300,8 +290,10 @@ func Test_authenticateOrigin(t *testing.T) {
 			r.Header.Set("Origin", tc.origin)
 
 			err := authenticateOrigin(r)
-			if tc.success != (err == nil) {
-				t.Fatalf("unexpected error value: %v", err)
+			if tc.success {
+				assert.Success(t, err)
+			} else {
+				assert.Error(t, err)
 			}
 		})
 	}
@@ -373,21 +365,13 @@ func Test_acceptCompression(t *testing.T) {
 			w := httptest.NewRecorder()
 			copts, err := acceptCompression(r, w, tc.mode)
 			if tc.error {
-				if err == nil {
-					t.Fatalf("expected error: %v", copts)
-				}
+				assert.Error(t, err)
 				return
 			}
 
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !cmp.Equal(tc.expCopts, copts) {
-				t.Fatalf("unexpected compression options: %v", cmp.Diff(tc.expCopts, copts))
-			}
-			if !cmp.Equal(tc.respSecWebSocketExtensions, w.Header().Get("Sec-WebSocket-Extensions")) {
-				t.Fatalf("unexpected respHeader: %v", cmp.Diff(tc.respSecWebSocketExtensions, w.Header().Get("Sec-WebSocket-Extensions")))
-			}
+			assert.Success(t, err)
+			assert.Equal(t, "compression options", tc.expCopts, copts)
+			assert.Equal(t, "Sec-WebSocket-Extensions", tc.respSecWebSocketExtensions, w.Header().Get("Sec-WebSocket-Extensions"))
 		})
 	}
 }

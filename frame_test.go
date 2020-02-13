@@ -16,7 +16,7 @@ import (
 	"github.com/gobwas/ws"
 	_ "github.com/gorilla/websocket"
 
-	"nhooyr.io/websocket/internal/test/cmp"
+	"nhooyr.io/websocket/internal/test/assert"
 )
 
 func TestHeader(t *testing.T) {
@@ -81,22 +81,15 @@ func testHeader(t *testing.T, h header) {
 	r := bufio.NewReader(b)
 
 	err := writeFrameHeader(h, w)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Success(t, err)
+
 	err = w.Flush()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Success(t, err)
 
 	h2, err := readFrameHeader(r)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Success(t, err)
 
-	if !cmp.Equal(h, h2) {
-		t.Fatal(cmp.Diff(h, h2))
-	}
+	assert.Equal(t, "read header", h, h2)
 }
 
 func Test_mask(t *testing.T) {
@@ -108,14 +101,10 @@ func Test_mask(t *testing.T) {
 	gotKey32 := mask(key32, p)
 
 	expP := []byte{0, 0, 0, 0x0d, 0x6}
-	if !cmp.Equal(expP, p) {
-		t.Fatal(cmp.Diff(expP, p))
-	}
+	assert.Equal(t, "p", expP, p)
 
 	expKey32 := bits.RotateLeft32(key32, -8)
-	if !cmp.Equal(expKey32, gotKey32) {
-		t.Fatal(cmp.Diff(expKey32, gotKey32))
-	}
+	assert.Equal(t, "key32", expKey32, gotKey32)
 }
 
 func basicMask(maskKey [4]byte, pos int, b []byte) int {

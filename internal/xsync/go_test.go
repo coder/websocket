@@ -3,7 +3,7 @@ package xsync
 import (
 	"testing"
 
-	"nhooyr.io/websocket/internal/test/cmp"
+	"nhooyr.io/websocket/internal/test/assert"
 )
 
 func TestGoRecover(t *testing.T) {
@@ -14,7 +14,5 @@ func TestGoRecover(t *testing.T) {
 	})
 
 	err := <-errs
-	if !cmp.ErrorContains(err, "anmol") {
-		t.Fatalf("unexpected err: %v", err)
-	}
+	assert.Contains(t, err, "anmol")
 }

@@ -19,6 +19,7 @@ import (
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/errd"
+	"nhooyr.io/websocket/internal/test/assert"
 	"nhooyr.io/websocket/internal/test/wstest"
 )
 
@@ -45,32 +46,26 @@ func TestAutobahn(t *testing.T) {
 	defer cancel()
 
 	wstestURL, closeFn, err := wstestClientServer(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Success(t, err)
 	defer closeFn()
 
 	err = waitWS(ctx, wstestURL)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Success(t, err)
 
 	cases, err := wstestCaseCount(ctx, wstestURL)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Success(t, err)
 
 	t.Run("cases", func(t *testing.T) {
 		for i := 1; i <= cases; i++ {
 			i := i
 			t.Run("", func(t *testing.T) {
+				t.Parallel()
+
 				ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 				defer cancel()
 
 				c, _, err := websocket.Dial(ctx, fmt.Sprintf(wstestURL+"/runCase?case=%v&agent=main", i), nil)
-				if err != nil {
-					t.Fatal(err)
-				}
+				assert.Success(t, err)
 				err = wstest.EchoLoop(ctx, c)
 				t.Logf("echoLoop: %v", err)
 			})
@@ -78,9 +73,7 @@ func TestAutobahn(t *testing.T) {
 	})
 
 	c, _, err := websocket.Dial(ctx, fmt.Sprintf(wstestURL+"/updateReports?agent=main"), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Success(t, err)
 	c.Close(websocket.StatusNormalClosure, "")
 
 	checkWSTestIndex(t, "./ci/out/wstestClientReports/index.json")
@@ -172,18 +165,14 @@ func wstestCaseCount(ctx context.Context, url string) (cases int, err error) {
 
 func checkWSTestIndex(t *testing.T, path string) {
 	wstestOut, err := ioutil.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Success(t, err)
 
 	var indexJSON map[string]map[string]struct {
 		Behavior      string `json:"behavior"`
 		BehaviorClose string `json:"behaviorClose"`
 	}
 	err = json.Unmarshal(wstestOut, &indexJSON)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Success(t, err)
 
 	for _, tests := range indexJSON {
 		for test, result := range tests {
