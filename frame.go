@@ -3,8 +3,11 @@ package websocket
 import (
 	"bufio"
 	"encoding/binary"
+	"io"
 	"math"
 	"math/bits"
+
+	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket/internal/errd"
 )
@@ -46,12 +49,12 @@ type header struct {
 
 // readFrameHeader reads a header from the reader.
 // See https://tools.ietf.org/html/rfc6455#section-5.2.
-func readFrameHeader(h *header, r *bufio.Reader) (err error) {
+func readFrameHeader(r *bufio.Reader, readBuf []byte) (h header, err error) {
 	defer errd.Wrap(&err, "failed to read frame header")
 
 	b, err := r.ReadByte()
 	if err != nil {
-		return err
+		return header{}, err
 	}
 
 	h.fin = b&(1<<7) != 0
@@ -63,7 +66,7 @@ func readFrameHeader(h *header, r *bufio.Reader) (err error) {
 
 	b, err = r.ReadByte()
 	if err != nil {
-		return err
+		return header{}, err
 	}
 
 	h.masked = b&(1<<7) != 0
@@ -73,24 +76,29 @@ func readFrameHeader(h *header, r *bufio.Reader) (err error) {
 	case payloadLength < 126:
 		h.payloadLength = int64(payloadLength)
 	case payloadLength == 126:
-		var pl uint16
-		err = binary.Read(r, binary.BigEndian, &pl)
-		h.payloadLength = int64(pl)
+		_, err = io.ReadFull(r, readBuf[:2])
+		h.payloadLength = int64(binary.BigEndian.Uint16(readBuf))
 	case payloadLength == 127:
-		err = binary.Read(r, binary.BigEndian, &h.payloadLength)
+		_, err = io.ReadFull(r, readBuf)
+		h.payloadLength = int64(binary.BigEndian.Uint64(readBuf))
 	}
 	if err != nil {
-		return err
+		return header{}, err
+	}
+
+	if h.payloadLength < 0 {
+		return header{}, xerrors.Errorf("received negative payload length: %v", h.payloadLength)
 	}
 
 	if h.masked {
-		err = binary.Read(r, binary.LittleEndian, &h.maskKey)
+		_, err = io.ReadFull(r, readBuf[:4])
 		if err != nil {
-			return err
+			return header{}, err
 		}
+		h.maskKey = binary.LittleEndian.Uint32(readBuf)
 	}
 
-	return nil
+	return h, nil
 }
 
 // maxControlPayload is the maximum length of a control frame payload.
@@ -99,7 +107,7 @@ const maxControlPayload = 125
 
 // writeFrameHeader writes the bytes of the header to w.
 // See https://tools.ietf.org/html/rfc6455#section-5.2
-func writeFrameHeader(h header, w *bufio.Writer) (err error) {
+func writeFrameHeader(h header, w *bufio.Writer, buf []byte) (err error) {
 	defer errd.Wrap(&err, "failed to write frame header")
 
 	var b byte
@@ -143,16 +151,19 @@ func writeFrameHeader(h header, w *bufio.Writer) (err error) {
 
 	switch {
 	case h.payloadLength > math.MaxUint16:
-		err = binary.Write(w, binary.BigEndian, h.payloadLength)
+		binary.BigEndian.PutUint64(buf, uint64(h.payloadLength))
+		_, err = w.Write(buf)
 	case h.payloadLength > 125:
-		err = binary.Write(w, binary.BigEndian, uint16(h.payloadLength))
+		binary.BigEndian.PutUint16(buf, uint16(h.payloadLength))
+		_, err = w.Write(buf[:2])
 	}
 	if err != nil {
 		return err
 	}
 
 	if h.masked {
-		err = binary.Write(w, binary.LittleEndian, h.maskKey)
+		binary.LittleEndian.PutUint32(buf, h.maskKey)
+		_, err = w.Write(buf[:4])
 		if err != nil {
 			return err
 		}

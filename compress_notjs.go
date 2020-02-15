@@ -3,10 +3,11 @@
 package websocket
 
 import (
-	"compress/flate"
 	"io"
 	"net/http"
 	"sync"
+
+	"github.com/klauspost/compress/flate"
 )
 
 func (m CompressionMode) opts() *compressionOptions {
@@ -45,10 +46,16 @@ type trimLastFourBytesWriter struct {
 }
 
 func (tw *trimLastFourBytesWriter) reset() {
-	tw.tail = tw.tail[:0]
+	if tw != nil && tw.tail != nil {
+		tw.tail = tw.tail[:0]
+	}
 }
 
 func (tw *trimLastFourBytesWriter) Write(p []byte) (int, error) {
+	if tw.tail == nil {
+		tw.tail = make([]byte, 0, 4)
+	}
+
 	extra := len(tw.tail) + len(p) - 4
 
 	if extra <= 0 {
@@ -65,7 +72,10 @@ func (tw *trimLastFourBytesWriter) Write(p []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		tw.tail = tw.tail[extra:]
+
+		// Shift remaining bytes in tail over.
+		n := copy(tw.tail, tw.tail[extra:])
+		tw.tail = tw.tail[:n]
 	}
 
 	// If p is less than or equal to 4 bytes,
@@ -118,22 +128,32 @@ type slidingWindow struct {
 	buf []byte
 }
 
-var swPoolMu sync.Mutex
+var swPoolMu sync.RWMutex
 var swPool = map[int]*sync.Pool{}
+
+func slidingWindowPool(n int) *sync.Pool {
+	swPoolMu.RLock()
+	p, ok := swPool[n]
+	swPoolMu.RUnlock()
+	if ok {
+		return p
+	}
+
+	p = &sync.Pool{}
+
+	swPoolMu.Lock()
+	swPool[n] = p
+	swPoolMu.Unlock()
+
+	return p
+}
 
 func (sw *slidingWindow) init(n int) {
 	if sw.buf != nil {
 		return
 	}
 
-	swPoolMu.Lock()
-	defer swPoolMu.Unlock()
-
-	p, ok := swPool[n]
-	if !ok {
-		p = &sync.Pool{}
-		swPool[n] = p
-	}
+	p := slidingWindowPool(n)
 	buf, ok := p.Get().([]byte)
 	if ok {
 		sw.buf = buf[:0]

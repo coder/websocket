@@ -3,6 +3,7 @@
 package websocket
 
 import (
+	"bufio"
 	"context"
 	"io"
 	"io/ioutil"
@@ -81,8 +82,9 @@ func newMsgReader(c *Conn) *msgReader {
 		c:   c,
 		fin: true,
 	}
+	mr.readFunc = mr.read
 
-	mr.limitReader = newLimitReader(c, readerFunc(mr.read), defaultReadLimit+1)
+	mr.limitReader = newLimitReader(c, mr.readFunc, defaultReadLimit+1)
 	return mr
 }
 
@@ -90,13 +92,16 @@ func (mr *msgReader) resetFlate() {
 	if mr.flateContextTakeover() {
 		mr.dict.init(32768)
 	}
+	if mr.flateBufio == nil {
+		mr.flateBufio = getBufioReader(mr.readFunc)
+	}
 
-	mr.flateReader = getFlateReader(readerFunc(mr.read), mr.dict.buf)
+	mr.flateReader = getFlateReader(mr.flateBufio, mr.dict.buf)
 	mr.limitReader.r = mr.flateReader
 	mr.flateTail.Reset(deflateMessageTail)
 }
 
-func (mr *msgReader) returnFlateReader() {
+func (mr *msgReader) putFlateReader() {
 	if mr.flateReader != nil {
 		putFlateReader(mr.flateReader)
 		mr.flateReader = nil
@@ -105,9 +110,11 @@ func (mr *msgReader) returnFlateReader() {
 
 func (mr *msgReader) close() {
 	mr.c.readMu.Lock(context.Background())
-	mr.returnFlateReader()
-
+	mr.putFlateReader()
 	mr.dict.close()
+	if mr.flateBufio != nil {
+		putBufioReader(mr.flateBufio)
+	}
 }
 
 func (mr *msgReader) flateContextTakeover() bool {
@@ -173,7 +180,7 @@ func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 	case c.readTimeout <- ctx:
 	}
 
-	err := readFrameHeader(&c.readHeader, c.br)
+	h, err := readFrameHeader(c.br, c.readHeaderBuf[:])
 	if err != nil {
 		select {
 		case <-c.closed:
@@ -192,7 +199,7 @@ func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 	case c.readTimeout <- context.Background():
 	}
 
-	return c.readHeader, nil
+	return h, nil
 }
 
 func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
@@ -317,6 +324,7 @@ type msgReader struct {
 	ctx         context.Context
 	flate       bool
 	flateReader io.Reader
+	flateBufio  *bufio.Reader
 	flateTail   strings.Reader
 	limitReader *limitReader
 	dict        slidingWindow
@@ -324,12 +332,15 @@ type msgReader struct {
 	fin           bool
 	payloadLength int64
 	maskKey       uint32
+
+	// readerFunc(mr.Read) to avoid continuous allocations.
+	readFunc readerFunc
 }
 
 func (mr *msgReader) reset(ctx context.Context, h header) {
 	mr.ctx = ctx
 	mr.flate = h.rsv1
-	mr.limitReader.reset(readerFunc(mr.read))
+	mr.limitReader.reset(mr.readFunc)
 
 	if mr.flate {
 		mr.resetFlate()
@@ -346,15 +357,15 @@ func (mr *msgReader) setFrame(h header) {
 
 func (mr *msgReader) Read(p []byte) (n int, err error) {
 	defer func() {
-		errd.Wrap(&err, "failed to read")
 		if xerrors.Is(err, io.ErrUnexpectedEOF) && mr.fin && mr.flate {
 			err = io.EOF
 		}
 		if xerrors.Is(err, io.EOF) {
 			err = io.EOF
-
-			mr.returnFlateReader()
+			mr.putFlateReader()
+			return
 		}
+		errd.Wrap(&err, "failed to read")
 	}()
 
 	err = mr.c.readMu.Lock(mr.ctx)
@@ -372,44 +383,46 @@ func (mr *msgReader) Read(p []byte) (n int, err error) {
 }
 
 func (mr *msgReader) read(p []byte) (int, error) {
-	if mr.payloadLength == 0 {
-		if mr.fin {
-			if mr.flate {
-				return mr.flateTail.Read(p)
+	for {
+		if mr.payloadLength == 0 {
+			if mr.fin {
+				if mr.flate {
+					return mr.flateTail.Read(p)
+				}
+				return 0, io.EOF
 			}
-			return 0, io.EOF
+
+			h, err := mr.c.readLoop(mr.ctx)
+			if err != nil {
+				return 0, err
+			}
+			if h.opcode != opContinuation {
+				err := xerrors.New("received new data message without finishing the previous message")
+				mr.c.writeError(StatusProtocolError, err)
+				return 0, err
+			}
+			mr.setFrame(h)
+
+			continue
 		}
 
-		h, err := mr.c.readLoop(mr.ctx)
+		if int64(len(p)) > mr.payloadLength {
+			p = p[:mr.payloadLength]
+		}
+
+		n, err := mr.c.readFramePayload(mr.ctx, p)
 		if err != nil {
-			return 0, err
+			return n, err
 		}
-		if h.opcode != opContinuation {
-			err := xerrors.New("received new data message without finishing the previous message")
-			mr.c.writeError(StatusProtocolError, err)
-			return 0, err
+
+		mr.payloadLength -= int64(n)
+
+		if !mr.c.client {
+			mr.maskKey = mask(mr.maskKey, p)
 		}
-		mr.setFrame(h)
 
-		return mr.read(p)
+		return n, nil
 	}
-
-	if int64(len(p)) > mr.payloadLength {
-		p = p[:mr.payloadLength]
-	}
-
-	n, err := mr.c.readFramePayload(mr.ctx, p)
-	if err != nil {
-		return n, err
-	}
-
-	mr.payloadLength -= int64(n)
-
-	if !mr.c.client {
-		mr.maskKey = mask(mr.maskKey, p)
-	}
-
-	return n, nil
 }
 
 type limitReader struct {

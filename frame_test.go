@@ -80,14 +80,13 @@ func testHeader(t *testing.T, h header) {
 	w := bufio.NewWriter(b)
 	r := bufio.NewReader(b)
 
-	err := writeFrameHeader(h, w)
+	err := writeFrameHeader(h, w, make([]byte, 8))
 	assert.Success(t, err)
 
 	err = w.Flush()
 	assert.Success(t, err)
 
-	var h2 header
-	err = readFrameHeader(&h2, r)
+	h2, err := readFrameHeader(r, make([]byte, 8))
 	assert.Success(t, err)
 
 	assert.Equal(t, "read header", h, h2)

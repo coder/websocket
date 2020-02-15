@@ -39,16 +39,17 @@ type Conn struct {
 
 	// Read state.
 	readMu            *mu
-	readHeader        header
+	readHeaderBuf     [8]byte
 	readControlBuf    [maxControlPayload]byte
 	msgReader         *msgReader
 	readCloseFrameErr error
 
 	// Write state.
-	msgWriter    *msgWriter
-	writeFrameMu *mu
-	writeBuf     []byte
-	writeHeader  header
+	msgWriterState *msgWriterState
+	writeFrameMu   *mu
+	writeBuf       []byte
+	writeHeaderBuf [8]byte
+	writeHeader    header
 
 	closed     chan struct{}
 	closeMu    sync.Mutex
@@ -94,14 +95,14 @@ func newConn(cfg connConfig) *Conn {
 
 	c.msgReader = newMsgReader(c)
 
-	c.msgWriter = newMsgWriter(c)
+	c.msgWriterState = newMsgWriterState(c)
 	if c.client {
 		c.writeBuf = extractBufioWriterBuf(c.bw, c.rwc)
 	}
 
 	if c.flate() && c.flateThreshold == 0 {
 		c.flateThreshold = 256
-		if !c.msgWriter.flateContextTakeover() {
+		if !c.msgWriterState.flateContextTakeover() {
 			c.flateThreshold = 512
 		}
 	}
@@ -142,7 +143,7 @@ func (c *Conn) close(err error) {
 			c.writeFrameMu.Lock(context.Background())
 			putBufioWriter(c.bw)
 		}
-		c.msgWriter.close()
+		c.msgWriterState.close()
 
 		c.msgReader.close()
 		if c.client {

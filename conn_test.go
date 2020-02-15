@@ -5,7 +5,6 @@ package websocket_test
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -13,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -379,15 +379,15 @@ func BenchmarkConn(b *testing.B) {
 		mode websocket.CompressionMode
 	}{
 		{
-			name: "compressionDisabled",
+			name: "disabledCompress",
 			mode: websocket.CompressionDisabled,
 		},
 		{
-			name: "compression",
+			name: "compress",
 			mode: websocket.CompressionContextTakeover,
 		},
 		{
-			name: "noContextCompression",
+			name: "compressNoContext",
 			mode: websocket.CompressionNoContextTakeover,
 		},
 	}
@@ -395,44 +395,36 @@ func BenchmarkConn(b *testing.B) {
 		b.Run(bc.name, func(b *testing.B) {
 			bb, c1, c2 := newConnTest(b, &websocket.DialOptions{
 				CompressionOptions: &websocket.CompressionOptions{Mode: bc.mode},
-			}, nil)
+			}, &websocket.AcceptOptions{
+				CompressionOptions: &websocket.CompressionOptions{Mode: bc.mode},
+			})
 			defer bb.cleanup()
 
 			bb.goEchoLoop(c2)
 
-			const n = 32768
-			writeBuf := make([]byte, n)
-			readBuf := make([]byte, n)
-			writes := make(chan websocket.MessageType)
+			msg := []byte(strings.Repeat("1234", 128))
+			readBuf := make([]byte, len(msg))
+			writes := make(chan struct{})
 			defer close(writes)
 			werrs := make(chan error)
 
 			go func() {
-				for typ := range writes {
-					werrs <- c1.Write(bb.ctx, typ, writeBuf)
+				for range writes {
+					werrs <- c1.Write(bb.ctx, websocket.MessageText, msg)
 				}
 			}()
-			b.SetBytes(n)
+			b.SetBytes(int64(len(msg)))
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				_, err := rand.Reader.Read(writeBuf)
-				if err != nil {
-					b.Fatal(err)
-				}
-
-				expType := websocket.MessageBinary
-				if writeBuf[0]%2 == 1 {
-					expType = websocket.MessageText
-				}
-				writes <- expType
+				writes <- struct{}{}
 
 				typ, r, err := c1.Reader(bb.ctx)
 				if err != nil {
 					b.Fatal(err)
 				}
-				if expType != typ {
-					assert.Equal(b, "data type", expType, typ)
+				if websocket.MessageText != typ {
+					assert.Equal(b, "data type", websocket.MessageText, typ)
 				}
 
 				_, err = io.ReadFull(r, readBuf)
@@ -448,8 +440,8 @@ func BenchmarkConn(b *testing.B) {
 					assert.Equal(b, "n2", 0, n2)
 				}
 
-				if !bytes.Equal(writeBuf, readBuf) {
-					assert.Equal(b, "msg", writeBuf, readBuf)
+				if !bytes.Equal(msg, readBuf) {
+					assert.Equal(b, "msg", msg, readBuf)
 				}
 
 				err = <-werrs
@@ -463,4 +455,9 @@ func BenchmarkConn(b *testing.B) {
 			assert.Success(b, err)
 		})
 	}
+}
+
+func TestCompression(t *testing.T) {
+	t.Parallel()
+
 }
