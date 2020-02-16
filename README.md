@@ -1,9 +1,9 @@
 # websocket
 
-[![GitHub Release](https://img.shields.io/github/v/release/nhooyr/websocket?color=6b9ded&sort=semver)](https://github.com/nhooyr/websocket/releases)
-[![GoDoc](https://godoc.org/nhooyr.io/websocket?status.svg)](https://godoc.org/nhooyr.io/websocket)
-[![Coveralls](https://img.shields.io/coveralls/github/nhooyr/websocket?color=65d6a4)](https://coveralls.io/github/nhooyr/websocket)
-[![CI Status](https://github.com/nhooyr/websocket/workflows/ci/badge.svg)](https://github.com/nhooyr/websocket/actions)
+[![release](https://img.shields.io/github/v/release/nhooyr/websocket?color=6b9ded&sort=semver)](https://github.com/nhooyr/websocket/releases)
+[![godoc](https://godoc.org/nhooyr.io/websocket?status.svg)](https://godoc.org/nhooyr.io/websocket)
+[![coverage](https://img.shields.io/coveralls/github/nhooyr/websocket?color=65d6a4)](https://coveralls.io/github/nhooyr/websocket)
+[![ci](https://github.com/nhooyr/websocket/workflows/ci/badge.svg)](https://github.com/nhooyr/websocket/actions)
 
 websocket is a minimal and idiomatic WebSocket library for Go.
 
@@ -16,28 +16,25 @@ go get nhooyr.io/websocket
 ## Features
 
 - Minimal and idiomatic API
-- Tiny codebase at 2200 lines
 - First class [context.Context](https://blog.golang.org/context) support
-- Thorough tests, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
-- [Zero dependencies](https://godoc.org/nhooyr.io/websocket?imports)
-- JSON and ProtoBuf helpers in the [wsjson](https://godoc.org/nhooyr.io/websocket/wsjson) and [wspb](https://godoc.org/nhooyr.io/websocket/wspb) subpackages
-- Highly optimized by default
-- Concurrent writes out of the box
-- [Complete Wasm](https://godoc.org/nhooyr.io/websocket#hdr-Wasm) support
+- Thorough tests, fully passes the WebSocket [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
+- [Minimal dependencies](https://godoc.org/nhooyr.io/websocket?imports)
+- JSON and protobuf helpers in the [wsjson](https://godoc.org/nhooyr.io/websocket/wsjson) and [wspb](https://godoc.org/nhooyr.io/websocket/wspb) subpackages
+- Zero alloc reads and writes
+- Concurrent writes
 - [Close handshake](https://godoc.org/nhooyr.io/websocket#Conn.Close)
+- [net.Conn](https://godoc.org/nhooyr.io/websocket#NetConn) wrapper
+- [Ping pong](https://godoc.org/nhooyr.io/websocket#Conn.Ping) API
+- [RFC 7692](https://tools.ietf.org/html/rfc7692) permessage-deflate compression
+- Compile to [Wasm](https://godoc.org/nhooyr.io/websocket#hdr-Wasm)
 
 ## Roadmap
 
-- [ ] Compression Extensions [#163](https://github.com/nhooyr/websocket/pull/163)
 - [ ] HTTP/2 [#4](https://github.com/nhooyr/websocket/issues/4)
 
 ## Examples
 
-For a production quality example that shows off the full API, see the [echo example on the godoc](https://godoc.org/nhooyr.io/websocket#example-package--Echo). On github, the example is at [example_echo_test.go](./example_echo_test.go).
-
-Use the [errors.As](https://golang.org/pkg/errors/#As) function [new in Go 1.13](https://golang.org/doc/go1.13#error_wrapping) to check for [websocket.CloseError](https://godoc.org/nhooyr.io/websocket#CloseError).
-There is also [websocket.CloseStatus](https://godoc.org/nhooyr.io/websocket#CloseStatus) to quickly grab the close status code out of a [websocket.CloseError](https://godoc.org/nhooyr.io/websocket#CloseError).
-See the [CloseStatus godoc example](https://godoc.org/nhooyr.io/websocket#example-CloseStatus).
+For a production quality example that demonstrates the complete API, see the [echo example](https://godoc.org/nhooyr.io/websocket#example-package--Echo).
 
 ### Server
 
@@ -84,98 +81,52 @@ if err != nil {
 c.Close(websocket.StatusNormalClosure, "")
 ```
 
-## Design justifications
-
-- A minimal API is easier to maintain due to less docs, tests and bugs
-- A minimal API is also easier to use and learn
-- Context based cancellation is more ergonomic and robust than setting deadlines
-- net.Conn is never exposed as WebSocket over HTTP/2 will not have a net.Conn.
-- Using net/http's Client for dialing means we do not have to reinvent dialing hooks
-  and configurations like other WebSocket libraries
-
 ## Comparison
-
-Before the comparison, I want to point out that both gorilla/websocket and gobwas/ws were
-extremely useful in implementing the WebSocket protocol correctly so _big thanks_ to the
-authors of both. In particular, I made sure to go through the issue tracker of gorilla/websocket
-to ensure I implemented details correctly and understood how people were using WebSockets in
-production.
 
 ### gorilla/websocket
 
-https://github.com/gorilla/websocket
+Advantages of [gorilla/websocket](https://github.com/gorilla/websocket):
 
-The implementation of gorilla/websocket is 6 years old. As such, it is
-widely used and very mature compared to nhooyr.io/websocket.
+- Mature and widely used
+- [Prepared writes](https://godoc.org/github.com/gorilla/websocket#PreparedMessage)
+- Configurable [buffer sizes](https://godoc.org/github.com/gorilla/websocket#hdr-Buffers)
 
-On the other hand, it has grown organically and now there are too many ways to do
-the same thing. Compare the godoc of
-[nhooyr/websocket](https://godoc.org/nhooyr.io/websocket) with
-[gorilla/websocket](https://godoc.org/github.com/gorilla/websocket) side by side.
+Advantages of nhooyr.io/websocket:
 
-The API for nhooyr.io/websocket has been designed such that there is only one way to do things.
-This makes it easy to use correctly. Not only is the API simpler, the implementation is
-only 2200 lines whereas gorilla/websocket is at 3500 lines. That's more code to maintain,
-more code to test, more code to document and more surface area for bugs.
+- Minimal and idiomatic API
+  - Compare godoc of [nhooyr.io/websocket](https://godoc.org/nhooyr.io/websocket) with [gorilla/websocket](https://godoc.org/github.com/gorilla/websocket) side by side.
+- [net.Conn](https://godoc.org/nhooyr.io/websocket#NetConn) wrapper
+- Zero alloc reads and writes ([gorilla/websocket#535](https://github.com/gorilla/websocket/issues/535))
+- Full [context.Context](https://blog.golang.org/context) support
+- Dial uses [net/http.Client](https://golang.org/pkg/net/http/#Client)
+  - Will enable easy HTTP/2 support in the future
+  - Gorilla writes directly to a net.Conn and so duplicates features of net/http.Client.
+- Concurrent writes
+- Close handshake ([gorilla/websocket#448](https://github.com/gorilla/websocket/issues/448))
+- Idiomatic [ping pong](https://godoc.org/nhooyr.io/websocket#Conn.Ping) API
+  - Gorilla requires registering a pong callback before sending a Ping
+- Can target Wasm ([gorilla/websocket#432](https://github.com/gorilla/websocket/issues/432))
+- Transparent message buffer reuse with [wsjson](https://godoc.org/nhooyr.io/websocket/wsjson) and [wspb](https://godoc.org/nhooyr.io/websocket/wspb) subpackages
+- [1.75x](https://github.com/nhooyr/websocket/releases/tag/v1.7.4) faster WebSocket masking implementation in pure Go
+  - Gorilla's implementation is slower and uses [unsafe](https://golang.org/pkg/unsafe/).
+- Full [permessage-deflate](https://tools.ietf.org/html/rfc7692) compression extension support
+  - Gorilla only supports no context takeover mode
+  - Uses [klauspost/compress](https://github.com/klauspost/compress) for optimized compression
+  - See [gorilla/websocket#203](https://github.com/gorilla/websocket/issues/203)
+- [CloseRead](https://godoc.org/nhooyr.io/websocket#Conn.CloseRead) helper ([gorilla/websocket#492](https://github.com/gorilla/websocket/issues/492))
+- Actively maintained ([gorilla/websocket#370](https://github.com/gorilla/websocket/issues/370))
 
-Moreover, nhooyr.io/websocket supports newer Go idioms such as context.Context.
-It also uses net/http's Client and ResponseWriter directly for WebSocket handshakes.
-gorilla/websocket writes its handshakes to the underlying net.Conn.
-Thus it has to reinvent hooks for TLS and proxies and prevents support of HTTP/2.
+#### golang.org/x/net/websocket
 
-Some more advantages of nhooyr.io/websocket are that it supports concurrent writes and
-makes it very easy to close the connection with a status code and reason. In fact,
-nhooyr.io/websocket even implements the complete WebSocket close handshake for you whereas
-with gorilla/websocket you have to perform it manually. See [gorilla/websocket#448](https://github.com/gorilla/websocket/issues/448).
+[golang.org/x/net/websocket](https://godoc.org/golang.org/x/net/websocket) is deprecated.
+See [golang/go/issues/18152](https://github.com/golang/go/issues/18152).
 
-The ping API is also nicer. gorilla/websocket requires registering a pong handler on the Conn
-which results in awkward control flow. With nhooyr.io/websocket you use the Ping method on the Conn
-that sends a ping and also waits for the pong.
+The [net.Conn](https://godoc.org/nhooyr.io/websocket#NetConn) wrapper will ease in transitioning
+to nhooyr.io/websocket.
 
-Additionally, nhooyr.io/websocket can compile to [Wasm](https://godoc.org/nhooyr.io/websocket#hdr-Wasm) for the browser.
+#### gobwas/ws
 
-In terms of performance, the differences mostly depend on your application code. nhooyr.io/websocket
-reuses message buffers out of the box if you use the wsjson and wspb subpackages.
-As mentioned above, nhooyr.io/websocket also supports concurrent writers.
+[gobwas/ws](https://github.com/gobwas/ws) has an extremely flexible API that allows it to be used
+in an event driven style for performance. See the author's [blog post](https://medium.freecodecamp.org/million-websockets-and-go-cc58418460bb).
 
-The WebSocket masking algorithm used by this package is also [1.75x](https://github.com/nhooyr/websocket/releases/tag/v1.7.4)
-faster than gorilla/websocket or gobwas/ws while using only pure safe Go.
-
-The only performance con to nhooyr.io/websocket is that it uses one extra goroutine to support
-cancellation with context.Context. This costs 2 KB of memory which is cheap compared to
-the benefits.
-
-### x/net/websocket
-
-https://godoc.org/golang.org/x/net/websocket
-
-Unmaintained and the API does not reflect WebSocket semantics. Should never be used.
-
-See https://github.com/golang/go/issues/18152
-
-### gobwas/ws
-
-https://github.com/gobwas/ws
-
-This library has an extremely flexible API but that comes at the cost of usability
-and clarity.
-
-This library is fantastic in terms of performance. The author put in significant
-effort to ensure its speed and I have applied as many of its optimizations as
-I could into nhooyr.io/websocket. Definitely check out his fantastic [blog post](https://medium.freecodecamp.org/million-websockets-and-go-cc58418460bb)
-about performant WebSocket servers.
-
-If you want a library that gives you absolute control over everything, this is the library.
-But for 99.9% of use cases, nhooyr.io/websocket will fit better. It's nearly as performant
-but much easier to use.
-
-## Contributing
-
-See [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md).
-
-## Users
-
-If your company or project is using this library, feel free to open an issue or PR to amend this list.
-
-- [Coder](https://github.com/cdr)
-- [Tatsu Works](https://github.com/tatsuworks) - Ingresses 20 TB in websocket data every month on their Discord bot.
+However when writing idiomatic Go, nhooyr.io/websocket will be faster and easier to use.

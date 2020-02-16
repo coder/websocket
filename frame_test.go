@@ -3,97 +3,24 @@
 package websocket
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
-	"io"
-	"math"
 	"math/bits"
 	"math/rand"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 	_ "unsafe"
 
 	"github.com/gobwas/ws"
-	"github.com/google/go-cmp/cmp"
 	_ "github.com/gorilla/websocket"
 
-	"nhooyr.io/websocket/internal/assert"
+	"nhooyr.io/websocket/internal/test/assert"
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
-func randBool() bool {
-	return rand.Intn(1) == 0
-}
 
 func TestHeader(t *testing.T) {
 	t.Parallel()
-
-	t.Run("eof", func(t *testing.T) {
-		t.Parallel()
-
-		testCases := []struct {
-			name  string
-			bytes []byte
-		}{
-			{
-				"start",
-				[]byte{0xff},
-			},
-			{
-				"middle",
-				[]byte{0xff, 0xff, 0xff},
-			},
-		}
-		for _, tc := range testCases {
-			tc := tc
-			t.Run(tc.name, func(t *testing.T) {
-				t.Parallel()
-
-				b := bytes.NewBuffer(tc.bytes)
-				_, err := readHeader(nil, b)
-				if io.ErrUnexpectedEOF != err {
-					t.Fatalf("expected %v but got: %v", io.ErrUnexpectedEOF, err)
-				}
-			})
-		}
-	})
-
-	t.Run("writeNegativeLength", func(t *testing.T) {
-		t.Parallel()
-
-		defer func() {
-			r := recover()
-			if r == nil {
-				t.Fatal("failed to induce panic in writeHeader with negative payload length")
-			}
-		}()
-
-		writeHeader(nil, header{
-			payloadLength: -1,
-		})
-	})
-
-	t.Run("readNegativeLength", func(t *testing.T) {
-		t.Parallel()
-
-		b := writeHeader(nil, header{
-			payloadLength: 1<<16 + 1,
-		})
-
-		// Make length negative
-		b[2] |= 1 << 7
-
-		r := bytes.NewReader(b)
-		_, err := readHeader(nil, r)
-		if err == nil {
-			t.Fatalf("unexpected error value: %+v", err)
-		}
-	})
 
 	t.Run("lengths", func(t *testing.T) {
 		t.Parallel()
@@ -102,12 +29,12 @@ func TestHeader(t *testing.T) {
 			124,
 			125,
 			126,
-			4096,
-			16384,
+			127,
+
+			65534,
 			65535,
 			65536,
 			65537,
-			131072,
 		}
 
 		for _, n := range lengths {
@@ -125,20 +52,22 @@ func TestHeader(t *testing.T) {
 	t.Run("fuzz", func(t *testing.T) {
 		t.Parallel()
 
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+		randBool := func() bool {
+			return r.Intn(1) == 0
+		}
+
 		for i := 0; i < 10000; i++ {
 			h := header{
 				fin:    randBool(),
 				rsv1:   randBool(),
 				rsv2:   randBool(),
 				rsv3:   randBool(),
-				opcode: opcode(rand.Intn(1 << 4)),
+				opcode: opcode(r.Intn(16)),
 
 				masked:        randBool(),
-				payloadLength: rand.Int63(),
-			}
-
-			if h.masked {
-				h.maskKey = rand.Uint32()
+				maskKey:       r.Uint32(),
+				payloadLength: r.Int63(),
 			}
 
 			testHeader(t, h)
@@ -147,168 +76,20 @@ func TestHeader(t *testing.T) {
 }
 
 func testHeader(t *testing.T, h header) {
-	b := writeHeader(nil, h)
-	r := bytes.NewReader(b)
-	h2, err := readHeader(nil, r)
-	if err != nil {
-		t.Logf("header: %#v", h)
-		t.Logf("bytes: %b", b)
-		t.Fatalf("failed to read header: %v", err)
-	}
+	b := &bytes.Buffer{}
+	w := bufio.NewWriter(b)
+	r := bufio.NewReader(b)
 
-	if !cmp.Equal(h, h2, cmp.AllowUnexported(header{})) {
-		t.Logf("header: %#v", h)
-		t.Logf("bytes: %b", b)
-		t.Fatalf("parsed and read header differ: %v", cmp.Diff(h, h2, cmp.AllowUnexported(header{})))
-	}
-}
+	err := writeFrameHeader(h, w, make([]byte, 8))
+	assert.Success(t, err)
 
-func TestCloseError(t *testing.T) {
-	t.Parallel()
+	err = w.Flush()
+	assert.Success(t, err)
 
-	testCases := []struct {
-		name    string
-		ce      CloseError
-		success bool
-	}{
-		{
-			name: "normal",
-			ce: CloseError{
-				Code:   StatusNormalClosure,
-				Reason: strings.Repeat("x", maxControlFramePayload-2),
-			},
-			success: true,
-		},
-		{
-			name: "bigReason",
-			ce: CloseError{
-				Code:   StatusNormalClosure,
-				Reason: strings.Repeat("x", maxControlFramePayload-1),
-			},
-			success: false,
-		},
-		{
-			name: "bigCode",
-			ce: CloseError{
-				Code:   math.MaxUint16,
-				Reason: strings.Repeat("x", maxControlFramePayload-2),
-			},
-			success: false,
-		},
-	}
+	h2, err := readFrameHeader(r, make([]byte, 8))
+	assert.Success(t, err)
 
-	for _, tc := range testCases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			_, err := tc.ce.bytes()
-			if (err == nil) != tc.success {
-				t.Fatalf("unexpected error value: %+v", err)
-			}
-		})
-	}
-}
-
-func Test_parseClosePayload(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		name    string
-		p       []byte
-		success bool
-		ce      CloseError
-	}{
-		{
-			name:    "normal",
-			p:       append([]byte{0x3, 0xE8}, []byte("hello")...),
-			success: true,
-			ce: CloseError{
-				Code:   StatusNormalClosure,
-				Reason: "hello",
-			},
-		},
-		{
-			name:    "nothing",
-			success: true,
-			ce: CloseError{
-				Code: StatusNoStatusRcvd,
-			},
-		},
-		{
-			name:    "oneByte",
-			p:       []byte{0},
-			success: false,
-		},
-		{
-			name:    "badStatusCode",
-			p:       []byte{0x17, 0x70},
-			success: false,
-		},
-	}
-
-	for _, tc := range testCases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			ce, err := parseClosePayload(tc.p)
-			if (err == nil) != tc.success {
-				t.Fatalf("unexpected expected error value: %+v", err)
-			}
-
-			if tc.success && tc.ce != ce {
-				t.Fatalf("unexpected close error: %v", cmp.Diff(tc.ce, ce))
-			}
-		})
-	}
-}
-
-func Test_validWireCloseCode(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		name  string
-		code  StatusCode
-		valid bool
-	}{
-		{
-			name:  "normal",
-			code:  StatusNormalClosure,
-			valid: true,
-		},
-		{
-			name:  "noStatus",
-			code:  StatusNoStatusRcvd,
-			valid: false,
-		},
-		{
-			name:  "3000",
-			code:  3000,
-			valid: true,
-		},
-		{
-			name:  "4999",
-			code:  4999,
-			valid: true,
-		},
-		{
-			name:  "unknown",
-			code:  5000,
-			valid: false,
-		},
-	}
-
-	for _, tc := range testCases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if valid := validWireCloseCode(tc.code); tc.valid != valid {
-				t.Fatalf("expected %v for %v but got %v", tc.valid, tc.code, valid)
-			}
-		})
-	}
+	assert.Equal(t, "read header", h, h2)
 }
 
 func Test_mask(t *testing.T) {
@@ -319,13 +100,11 @@ func Test_mask(t *testing.T) {
 	p := []byte{0xa, 0xb, 0xc, 0xf2, 0xc}
 	gotKey32 := mask(key32, p)
 
-	if exp := []byte{0, 0, 0, 0x0d, 0x6}; !cmp.Equal(exp, p) {
-		t.Fatalf("unexpected mask: %v", cmp.Diff(exp, p))
-	}
+	expP := []byte{0, 0, 0, 0x0d, 0x6}
+	assert.Equal(t, "p", expP, p)
 
-	if exp := bits.RotateLeft32(key32, -8); !cmp.Equal(exp, gotKey32) {
-		t.Fatalf("unexpected mask key: %v", cmp.Diff(exp, gotKey32))
-	}
+	expKey32 := bits.RotateLeft32(key32, -8)
+	assert.Equal(t, "key32", expKey32, gotKey32)
 }
 
 func basicMask(maskKey [4]byte, pos int, b []byte) int {
@@ -395,11 +174,7 @@ func Benchmark_mask(b *testing.B) {
 		},
 	}
 
-	var key [4]byte
-	_, err := rand.Read(key[:])
-	if err != nil {
-		b.Fatalf("failed to populate mask key: %v", err)
-	}
+	key := [4]byte{1, 2, 3, 4}
 
 	for _, size := range sizes {
 		p := make([]byte, size)
@@ -411,46 +186,6 @@ func Benchmark_mask(b *testing.B) {
 
 					fn.fn(b, key, p)
 				})
-			}
-		})
-	}
-}
-
-func TestCloseStatus(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		name string
-		in   error
-		exp  StatusCode
-	}{
-		{
-			name: "nil",
-			in:   nil,
-			exp:  -1,
-		},
-		{
-			name: "io.EOF",
-			in:   io.EOF,
-			exp:  -1,
-		},
-		{
-			name: "StatusInternalError",
-			in: CloseError{
-				Code: StatusInternalError,
-			},
-			exp: StatusInternalError,
-		},
-	}
-
-	for _, tc := range testCases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := assert.Equalf(tc.exp, CloseStatus(tc.in), "unexpected close status")
-			if err != nil {
-				t.Fatal(err)
 			}
 		})
 	}

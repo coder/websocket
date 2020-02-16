@@ -4,24 +4,50 @@ on: [push, pull_request]
 jobs:
   fmt:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:8a8fd73fdea33585d50a33619c4936adfd016246a2ed6bbfbf06def24b518a6a
     steps:
       - uses: actions/checkout@v1
-      - run: make fmt
+      - uses: actions/cache@v1
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Run make fmt
+        uses: ./ci/image
+        with:
+          args: make fmt
+
   lint:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:8a8fd73fdea33585d50a33619c4936adfd016246a2ed6bbfbf06def24b518a6a
     steps:
       - uses: actions/checkout@v1
-      - run: make lint
+      - uses: actions/cache@v1
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Run make lint
+        uses: ./ci/image
+        with:
+          args: make lint
+
   test:
     runs-on: ubuntu-latest
-    container: nhooyr/websocket-ci@sha256:8a8fd73fdea33585d50a33619c4936adfd016246a2ed6bbfbf06def24b518a6a
     steps:
       - uses: actions/checkout@v1
-      - run: make test
+      - uses: actions/cache@v1
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Run make test
+        uses: ./ci/image
+        with:
+          args: make test
         env:
-          COVERALLS_TOKEN: ${{ secrets.github_token }}
+          COVERALLS_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
       - name: Upload coverage.html
         uses: actions/upload-artifact@master
         with:

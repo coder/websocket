@@ -1,4 +1,4 @@
-lint: govet golint govet-wasm golint-wasm
+lint: govet golint
 
 govet:
 	go vet ./...

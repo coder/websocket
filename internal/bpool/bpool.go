@@ -10,11 +10,11 @@ var bpool sync.Pool
 // Get returns a buffer from the pool or creates a new one if
 // the pool is empty.
 func Get() *bytes.Buffer {
-	b, ok := bpool.Get().(*bytes.Buffer)
-	if !ok {
-		b = &bytes.Buffer{}
+	b := bpool.Get()
+	if b == nil {
+		return &bytes.Buffer{}
 	}
-	return b
+	return b.(*bytes.Buffer)
 }
 
 // Put returns a buffer into the pool.

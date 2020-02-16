@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"golang.org/x/time/rate"
+	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
@@ -77,7 +78,7 @@ func echoServer(w http.ResponseWriter, r *http.Request) error {
 
 	if c.Subprotocol() != "echo" {
 		c.Close(websocket.StatusPolicyViolation, "client must speak the echo subprotocol")
-		return fmt.Errorf("client does not speak echo sub protocol")
+		return xerrors.New("client does not speak echo sub protocol")
 	}
 
 	l := rate.NewLimiter(rate.Every(time.Millisecond*100), 10)
@@ -87,12 +88,12 @@ func echoServer(w http.ResponseWriter, r *http.Request) error {
 			return nil
 		}
 		if err != nil {
-			return fmt.Errorf("failed to echo with %v: %w", r.RemoteAddr, err)
+			return xerrors.Errorf("failed to echo with %v: %w", r.RemoteAddr, err)
 		}
 	}
 }
 
-// echo reads from the websocket connection and then writes
+// echo reads from the WebSocket connection and then writes
 // the received message back to it.
 // The entire function has 10s to complete.
 func echo(ctx context.Context, c *websocket.Conn, l *rate.Limiter) error {
@@ -116,7 +117,7 @@ func echo(ctx context.Context, c *websocket.Conn, l *rate.Limiter) error {
 
 	_, err = io.Copy(w, r)
 	if err != nil {
-		return fmt.Errorf("failed to io.Copy: %w", err)
+		return xerrors.Errorf("failed to io.Copy: %w", err)
 	}
 
 	err = w.Close()

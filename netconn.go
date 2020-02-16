@@ -1,17 +1,14 @@
-// This file contains *Conn symbols relevant to both
-// Wasm and non Wasm builds.
-
 package websocket
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"math"
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
+
+	"golang.org/x/xerrors"
 )
 
 // NetConn converts a *websocket.Conn into a net.Conn.
@@ -111,7 +108,7 @@ func (c *netConn) Read(p []byte) (int, error) {
 			return 0, err
 		}
 		if typ != c.msgType {
-			err := fmt.Errorf("unexpected frame type read (expected %v): %v", c.msgType, typ)
+			err := xerrors.Errorf("unexpected frame type read (expected %v): %v", c.msgType, typ)
 			c.c.Close(StatusUnsupportedData, err.Error())
 			return 0, err
 		}
@@ -167,79 +164,4 @@ func (c *netConn) SetReadDeadline(t time.Time) error {
 		c.readTimer.Reset(t.Sub(time.Now()))
 	}
 	return nil
-}
-
-// CloseRead will start a goroutine to read from the connection until it is closed or a data message
-// is received. If a data message is received, the connection will be closed with StatusPolicyViolation.
-// Since CloseRead reads from the connection, it will respond to ping, pong and close frames.
-// After calling this method, you cannot read any data messages from the connection.
-// The returned context will be cancelled when the connection is closed.
-//
-// Use this when you do not want to read data messages from the connection anymore but will
-// want to write messages to it.
-func (c *Conn) CloseRead(ctx context.Context) context.Context {
-	c.isReadClosed.Store(1)
-
-	ctx, cancel := context.WithCancel(ctx)
-	go func() {
-		defer cancel()
-		// We use the unexported reader method so that we don't get the read closed error.
-		c.reader(ctx, true)
-		// Either the connection is already closed since there was a read error
-		// or the context was cancelled or a message was read and we should close
-		// the connection.
-		c.Close(StatusPolicyViolation, "unexpected data message")
-	}()
-	return ctx
-}
-
-// SetReadLimit sets the max number of bytes to read for a single message.
-// It applies to the Reader and Read methods.
-//
-// By default, the connection has a message read limit of 32768 bytes.
-//
-// When the limit is hit, the connection will be closed with StatusMessageTooBig.
-func (c *Conn) SetReadLimit(n int64) {
-	c.msgReadLimit.Store(n)
-}
-
-func (c *Conn) setCloseErr(err error) {
-	c.closeErrOnce.Do(func() {
-		c.closeErr = fmt.Errorf("websocket closed: %w", err)
-	})
-}
-
-// See https://github.com/nhooyr/websocket/issues/153
-type atomicInt64 struct {
-	v int64
-}
-
-func (v *atomicInt64) Load() int64 {
-	return atomic.LoadInt64(&v.v)
-}
-
-func (v *atomicInt64) Store(i int64) {
-	atomic.StoreInt64(&v.v, i)
-}
-
-func (v *atomicInt64) String() string {
-	return fmt.Sprint(v.Load())
-}
-
-// Increment increments the value and returns the new value.
-func (v *atomicInt64) Increment(delta int64) int64 {
-	return atomic.AddInt64(&v.v, delta)
-}
-
-func (v *atomicInt64) CAS(old, new int64) (swapped bool) {
-	return atomic.CompareAndSwapInt64(&v.v, old, new)
-}
-
-func (c *Conn) isClosed() bool {
-	select {
-	case <-c.closed:
-		return true
-	default:
-		return false
-	}
 }

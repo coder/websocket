@@ -33,8 +33,6 @@ func ExampleAccept() {
 			return
 		}
 
-		log.Printf("received: %v", v)
-
 		c.Close(websocket.StatusNormalClosure, "")
 	})
 
@@ -76,8 +74,7 @@ func ExampleCloseStatus() {
 
 	_, _, err = c.Reader(ctx)
 	if websocket.CloseStatus(err) != websocket.StatusNormalClosure {
-		log.Fatalf("expected to be disconnected with StatusNormalClosure but got: %+v", err)
-		return
+		log.Fatalf("expected to be disconnected with StatusNormalClosure but got: %v", err)
 	}
 }
 

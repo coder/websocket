@@ -3,12 +3,16 @@
 package websocket
 
 import (
-	"context"
+	"bufio"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
+
+	"golang.org/x/xerrors"
+
+	"nhooyr.io/websocket/internal/test/assert"
 )
 
 func TestAccept(t *testing.T) {
@@ -21,10 +25,39 @@ func TestAccept(t *testing.T) {
 		r := httptest.NewRequest("GET", "/", nil)
 
 		_, err := Accept(w, r, nil)
-		if err == nil {
-			t.Fatalf("unexpected error value: %v", err)
-		}
+		assert.Contains(t, err, "protocol violation")
+	})
 
+	t.Run("badOrigin", func(t *testing.T) {
+		t.Parallel()
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", "/", nil)
+		r.Header.Set("Connection", "Upgrade")
+		r.Header.Set("Upgrade", "websocket")
+		r.Header.Set("Sec-WebSocket-Version", "13")
+		r.Header.Set("Sec-WebSocket-Key", "meow123")
+		r.Header.Set("Origin", "harhar.com")
+
+		_, err := Accept(w, r, nil)
+		assert.Contains(t, err, `request Origin "harhar.com" is not authorized for Host`)
+	})
+
+	t.Run("badCompression", func(t *testing.T) {
+		t.Parallel()
+
+		w := mockHijacker{
+			ResponseWriter: httptest.NewRecorder(),
+		}
+		r := httptest.NewRequest("GET", "/", nil)
+		r.Header.Set("Connection", "Upgrade")
+		r.Header.Set("Upgrade", "websocket")
+		r.Header.Set("Sec-WebSocket-Version", "13")
+		r.Header.Set("Sec-WebSocket-Key", "meow123")
+		r.Header.Set("Sec-WebSocket-Extensions", "permessage-deflate; harharhar")
+
+		_, err := Accept(w, r, nil)
+		assert.Contains(t, err, `unsupported permessage-deflate parameter`)
 	})
 
 	t.Run("requireHttpHijacker", func(t *testing.T) {
@@ -38,9 +71,27 @@ func TestAccept(t *testing.T) {
 		r.Header.Set("Sec-WebSocket-Key", "meow123")
 
 		_, err := Accept(w, r, nil)
-		if err == nil || !strings.Contains(err.Error(), "http.Hijacker") {
-			t.Fatalf("unexpected error value: %v", err)
+		assert.Contains(t, err, `http.ResponseWriter does not implement http.Hijacker`)
+	})
+
+	t.Run("badHijack", func(t *testing.T) {
+		t.Parallel()
+
+		w := mockHijacker{
+			ResponseWriter: httptest.NewRecorder(),
+			hijack: func() (conn net.Conn, writer *bufio.ReadWriter, err error) {
+				return nil, nil, xerrors.New("haha")
+			},
 		}
+
+		r := httptest.NewRequest("GET", "/", nil)
+		r.Header.Set("Connection", "Upgrade")
+		r.Header.Set("Upgrade", "websocket")
+		r.Header.Set("Sec-WebSocket-Version", "13")
+		r.Header.Set("Sec-WebSocket-Key", "meow123")
+
+		_, err := Accept(w, r, nil)
+		assert.Contains(t, err, `failed to hijack connection`)
 	})
 }
 
@@ -119,7 +170,6 @@ func Test_verifyClientHandshake(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			w := httptest.NewRecorder()
 			r := httptest.NewRequest(tc.method, "/", nil)
 
 			r.ProtoMajor = 1
@@ -132,9 +182,11 @@ func Test_verifyClientHandshake(t *testing.T) {
 				r.Header.Set(k, v)
 			}
 
-			err := verifyClientRequest(w, r)
-			if (err == nil) != tc.success {
-				t.Fatalf("unexpected error value: %+v", err)
+			_, err := verifyClientRequest(httptest.NewRecorder(), r)
+			if tc.success {
+				assert.Success(t, err)
+			} else {
+				assert.Error(t, err)
 			}
 		})
 	}
@@ -184,9 +236,7 @@ func Test_selectSubprotocol(t *testing.T) {
 			r.Header.Set("Sec-WebSocket-Protocol", strings.Join(tc.clientProtocols, ","))
 
 			negotiated := selectSubprotocol(r, tc.serverProtocols)
-			if tc.negotiated != negotiated {
-				t.Fatalf("expected %q but got %q", tc.negotiated, negotiated)
-			}
+			assert.Equal(t, "negotiated", tc.negotiated, negotiated)
 		})
 	}
 }
@@ -240,41 +290,67 @@ func Test_authenticateOrigin(t *testing.T) {
 			r.Header.Set("Origin", tc.origin)
 
 			err := authenticateOrigin(r)
-			if (err == nil) != tc.success {
-				t.Fatalf("unexpected error value: %+v", err)
+			if tc.success {
+				assert.Success(t, err)
+			} else {
+				assert.Error(t, err)
 			}
 		})
 	}
 }
 
-func TestBadDials(t *testing.T) {
+func Test_acceptCompression(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name string
-		url  string
-		opts *DialOptions
+		name                       string
+		mode                       CompressionMode
+		reqSecWebSocketExtensions  string
+		respSecWebSocketExtensions string
+		expCopts                   *compressionOptions
+		error                      bool
 	}{
 		{
-			name: "badURL",
-			url:  "://noscheme",
+			name:     "disabled",
+			mode:     CompressionDisabled,
+			expCopts: nil,
 		},
 		{
-			name: "badURLScheme",
-			url:  "ftp://nhooyr.io",
+			name:     "noClientSupport",
+			mode:     CompressionNoContextTakeover,
+			expCopts: nil,
 		},
 		{
-			name: "badHTTPClient",
-			url:  "ws://nhooyr.io",
-			opts: &DialOptions{
-				HTTPClient: &http.Client{
-					Timeout: time.Minute,
-				},
+			name:                       "permessage-deflate",
+			mode:                       CompressionNoContextTakeover,
+			reqSecWebSocketExtensions:  "permessage-deflate; client_max_window_bits",
+			respSecWebSocketExtensions: "permessage-deflate; client_no_context_takeover; server_no_context_takeover",
+			expCopts: &compressionOptions{
+				clientNoContextTakeover: true,
+				serverNoContextTakeover: true,
 			},
 		},
 		{
-			name: "badTLS",
-			url:  "wss://totallyfake.nhooyr.io",
+			name:                      "permessage-deflate/error",
+			mode:                      CompressionNoContextTakeover,
+			reqSecWebSocketExtensions: "permessage-deflate; meow",
+			error:                     true,
+		},
+		{
+			name:                       "x-webkit-deflate-frame",
+			mode:                       CompressionNoContextTakeover,
+			reqSecWebSocketExtensions:  "x-webkit-deflate-frame; no_context_takeover",
+			respSecWebSocketExtensions: "x-webkit-deflate-frame; no_context_takeover",
+			expCopts: &compressionOptions{
+				clientNoContextTakeover: true,
+				serverNoContextTakeover: true,
+			},
+		},
+		{
+			name:                      "x-webkit-deflate/error",
+			mode:                      CompressionNoContextTakeover,
+			reqSecWebSocketExtensions: "x-webkit-deflate-frame; max_window_bits",
+			error:                     true,
 		},
 	}
 
@@ -283,104 +359,30 @@ func TestBadDials(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-			defer cancel()
-
-			_, _, err := Dial(ctx, tc.url, tc.opts)
-			if err == nil {
-				t.Fatalf("expected non nil error: %+v", err)
-			}
-		})
-	}
-}
-
-func Test_verifyServerHandshake(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		name     string
-		response func(w http.ResponseWriter)
-		success  bool
-	}{
-		{
-			name: "badStatus",
-			response: func(w http.ResponseWriter) {
-				w.WriteHeader(http.StatusOK)
-			},
-			success: false,
-		},
-		{
-			name: "badConnection",
-			response: func(w http.ResponseWriter) {
-				w.Header().Set("Connection", "???")
-				w.WriteHeader(http.StatusSwitchingProtocols)
-			},
-			success: false,
-		},
-		{
-			name: "badUpgrade",
-			response: func(w http.ResponseWriter) {
-				w.Header().Set("Connection", "Upgrade")
-				w.Header().Set("Upgrade", "???")
-				w.WriteHeader(http.StatusSwitchingProtocols)
-			},
-			success: false,
-		},
-		{
-			name: "badSecWebSocketAccept",
-			response: func(w http.ResponseWriter) {
-				w.Header().Set("Connection", "Upgrade")
-				w.Header().Set("Upgrade", "websocket")
-				w.Header().Set("Sec-WebSocket-Accept", "xd")
-				w.WriteHeader(http.StatusSwitchingProtocols)
-			},
-			success: false,
-		},
-		{
-			name: "badSecWebSocketProtocol",
-			response: func(w http.ResponseWriter) {
-				w.Header().Set("Connection", "Upgrade")
-				w.Header().Set("Upgrade", "websocket")
-				w.Header().Set("Sec-WebSocket-Protocol", "xd")
-				w.WriteHeader(http.StatusSwitchingProtocols)
-			},
-			success: false,
-		},
-		{
-			name: "success",
-			response: func(w http.ResponseWriter) {
-				w.Header().Set("Connection", "Upgrade")
-				w.Header().Set("Upgrade", "websocket")
-				w.WriteHeader(http.StatusSwitchingProtocols)
-			},
-			success: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			r.Header.Set("Sec-WebSocket-Extensions", tc.reqSecWebSocketExtensions)
 
 			w := httptest.NewRecorder()
-			tc.response(w)
-			resp := w.Result()
-
-			r := httptest.NewRequest("GET", "/", nil)
-			key, err := makeSecWebSocketKey()
-			if err != nil {
-				t.Fatal(err)
-			}
-			r.Header.Set("Sec-WebSocket-Key", key)
-
-			if resp.Header.Get("Sec-WebSocket-Accept") == "" {
-				resp.Header.Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
+			copts, err := acceptCompression(r, w, tc.mode)
+			if tc.error {
+				assert.Error(t, err)
+				return
 			}
 
-			err = verifyServerResponse(r, resp)
-			if (err == nil) != tc.success {
-				t.Fatalf("unexpected error: %+v", err)
-			}
+			assert.Success(t, err)
+			assert.Equal(t, "compression options", tc.expCopts, copts)
+			assert.Equal(t, "Sec-WebSocket-Extensions", tc.respSecWebSocketExtensions, w.Header().Get("Sec-WebSocket-Extensions"))
 		})
 	}
+}
+
+type mockHijacker struct {
+	http.ResponseWriter
+	hijack func() (net.Conn, *bufio.ReadWriter, error)
+}
+
+var _ http.Hijacker = mockHijacker{}
+
+func (mj mockHijacker) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return mj.hijack()
 }
