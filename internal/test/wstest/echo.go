@@ -3,10 +3,9 @@ package wstest
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"time"
-
-	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/test/cmp"
@@ -73,11 +72,11 @@ func Echo(ctx context.Context, c *websocket.Conn, max int) error {
 	}
 
 	if expType != actType {
-		return xerrors.Errorf("unexpected message typ (%v): %v", expType, actType)
+		return fmt.Errorf("unexpected message typ (%v): %v", expType, actType)
 	}
 
 	if !bytes.Equal(msg, act) {
-		return xerrors.Errorf("unexpected msg read: %v", cmp.Diff(msg, act))
+		return fmt.Errorf("unexpected msg read: %v", cmp.Diff(msg, act))
 	}
 
 	return nil

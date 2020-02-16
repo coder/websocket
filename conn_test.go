@@ -19,7 +19,6 @@ import (
 
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/duration"
-	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/test/assert"
@@ -289,10 +288,10 @@ func TestWasm(t *testing.T) {
 
 func assertCloseStatus(exp websocket.StatusCode, err error) error {
 	if websocket.CloseStatus(err) == -1 {
-		return xerrors.Errorf("expected websocket.CloseError: %T %v", err, err)
+		return fmt.Errorf("expected websocket.CloseError: %T %v", err, err)
 	}
 	if websocket.CloseStatus(err) != exp {
-		return xerrors.Errorf("expected close status %v but got ", exp, err)
+		return fmt.Errorf("expected close status %v but got %v", exp, err)
 	}
 	return nil
 }

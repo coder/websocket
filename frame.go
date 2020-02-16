@@ -3,11 +3,10 @@ package websocket
 import (
 	"bufio"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"math"
 	"math/bits"
-
-	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket/internal/errd"
 )
@@ -87,7 +86,7 @@ func readFrameHeader(r *bufio.Reader, readBuf []byte) (h header, err error) {
 	}
 
 	if h.payloadLength < 0 {
-		return header{}, xerrors.Errorf("received negative payload length: %v", h.payloadLength)
+		return header{}, fmt.Errorf("received negative payload length: %v", h.payloadLength)
 	}
 
 	if h.masked {
