@@ -1,4 +1,4 @@
-test: gotest ci/out/coverage.html
+test: ci/out/coverage.html
 ifdef CI
 test: coveralls
 endif

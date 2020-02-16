@@ -39,8 +39,8 @@ func Error(t testing.TB, err error) {
 func Contains(t testing.TB, v interface{}, sub string) {
 	t.Helper()
 
-	vstr := fmt.Sprint(v)
-	if !strings.Contains(vstr, sub) {
-		t.Fatalf("expected %q to contain %q", vstr, sub)
+	s := fmt.Sprint(v)
+	if !strings.Contains(s, sub) {
+		t.Fatalf("expected %q to contain %q", s, sub)
 	}
 }

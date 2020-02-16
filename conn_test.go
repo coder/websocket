@@ -402,6 +402,9 @@ func BenchmarkConn(b *testing.B) {
 
 			bb.goEchoLoop(c2)
 
+			bytesWritten := c1.RecordBytesWritten()
+			bytesRead := c1.RecordBytesRead()
+
 			msg := []byte(strings.Repeat("1234", 128))
 			readBuf := make([]byte, len(msg))
 			writes := make(chan struct{})
@@ -450,6 +453,9 @@ func BenchmarkConn(b *testing.B) {
 				}
 			}
 			b.StopTimer()
+
+			b.ReportMetric(float64(*bytesWritten/b.N), "written/op")
+			b.ReportMetric(float64(*bytesRead/b.N), "read/op")
 
 			err := c1.Close(websocket.StatusNormalClosure, "")
 			assert.Success(b, err)

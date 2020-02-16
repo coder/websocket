@@ -108,22 +108,6 @@ func putFlateReader(fr io.Reader) {
 	flateReaderPool.Put(fr)
 }
 
-var flateWriterPool sync.Pool
-
-func getFlateWriter(w io.Writer) *flate.Writer {
-	fw, ok := flateWriterPool.Get().(*flate.Writer)
-	if !ok {
-		fw, _ = flate.NewWriter(w, flate.BestSpeed)
-		return fw
-	}
-	fw.Reset(w)
-	return fw
-}
-
-func putFlateWriter(w *flate.Writer) {
-	flateWriterPool.Put(w)
-}
-
 type slidingWindow struct {
 	buf []byte
 }

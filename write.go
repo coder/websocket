@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/flate"
-	kflate "github.com/klauspost/compress/flate"
 	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket/internal/errd"
@@ -77,9 +76,8 @@ type msgWriterState struct {
 	opcode opcode
 	flate  bool
 
-	trimWriter  *trimLastFourBytesWriter
-	flateWriter *flate.Writer
-	dict        slidingWindow
+	trimWriter *trimLastFourBytesWriter
+	dict       slidingWindow
 }
 
 func newMsgWriterState(c *Conn) *msgWriterState {
@@ -90,8 +88,6 @@ func newMsgWriterState(c *Conn) *msgWriterState {
 	return mw
 }
 
-const stateless = true
-
 func (mw *msgWriterState) ensureFlate() {
 	if mw.trimWriter == nil {
 		mw.trimWriter = &trimLastFourBytesWriter{
@@ -99,14 +95,7 @@ func (mw *msgWriterState) ensureFlate() {
 		}
 	}
 
-	if stateless {
-		mw.dict.init(8192)
-	} else {
-		if mw.flateWriter == nil {
-			mw.flateWriter = getFlateWriter(mw.trimWriter)
-		}
-	}
-
+	mw.dict.init(8192)
 	mw.flate = true
 }
 
@@ -163,13 +152,6 @@ func (mw *msgWriterState) reset(ctx context.Context, typ MessageType) error {
 	return nil
 }
 
-func (mw *msgWriterState) putFlateWriter() {
-	if mw.flateWriter != nil {
-		putFlateWriter(mw.flateWriter)
-		mw.flateWriter = nil
-	}
-}
-
 // Write writes the given bytes to the WebSocket connection.
 func (mw *msgWriterState) Write(p []byte) (_ int, err error) {
 	defer errd.Wrap(&err, "failed to write")
@@ -186,15 +168,12 @@ func (mw *msgWriterState) Write(p []byte) (_ int, err error) {
 	}
 
 	if mw.flate {
-		if stateless {
-			err = kflate.StatelessDeflate(mw.trimWriter, p, false, mw.dict.buf)
-			if err != nil {
-				return 0, err
-			}
-			mw.dict.write(p)
-			return len(p), nil
+		err = flate.StatelessDeflate(mw.trimWriter, p, false, mw.dict.buf)
+		if err != nil {
+			return 0, err
 		}
-		return mw.flateWriter.Write(p)
+		mw.dict.write(p)
+		return len(p), nil
 	}
 
 	return mw.write(p)
@@ -216,13 +195,6 @@ func (mw *msgWriterState) Close() (err error) {
 	mw.writeMu.Lock()
 	defer mw.writeMu.Unlock()
 
-	if mw.flate && !stateless {
-		err = mw.flateWriter.Flush()
-		if err != nil {
-			return xerrors.Errorf("failed to flush flate: %w", err)
-		}
-	}
-
 	_, err = mw.c.writeFrame(mw.ctx, true, mw.flate, mw.opcode, nil)
 	if err != nil {
 		return xerrors.Errorf("failed to write fin frame: %w", err)
@@ -230,7 +202,6 @@ func (mw *msgWriterState) Close() (err error) {
 
 	if mw.flate && !mw.flateContextTakeover() {
 		mw.dict.close()
-		mw.putFlateWriter()
 	}
 	mw.mu.Unlock()
 	return nil
@@ -238,7 +209,6 @@ func (mw *msgWriterState) Close() (err error) {
 
 func (mw *msgWriterState) close() {
 	mw.writeMu.Lock()
-	mw.putFlateWriter()
 	mw.dict.close()
 }
 
@@ -311,14 +281,13 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 	return n, nil
 }
 
-func (c *Conn) writeFramePayload(p []byte) (_ int, err error) {
+func (c *Conn) writeFramePayload(p []byte) (n int, err error) {
 	defer errd.Wrap(&err, "failed to write frame payload")
 
 	if !c.writeHeader.masked {
 		return c.bw.Write(p)
 	}
 
-	var n int
 	maskKey := c.writeHeader.maskKey
 	for len(p) > 0 {
 		// If the buffer is full, we need to flush.
