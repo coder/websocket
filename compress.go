@@ -1,20 +1,5 @@
 package websocket
 
-// CompressionOptions represents the available deflate extension options.
-// See https://tools.ietf.org/html/rfc7692
-type CompressionOptions struct {
-	// Mode controls the compression mode.
-	//
-	// See docs on CompressionMode.
-	Mode CompressionMode
-
-	// Threshold controls the minimum size of a message before compression is applied.
-	//
-	// Defaults to 512 bytes for CompressionNoContextTakeover and 256 bytes
-	// for CompressionContextTakeover.
-	Threshold int
-}
-
 // CompressionMode represents the modes available to the deflate extension.
 // See https://tools.ietf.org/html/rfc7692
 //
@@ -38,7 +23,7 @@ const (
 	// CompressionContextTakeover uses a flate.Reader and flate.Writer per connection.
 	// This enables reusing the sliding window from previous messages.
 	// As most WebSocket protocols are repetitive, this can be very efficient.
-	// It carries an overhead of 64 kB for every connection compared to CompressionNoContextTakeover.
+	// It carries an overhead of 8 kB for every connection compared to CompressionNoContextTakeover.
 	//
 	// If the peer negotiates NoContextTakeover on the client or server side, it will be
 	// used instead as this is required by the RFC.

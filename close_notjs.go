@@ -35,7 +35,7 @@ func (c *Conn) closeHandshake(code StatusCode, reason string) (err error) {
 	defer errd.Wrap(&err, "failed to close WebSocket")
 
 	err = c.writeClose(code, reason)
-	if err != nil && CloseStatus(err) == -1 {
+	if err != nil && CloseStatus(err) == -1 && err != errAlreadyWroteClose {
 		return err
 	}
 
@@ -46,13 +46,15 @@ func (c *Conn) closeHandshake(code StatusCode, reason string) (err error) {
 	return nil
 }
 
+var errAlreadyWroteClose = xerrors.New("already wrote close")
+
 func (c *Conn) writeClose(code StatusCode, reason string) error {
 	c.closeMu.Lock()
 	closing := c.wroteClose
 	c.wroteClose = true
 	c.closeMu.Unlock()
 	if closing {
-		return xerrors.New("already wrote close")
+		return errAlreadyWroteClose
 	}
 
 	ce := CloseError{

@@ -17,8 +17,8 @@ go get nhooyr.io/websocket
 
 - Minimal and idiomatic API
 - First class [context.Context](https://blog.golang.org/context) support
-- Thorough tests, fully passes the [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
-- [Zero dependencies](https://godoc.org/nhooyr.io/websocket?imports)
+- Thorough tests, fully passes the WebSocket [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
+- [Minimal dependencies](https://godoc.org/nhooyr.io/websocket?imports)
 - JSON and protobuf helpers in the [wsjson](https://godoc.org/nhooyr.io/websocket/wsjson) and [wspb](https://godoc.org/nhooyr.io/websocket/wspb) subpackages
 - Zero alloc reads and writes
 - Concurrent writes
@@ -34,7 +34,7 @@ go get nhooyr.io/websocket
 
 ## Examples
 
-For a production quality example that demonstrates the full API, see the [echo example](https://godoc.org/nhooyr.io/websocket#example-package--Echo).
+For a production quality example that demonstrates the complete API, see the [echo example](https://godoc.org/nhooyr.io/websocket#example-package--Echo).
 
 ### Server
 
@@ -111,6 +111,8 @@ Advantages of nhooyr.io/websocket:
   - Gorilla's implementation is slower and uses [unsafe](https://golang.org/pkg/unsafe/).
 - Full [permessage-deflate](https://tools.ietf.org/html/rfc7692) compression extension support
   - Gorilla only supports no context takeover mode
+  - Uses [klauspost/compress](https://github.com/klauspost/compress) for optimized compression
+  - See [gorilla/websocket#203](https://github.com/gorilla/websocket/issues/203)
 - [CloseRead](https://godoc.org/nhooyr.io/websocket#Conn.CloseRead) helper ([gorilla/websocket#492](https://github.com/gorilla/websocket/issues/492))
 - Actively maintained ([gorilla/websocket#370](https://github.com/gorilla/websocket/issues/370))
 

@@ -152,6 +152,11 @@ func (c *Conn) read(ctx context.Context) (MessageType, []byte, error) {
 	}
 }
 
+// Ping is mocked out for Wasm.
+func (c *Conn) Ping(ctx context.Context) error {
+	return nil
+}
+
 // Write writes a message of the given type to the connection.
 // Always non blocking.
 func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {

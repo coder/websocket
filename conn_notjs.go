@@ -101,7 +101,7 @@ func newConn(cfg connConfig) *Conn {
 	}
 
 	if c.flate() && c.flateThreshold == 0 {
-		c.flateThreshold = 256
+		c.flateThreshold = 128
 		if !c.msgWriterState.flateContextTakeover() {
 			c.flateThreshold = 512
 		}

@@ -36,19 +36,18 @@ func TestConn(t *testing.T) {
 	t.Run("fuzzData", func(t *testing.T) {
 		t.Parallel()
 
-		copts := func() *websocket.CompressionOptions {
-			return &websocket.CompressionOptions{
-				Mode:      websocket.CompressionMode(xrand.Int(int(websocket.CompressionDisabled) + 1)),
-				Threshold: xrand.Int(9999),
-			}
+		compressionMode := func() websocket.CompressionMode {
+			return websocket.CompressionMode(xrand.Int(int(websocket.CompressionDisabled) + 1))
 		}
 
 		for i := 0; i < 5; i++ {
 			t.Run("", func(t *testing.T) {
 				tt, c1, c2 := newConnTest(t, &websocket.DialOptions{
-					CompressionOptions: copts(),
+					CompressionMode:      compressionMode(),
+					CompressionThreshold: xrand.Int(9999),
 				}, &websocket.AcceptOptions{
-					CompressionOptions: copts(),
+					CompressionMode:      compressionMode(),
+					CompressionThreshold: xrand.Int(9999),
 				})
 				defer tt.cleanup()
 
@@ -394,9 +393,9 @@ func BenchmarkConn(b *testing.B) {
 	for _, bc := range benchCases {
 		b.Run(bc.name, func(b *testing.B) {
 			bb, c1, c2 := newConnTest(b, &websocket.DialOptions{
-				CompressionOptions: &websocket.CompressionOptions{Mode: bc.mode},
+				CompressionMode: bc.mode,
 			}, &websocket.AcceptOptions{
-				CompressionOptions: &websocket.CompressionOptions{Mode: bc.mode},
+				CompressionMode: bc.mode,
 			})
 			defer bb.cleanup()
 

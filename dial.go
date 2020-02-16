@@ -33,9 +33,17 @@ type DialOptions struct {
 	// Subprotocols lists the WebSocket subprotocols to negotiate with the server.
 	Subprotocols []string
 
-	// CompressionOptions controls the compression options.
-	// See docs on the CompressionOptions type.
-	CompressionOptions *CompressionOptions
+	// CompressionMode controls the compression mode.
+	// Defaults to CompressionNoContextTakeover.
+	//
+	// See docs on CompressionMode for details.
+	CompressionMode CompressionMode
+
+	// CompressionThreshold controls the minimum size of a message before compression is applied.
+	//
+	// Defaults to 512 bytes for CompressionNoContextTakeover and 128 bytes
+	// for CompressionContextTakeover.
+	CompressionThreshold int
 }
 
 // Dial performs a WebSocket handshake on url.
@@ -66,9 +74,6 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 	}
 	if opts.HTTPHeader == nil {
 		opts.HTTPHeader = http.Header{}
-	}
-	if opts.CompressionOptions == nil {
-		opts.CompressionOptions = &CompressionOptions{}
 	}
 
 	secWebSocketKey, err := secWebSocketKey(rand)
@@ -107,7 +112,7 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 		rwc:            rwc,
 		client:         true,
 		copts:          copts,
-		flateThreshold: opts.CompressionOptions.Threshold,
+		flateThreshold: opts.CompressionThreshold,
 		br:             getBufioReader(rwc),
 		bw:             getBufioWriter(rwc),
 	}), resp, nil
@@ -141,8 +146,8 @@ func handshakeRequest(ctx context.Context, urls string, opts *DialOptions, secWe
 	if len(opts.Subprotocols) > 0 {
 		req.Header.Set("Sec-WebSocket-Protocol", strings.Join(opts.Subprotocols, ","))
 	}
-	if opts.CompressionOptions.Mode != CompressionDisabled {
-		copts := opts.CompressionOptions.Mode.opts()
+	if opts.CompressionMode != CompressionDisabled {
+		copts := opts.CompressionMode.opts()
 		copts.setHeader(req.Header)
 	}
 

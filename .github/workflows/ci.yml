@@ -12,7 +12,7 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-      - name: make fmt
+      - name: Run make fmt
         uses: ./ci/image
         with:
           args: make fmt
@@ -27,7 +27,7 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-      - name: make lint
+      - name: Run make lint
         uses: ./ci/image
         with:
           args: make lint
@@ -42,7 +42,7 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-      - name: make test
+      - name: Run make test
         uses: ./ci/image
         with:
           args: make test

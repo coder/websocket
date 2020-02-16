@@ -37,9 +37,17 @@ type AcceptOptions struct {
 	// If used incorrectly your WebSocket server will be open to CSRF attacks.
 	InsecureSkipVerify bool
 
-	// CompressionOptions controls the compression options.
-	// See docs on the CompressionOptions type.
-	CompressionOptions *CompressionOptions
+	// CompressionMode controls the compression mode.
+	// Defaults to CompressionNoContextTakeover.
+	//
+	// See docs on CompressionMode for details.
+	CompressionMode CompressionMode
+
+	// CompressionThreshold controls the minimum size of a message before compression is applied.
+	//
+	// Defaults to 512 bytes for CompressionNoContextTakeover and 128 bytes
+	// for CompressionContextTakeover.
+	CompressionThreshold int
 }
 
 // Accept accepts a WebSocket handshake from a client and upgrades the
@@ -60,10 +68,6 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 		opts = &AcceptOptions{}
 	}
 	opts = &*opts
-
-	if opts.CompressionOptions == nil {
-		opts.CompressionOptions = &CompressionOptions{}
-	}
 
 	errCode, err := verifyClientRequest(w, r)
 	if err != nil {
@@ -97,7 +101,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 		w.Header().Set("Sec-WebSocket-Protocol", subproto)
 	}
 
-	copts, err := acceptCompression(r, w, opts.CompressionOptions.Mode)
+	copts, err := acceptCompression(r, w, opts.CompressionMode)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +124,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 		rwc:            netConn,
 		client:         false,
 		copts:          copts,
-		flateThreshold: opts.CompressionOptions.Threshold,
+		flateThreshold: opts.CompressionThreshold,
 
 		br: brw.Reader,
 		bw: brw.Writer,

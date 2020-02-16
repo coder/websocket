@@ -8,9 +8,10 @@ import (
 
 // AcceptOptions represents Accept's options.
 type AcceptOptions struct {
-	Subprotocols       []string
-	InsecureSkipVerify bool
-	CompressionOptions *CompressionOptions
+	Subprotocols         []string
+	InsecureSkipVerify   bool
+	CompressionMode      CompressionMode
+	CompressionThreshold int
 }
 
 // Accept is stubbed out for Wasm.

@@ -6,7 +6,7 @@
 //
 // Use Dial to dial a WebSocket server.
 //
-// Accept to accept a WebSocket client.
+// Use Accept to accept a WebSocket client.
 //
 // Conn represents the resulting WebSocket connection.
 //
@@ -25,7 +25,8 @@
 //
 // Some important caveats to be aware of:
 //
+//  - Accept always errors out
 //  - Conn.Ping is no-op
 //  - HTTPClient, HTTPHeader and CompressionMode in DialOptions are no-op
-//  - *http.Response from Dial is &http.Response{} on success
+//  - *http.Response from Dial is &http.Response{} with a 101 status code on success
 package websocket // import "nhooyr.io/websocket"
