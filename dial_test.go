@@ -221,7 +221,7 @@ func Test_verifyServerHandshake(t *testing.T) {
 			opts := &DialOptions{
 				Subprotocols: strings.Split(r.Header.Get("Sec-WebSocket-Protocol"), ","),
 			}
-			_, err = verifyServerResponse(opts, key, resp)
+			_, err = verifyServerResponse(opts, opts.CompressionMode.opts(), key, resp)
 			if tc.success {
 				assert.Success(t, err)
 			} else {
