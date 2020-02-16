@@ -5,11 +5,10 @@ package wstest
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
-
-	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/errd"
@@ -39,11 +38,11 @@ func Pipe(dialOpts *websocket.DialOptions, acceptOpts *websocket.AcceptOptions) 
 
 	clientConn, _, err := websocket.Dial(context.Background(), "ws://example.com", dialOpts)
 	if err != nil {
-		return nil, nil, xerrors.Errorf("failed to dial with fake transport: %w", err)
+		return nil, nil, fmt.Errorf("failed to dial with fake transport: %w", err)
 	}
 
 	if serverConn == nil {
-		return nil, nil, xerrors.Errorf("failed to get server conn from fake transport: %w", acceptErr)
+		return nil, nil, fmt.Errorf("failed to get server conn from fake transport: %w", acceptErr)
 	}
 
 	if xrand.Bool() {

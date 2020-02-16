@@ -5,10 +5,10 @@ package websocket
 import (
 	"context"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"log"
 	"time"
-
-	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket/internal/errd"
 )
@@ -46,7 +46,7 @@ func (c *Conn) closeHandshake(code StatusCode, reason string) (err error) {
 	return nil
 }
 
-var errAlreadyWroteClose = xerrors.New("already wrote close")
+var errAlreadyWroteClose = errors.New("already wrote close")
 
 func (c *Conn) writeClose(code StatusCode, reason string) error {
 	c.closeMu.Lock()
@@ -62,7 +62,7 @@ func (c *Conn) writeClose(code StatusCode, reason string) error {
 		Reason: reason,
 	}
 
-	c.setCloseErr(xerrors.Errorf("sent close frame: %w", ce))
+	c.setCloseErr(fmt.Errorf("sent close frame: %w", ce))
 
 	var p []byte
 	var err error
@@ -119,7 +119,7 @@ func parseClosePayload(p []byte) (CloseError, error) {
 	}
 
 	if len(p) < 2 {
-		return CloseError{}, xerrors.Errorf("close payload %q too small, cannot even contain the 2 byte status code", p)
+		return CloseError{}, fmt.Errorf("close payload %q too small, cannot even contain the 2 byte status code", p)
 	}
 
 	ce := CloseError{
@@ -128,7 +128,7 @@ func parseClosePayload(p []byte) (CloseError, error) {
 	}
 
 	if !validWireCloseCode(ce.Code) {
-		return CloseError{}, xerrors.Errorf("invalid status code %v", ce.Code)
+		return CloseError{}, fmt.Errorf("invalid status code %v", ce.Code)
 	}
 
 	return ce, nil
@@ -155,7 +155,7 @@ func validWireCloseCode(code StatusCode) bool {
 func (ce CloseError) bytes() ([]byte, error) {
 	p, err := ce.bytesErr()
 	if err != nil {
-		err = xerrors.Errorf("failed to marshal close frame: %w", err)
+		err = fmt.Errorf("failed to marshal close frame: %w", err)
 		ce = CloseError{
 			Code: StatusInternalError,
 		}
@@ -168,11 +168,11 @@ const maxCloseReason = maxControlPayload - 2
 
 func (ce CloseError) bytesErr() ([]byte, error) {
 	if len(ce.Reason) > maxCloseReason {
-		return nil, xerrors.Errorf("reason string max is %v but got %q with length %v", maxCloseReason, ce.Reason, len(ce.Reason))
+		return nil, fmt.Errorf("reason string max is %v but got %q with length %v", maxCloseReason, ce.Reason, len(ce.Reason))
 	}
 
 	if !validWireCloseCode(ce.Code) {
-		return nil, xerrors.Errorf("status code %v cannot be set", ce.Code)
+		return nil, fmt.Errorf("status code %v cannot be set", ce.Code)
 	}
 
 	buf := make([]byte, 2+len(ce.Reason))
@@ -189,7 +189,7 @@ func (c *Conn) setCloseErr(err error) {
 
 func (c *Conn) setCloseErrLocked(err error) {
 	if c.closeErr == nil {
-		c.closeErr = xerrors.Errorf("WebSocket closed: %w", err)
+		c.closeErr = fmt.Errorf("WebSocket closed: %w", err)
 	}
 }
 

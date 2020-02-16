@@ -1,9 +1,6 @@
 # websocket
 
-[![release](https://img.shields.io/github/v/release/nhooyr/websocket?color=6b9ded&sort=semver)](https://github.com/nhooyr/websocket/releases)
 [![godoc](https://godoc.org/nhooyr.io/websocket?status.svg)](https://godoc.org/nhooyr.io/websocket)
-[![coverage](https://img.shields.io/coveralls/github/nhooyr/websocket?color=65d6a4)](https://coveralls.io/github/nhooyr/websocket)
-[![ci](https://github.com/nhooyr/websocket/workflows/ci/badge.svg)](https://github.com/nhooyr/websocket/actions)
 
 websocket is a minimal and idiomatic WebSocket library for Go.
 
@@ -17,7 +14,8 @@ go get nhooyr.io/websocket
 
 - Minimal and idiomatic API
 - First class [context.Context](https://blog.golang.org/context) support
-- Thorough tests, fully passes the WebSocket [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
+- Fully passes the WebSocket [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
+- Thorough unit tests with [90% coverage](https://coveralls.io/github/nhooyr/websocket)
 - [Minimal dependencies](https://godoc.org/nhooyr.io/websocket?imports)
 - JSON and protobuf helpers in the [wsjson](https://godoc.org/nhooyr.io/websocket/wsjson) and [wspb](https://godoc.org/nhooyr.io/websocket/wspb) subpackages
 - Zero alloc reads and writes
@@ -111,8 +109,7 @@ Advantages of nhooyr.io/websocket:
   - Gorilla's implementation is slower and uses [unsafe](https://golang.org/pkg/unsafe/).
 - Full [permessage-deflate](https://tools.ietf.org/html/rfc7692) compression extension support
   - Gorilla only supports no context takeover mode
-  - Uses [klauspost/compress](https://github.com/klauspost/compress) for optimized compression
-  - See [gorilla/websocket#203](https://github.com/gorilla/websocket/issues/203)
+  - We use [klauspost/compress](https://github.com/klauspost/compress) for much lower memory usage ([gorilla/websocket#203](https://github.com/gorilla/websocket/issues/203))
 - [CloseRead](https://godoc.org/nhooyr.io/websocket#Conn.CloseRead) helper ([gorilla/websocket#492](https://github.com/gorilla/websocket/issues/492))
 - Actively maintained ([gorilla/websocket#370](https://github.com/gorilla/websocket/issues/370))
 

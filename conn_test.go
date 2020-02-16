@@ -19,7 +19,6 @@ import (
 
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/duration"
-	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/test/assert"
@@ -115,13 +114,21 @@ func TestConn(t *testing.T) {
 
 		for i := 0; i < count; i++ {
 			go func() {
-				errs <- c1.Write(tt.ctx, websocket.MessageBinary, msg)
+				select {
+				case errs <- c1.Write(tt.ctx, websocket.MessageBinary, msg):
+				case <-tt.ctx.Done():
+					return
+				}
 			}()
 		}
 
 		for i := 0; i < count; i++ {
-			err := <-errs
-			assert.Success(t, err)
+			select {
+			case err := <-errs:
+				assert.Success(t, err)
+			case <-tt.ctx.Done():
+				t.Fatal(tt.ctx.Err())
+			}
 		}
 
 		err := c1.Close(websocket.StatusNormalClosure, "")
@@ -172,8 +179,12 @@ func TestConn(t *testing.T) {
 		_, err = n1.Read(nil)
 		assert.Equal(t, "read error", err, io.EOF)
 
-		err = <-errs
-		assert.Success(t, err)
+		select {
+		case err := <-errs:
+			assert.Success(t, err)
+		case <-tt.ctx.Done():
+			t.Fatal(tt.ctx.Err())
+		}
 
 		assert.Equal(t, "read msg", []byte("hello"), b)
 	})
@@ -196,8 +207,12 @@ func TestConn(t *testing.T) {
 		_, err := ioutil.ReadAll(n1)
 		assert.Contains(t, err, `unexpected frame type read (expected MessageBinary): MessageText`)
 
-		err = <-errs
-		assert.Success(t, err)
+		select {
+		case err := <-errs:
+			assert.Success(t, err)
+		case <-tt.ctx.Done():
+			t.Fatal(tt.ctx.Err())
+		}
 	})
 
 	t.Run("wsjson", func(t *testing.T) {
@@ -219,8 +234,12 @@ func TestConn(t *testing.T) {
 		assert.Success(t, err)
 		assert.Equal(t, "read msg", exp, act)
 
-		err = <-werr
-		assert.Success(t, err)
+		select {
+		case err := <-werr:
+			assert.Success(t, err)
+		case <-tt.ctx.Done():
+			t.Fatal(tt.ctx.Err())
+		}
 
 		err = c1.Close(websocket.StatusNormalClosure, "")
 		assert.Success(t, err)
@@ -289,10 +308,10 @@ func TestWasm(t *testing.T) {
 
 func assertCloseStatus(exp websocket.StatusCode, err error) error {
 	if websocket.CloseStatus(err) == -1 {
-		return xerrors.Errorf("expected websocket.CloseError: %T %v", err, err)
+		return fmt.Errorf("expected websocket.CloseError: %T %v", err, err)
 	}
 	if websocket.CloseStatus(err) != exp {
-		return xerrors.Errorf("expected close status %v but got ", exp, err)
+		return fmt.Errorf("expected close status %v but got %v", exp, err)
 	}
 	return nil
 }
@@ -412,14 +431,22 @@ func BenchmarkConn(b *testing.B) {
 
 			go func() {
 				for range writes {
-					werrs <- c1.Write(bb.ctx, websocket.MessageText, msg)
+					select {
+					case werrs <- c1.Write(bb.ctx, websocket.MessageText, msg):
+					case <-bb.ctx.Done():
+						return
+					}
 				}
 			}()
 			b.SetBytes(int64(len(msg)))
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				writes <- struct{}{}
+				select {
+				case writes <- struct{}{}:
+				case <-bb.ctx.Done():
+					b.Fatal(bb.ctx.Err())
+				}
 
 				typ, r, err := c1.Reader(bb.ctx)
 				if err != nil {
@@ -446,7 +473,11 @@ func BenchmarkConn(b *testing.B) {
 					assert.Equal(b, "msg", msg, readBuf)
 				}
 
-				err = <-werrs
+				select {
+				case err = <-werrs:
+				case <-bb.ctx.Done():
+					b.Fatal(bb.ctx.Err())
+				}
 				if err != nil {
 					b.Fatal(err)
 				}

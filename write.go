@@ -7,12 +7,13 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"time"
 
 	"github.com/klauspost/compress/flate"
-	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket/internal/errd"
 )
@@ -27,7 +28,7 @@ import (
 func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, error) {
 	w, err := c.writer(ctx, typ)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to get writer: %w", err)
+		return nil, fmt.Errorf("failed to get writer: %w", err)
 	}
 	return w, nil
 }
@@ -41,7 +42,7 @@ func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	_, err := c.write(ctx, typ, p)
 	if err != nil {
-		return xerrors.Errorf("failed to write msg: %w", err)
+		return fmt.Errorf("failed to write msg: %w", err)
 	}
 	return nil
 }
@@ -53,14 +54,14 @@ type msgWriter struct {
 
 func (mw *msgWriter) Write(p []byte) (int, error) {
 	if mw.closed {
-		return 0, xerrors.New("cannot use closed writer")
+		return 0, errors.New("cannot use closed writer")
 	}
 	return mw.mw.Write(p)
 }
 
 func (mw *msgWriter) Close() error {
 	if mw.closed {
-		return xerrors.New("cannot use closed writer")
+		return errors.New("cannot use closed writer")
 	}
 	mw.closed = true
 	return mw.mw.Close()
@@ -182,7 +183,7 @@ func (mw *msgWriterState) Write(p []byte) (_ int, err error) {
 func (mw *msgWriterState) write(p []byte) (int, error) {
 	n, err := mw.c.writeFrame(mw.ctx, false, mw.flate, mw.opcode, p)
 	if err != nil {
-		return n, xerrors.Errorf("failed to write data frame: %w", err)
+		return n, fmt.Errorf("failed to write data frame: %w", err)
 	}
 	mw.opcode = opContinuation
 	return n, nil
@@ -197,7 +198,7 @@ func (mw *msgWriterState) Close() (err error) {
 
 	_, err = mw.c.writeFrame(mw.ctx, true, mw.flate, mw.opcode, nil)
 	if err != nil {
-		return xerrors.Errorf("failed to write fin frame: %w", err)
+		return fmt.Errorf("failed to write fin frame: %w", err)
 	}
 
 	if mw.flate && !mw.flateContextTakeover() {
@@ -218,7 +219,7 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 
 	_, err := c.writeFrame(ctx, true, false, opcode, p)
 	if err != nil {
-		return xerrors.Errorf("failed to write control frame %v: %w", opcode, err)
+		return fmt.Errorf("failed to write control frame %v: %w", opcode, err)
 	}
 	return nil
 }
@@ -245,7 +246,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 		c.writeHeader.masked = true
 		_, err = io.ReadFull(rand.Reader, c.writeHeaderBuf[:4])
 		if err != nil {
-			return 0, xerrors.Errorf("failed to generate masking key: %w", err)
+			return 0, fmt.Errorf("failed to generate masking key: %w", err)
 		}
 		c.writeHeader.maskKey = binary.LittleEndian.Uint32(c.writeHeaderBuf[:])
 	}
@@ -268,7 +269,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 	if c.writeHeader.fin {
 		err = c.bw.Flush()
 		if err != nil {
-			return n, xerrors.Errorf("failed to flush: %w", err)
+			return n, fmt.Errorf("failed to flush: %w", err)
 		}
 	}
 

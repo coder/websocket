@@ -4,13 +4,12 @@ package websocket
 
 import (
 	"bufio"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"golang.org/x/xerrors"
 
 	"nhooyr.io/websocket/internal/test/assert"
 )
@@ -80,7 +79,7 @@ func TestAccept(t *testing.T) {
 		w := mockHijacker{
 			ResponseWriter: httptest.NewRecorder(),
 			hijack: func() (conn net.Conn, writer *bufio.ReadWriter, err error) {
-				return nil, nil, xerrors.New("haha")
+				return nil, nil, errors.New("haha")
 			},
 		}
 
@@ -328,6 +327,7 @@ func Test_acceptCompression(t *testing.T) {
 			expCopts: &compressionOptions{
 				clientNoContextTakeover: true,
 				serverNoContextTakeover: true,
+				serverMaxWindowBits:     8,
 			},
 		},
 		{

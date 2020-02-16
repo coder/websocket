@@ -4,8 +4,7 @@ package wsjson // import "nhooyr.io/websocket/wsjson"
 import (
 	"context"
 	"encoding/json"
-
-	"golang.org/x/xerrors"
+	"fmt"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/bpool"
@@ -28,7 +27,7 @@ func read(ctx context.Context, c *websocket.Conn, v interface{}) (err error) {
 
 	if typ != websocket.MessageText {
 		c.Close(websocket.StatusUnsupportedData, "expected text message")
-		return xerrors.Errorf("expected text message for JSON but got: %v", typ)
+		return fmt.Errorf("expected text message for JSON but got: %v", typ)
 	}
 
 	b := bpool.Get()
@@ -42,7 +41,7 @@ func read(ctx context.Context, c *websocket.Conn, v interface{}) (err error) {
 	err = json.Unmarshal(b.Bytes(), v)
 	if err != nil {
 		c.Close(websocket.StatusInvalidFramePayloadData, "failed to unmarshal JSON")
-		return xerrors.Errorf("failed to unmarshal JSON: %w", err)
+		return fmt.Errorf("failed to unmarshal JSON: %w", err)
 	}
 
 	return nil
@@ -66,7 +65,7 @@ func write(ctx context.Context, c *websocket.Conn, v interface{}) (err error) {
 	// a copy of the byte slice but Encoder does as it directly writes to w.
 	err = json.NewEncoder(w).Encode(v)
 	if err != nil {
-		return xerrors.Errorf("failed to marshal JSON: %w", err)
+		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 
 	return w.Close()

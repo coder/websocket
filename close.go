@@ -1,9 +1,8 @@
 package websocket
 
 import (
+	"errors"
 	"fmt"
-
-	"golang.org/x/xerrors"
 )
 
 // StatusCode represents a WebSocket status code.
@@ -53,7 +52,7 @@ const (
 
 // CloseError is returned when the connection is closed with a status and reason.
 //
-// Use Go 1.13's xerrors.As to check for this error.
+// Use Go 1.13's errors.As to check for this error.
 // Also see the CloseStatus helper.
 type CloseError struct {
 	Code   StatusCode
@@ -64,13 +63,13 @@ func (ce CloseError) Error() string {
 	return fmt.Sprintf("status = %v and reason = %q", ce.Code, ce.Reason)
 }
 
-// CloseStatus is a convenience wrapper around Go 1.13's xerrors.As to grab
+// CloseStatus is a convenience wrapper around Go 1.13's errors.As to grab
 // the status code from a CloseError.
 //
 // -1 will be returned if the passed error is nil or not a CloseError.
 func CloseStatus(err error) StatusCode {
 	var ce CloseError
-	if xerrors.As(err, &ce) {
+	if errors.As(err, &ce) {
 		return ce.Code
 	}
 	return -1

@@ -1,9 +1,8 @@
 package websocket
 
 import (
+	"errors"
 	"net/http"
-
-	"golang.org/x/xerrors"
 )
 
 // AcceptOptions represents Accept's options.
@@ -16,5 +15,5 @@ type AcceptOptions struct {
 
 // Accept is stubbed out for Wasm.
 func Accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn, error) {
-	return nil, xerrors.New("unimplemented")
+	return nil, errors.New("unimplemented")
 }

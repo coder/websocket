@@ -1,6 +1,6 @@
 module nhooyr.io/websocket
 
-go 1.12
+go 1.13
 
 require (
 	github.com/gobwas/httphead v0.0.0-20180130184737-2c6c146eadee // indirect
@@ -11,5 +11,4 @@ require (
 	github.com/gorilla/websocket v1.4.1
 	github.com/klauspost/compress v1.10.0
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
-	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
 )
