@@ -28,6 +28,7 @@ var excludedAutobahnCases = []string{
 
 	// We skip the tests related to requestMaxWindowBits as that is unimplemented due
 	// to limitations in compress/flate. See https://github.com/golang/go/issues/3155
+	// Same with klauspost/compress which doesn't allow adjusting the sliding window size.
 	"13.3.*", "13.4.*", "13.5.*", "13.6.*",
 }
 
