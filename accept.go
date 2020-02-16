@@ -325,6 +325,7 @@ func headerTokens(h http.Header, key string) []string {
 		v = strings.TrimSpace(v)
 		for _, t := range strings.Split(v, ",") {
 			t = strings.ToLower(t)
+			t = strings.TrimSpace(t)
 			tokens = append(tokens, t)
 		}
 	}

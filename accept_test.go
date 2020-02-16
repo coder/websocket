@@ -155,7 +155,7 @@ func Test_verifyClientHandshake(t *testing.T) {
 		{
 			name: "success",
 			h: map[string]string{
-				"Connection":            "Upgrade",
+				"Connection":            "keep-alive, Upgrade",
 				"Upgrade":               "websocket",
 				"Sec-WebSocket-Version": "13",
 				"Sec-WebSocket-Key":     "meow123",
