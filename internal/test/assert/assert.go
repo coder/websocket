@@ -2,17 +2,27 @@ package assert
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
-	"nhooyr.io/websocket/internal/test/cmp"
+	"github.com/golang/protobuf/proto"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
+
+// Diff returns a human readable diff between v1 and v2
+func Diff(v1, v2 interface{}) string {
+	return cmp.Diff(v1, v2, cmpopts.EquateErrors(), cmp.Exporter(func(r reflect.Type) bool {
+		return true
+	}), cmp.Comparer(proto.Equal))
+}
 
 // Equal asserts exp == act.
 func Equal(t testing.TB, name string, exp, act interface{}) {
 	t.Helper()
 
-	if diff := cmp.Diff(exp, act); diff != "" {
+	if diff := Diff(exp, act); diff != "" {
 		t.Fatalf("unexpected %v: %v", name, diff)
 	}
 }

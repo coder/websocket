@@ -327,6 +327,7 @@ func Test_acceptCompression(t *testing.T) {
 			expCopts: &compressionOptions{
 				clientNoContextTakeover: true,
 				serverNoContextTakeover: true,
+				serverMaxWindowBits:     8,
 			},
 		},
 		{

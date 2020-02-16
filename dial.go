@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"nhooyr.io/websocket/internal/errd"
 )
@@ -91,6 +92,12 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 		if err != nil {
 			// We read a bit of the body for easier debugging.
 			r := io.LimitReader(respBody, 1024)
+
+			timer := time.AfterFunc(time.Second*3, func() {
+				respBody.Close()
+			})
+			defer timer.Stop()
+
 			b, _ := ioutil.ReadAll(r)
 			respBody.Close()
 			resp.Body = ioutil.NopCloser(bytes.NewReader(b))
@@ -148,6 +155,7 @@ func handshakeRequest(ctx context.Context, urls string, opts *DialOptions, secWe
 	}
 	if opts.CompressionMode != CompressionDisabled {
 		copts := opts.CompressionMode.opts()
+		copts.clientMaxWindowBits = 8
 		copts.setHeader(req.Header)
 	}
 
@@ -225,15 +233,36 @@ func verifyServerExtensions(h http.Header) (*compressionOptions, error) {
 	}
 
 	copts := &compressionOptions{}
+	copts.clientMaxWindowBits = 8
 	for _, p := range ext.params {
 		switch p {
 		case "client_no_context_takeover":
 			copts.clientNoContextTakeover = true
+			continue
 		case "server_no_context_takeover":
 			copts.serverNoContextTakeover = true
-		default:
-			return nil, fmt.Errorf("unsupported permessage-deflate parameter: %q", p)
+			continue
 		}
+
+		if false && strings.HasPrefix(p, "server_max_window_bits") {
+			bits, ok := parseExtensionParameter(p, 0)
+			if !ok || bits < 8 || bits > 16 {
+				return nil, fmt.Errorf("invalid server_max_window_bits: %q", p)
+			}
+			copts.serverMaxWindowBits = bits
+			continue
+		}
+
+		if false && strings.HasPrefix(p, "client_max_window_bits") {
+			bits, ok := parseExtensionParameter(p, 0)
+			if !ok || bits < 8 || bits > 16 {
+				return nil, fmt.Errorf("invalid client_max_window_bits: %q", p)
+			}
+			copts.clientMaxWindowBits = 8
+			continue
+		}
+
+		return nil, fmt.Errorf("unsupported permessage-deflate parameter: %q", p)
 	}
 
 	return copts, nil

@@ -3,6 +3,7 @@
 package websocket
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"sync"
@@ -19,7 +20,10 @@ func (m CompressionMode) opts() *compressionOptions {
 
 type compressionOptions struct {
 	clientNoContextTakeover bool
+	clientMaxWindowBits     int
+
 	serverNoContextTakeover bool
+	serverMaxWindowBits     int
 }
 
 func (copts *compressionOptions) setHeader(h http.Header) {
@@ -29,6 +33,12 @@ func (copts *compressionOptions) setHeader(h http.Header) {
 	}
 	if copts.serverNoContextTakeover {
 		s += "; server_no_context_takeover"
+	}
+	if false && copts.serverMaxWindowBits > 0 {
+		s += fmt.Sprintf("; server_max_window_bits=%v", copts.serverMaxWindowBits)
+	}
+	if false && copts.clientMaxWindowBits > 0 {
+		s += fmt.Sprintf("; client_max_window_bits=%v", copts.clientMaxWindowBits)
 	}
 	h.Set("Sec-WebSocket-Extensions", s)
 }
@@ -152,9 +162,8 @@ func (sw *slidingWindow) close() {
 	}
 
 	swPoolMu.Lock()
-	defer swPoolMu.Unlock()
-
 	swPool[cap(sw.buf)].Put(sw.buf)
+	swPoolMu.Unlock()
 	sw.buf = nil
 }
 

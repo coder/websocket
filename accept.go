@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"nhooyr.io/websocket/internal/errd"
@@ -208,6 +209,7 @@ func acceptCompression(r *http.Request, w http.ResponseWriter, mode CompressionM
 
 func acceptDeflate(w http.ResponseWriter, ext websocketExtension, mode CompressionMode) (*compressionOptions, error) {
 	copts := mode.opts()
+	copts.serverMaxWindowBits = 8
 
 	for _, p := range ext.params {
 		switch p {
@@ -219,7 +221,27 @@ func acceptDeflate(w http.ResponseWriter, ext websocketExtension, mode Compressi
 			continue
 		}
 
-		if strings.HasPrefix(p, "client_max_window_bits") || strings.HasPrefix(p, "server_max_window_bits") {
+		if strings.HasPrefix(p, "client_max_window_bits") {
+			continue
+
+			// bits, ok := parseExtensionParameter(p, 15)
+			// if !ok || bits < 8 || bits > 16 {
+			// 	err := fmt.Errorf("invalid client_max_window_bits: %q", p)
+			// 	http.Error(w, err.Error(), http.StatusBadRequest)
+			// 	return nil, err
+			// }
+			// copts.clientMaxWindowBits = bits
+			// continue
+		}
+
+		if false && strings.HasPrefix(p, "server_max_window_bits") {
+			// We always send back 8 but make sure to validate.
+			bits, ok := parseExtensionParameter(p, 0)
+			if !ok || bits < 8 || bits > 16 {
+				err := fmt.Errorf("invalid server_max_window_bits: %q", p)
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return nil, err
+			}
 			continue
 		}
 
@@ -231,6 +253,21 @@ func acceptDeflate(w http.ResponseWriter, ext websocketExtension, mode Compressi
 	copts.setHeader(w.Header())
 
 	return copts, nil
+}
+
+// parseExtensionParameter parses the value in the extension parameter p.
+// It falls back to defaultVal if there is no value.
+// If defaultVal == 0, then ok == false if there is no value.
+func parseExtensionParameter(p string, defaultVal int) (int, bool) {
+	ps := strings.Split(p, "=")
+	if len(ps) == 1 {
+		if defaultVal > 0 {
+			return defaultVal, true
+		}
+		return 0, false
+	}
+	i, e := strconv.Atoi(strings.Trim(ps[1], `"`))
+	return i, e == nil
 }
 
 func acceptWebkitDeflate(w http.ResponseWriter, ext websocketExtension, mode CompressionMode) (*compressionOptions, error) {
