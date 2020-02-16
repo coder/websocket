@@ -1,12 +1,6 @@
-fmt: modtidy gofmt goimports prettier
+fmt: modtidy gofmt goimports prettier shfmt
 ifdef CI
-	if [[ $$(git ls-files --other --modified --exclude-standard) != "" ]]; then
-	  echo "Files need generation or are formatted incorrectly:"
-	  git -c color.ui=always status | grep --color=no '\e\[31m'
-	  echo "Please run the following locally:"
-	  echo "  make fmt"
-	  exit 1
-	fi
+	./ci/ensure_fmt.sh
 endif
 
 modtidy: gen
@@ -23,3 +17,6 @@ prettier:
 
 gen:
 	stringer -type=opcode,MessageType,StatusCode -output=stringer.go
+
+shfmt:
+	shfmt -i 2 -w -s -sr $$(git ls-files "*.sh")
