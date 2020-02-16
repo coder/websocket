@@ -1,7 +1,6 @@
 # websocket
 
 [![godoc](https://godoc.org/nhooyr.io/websocket?status.svg)](https://godoc.org/nhooyr.io/websocket)
-[![ci](https://img.shields.io/github/workflow/status/nhooyr/websocket/ci?label=ci)](https://github.com/nhooyr/websocket/actions)
 
 websocket is a minimal and idiomatic WebSocket library for Go.
 
@@ -110,8 +109,7 @@ Advantages of nhooyr.io/websocket:
   - Gorilla's implementation is slower and uses [unsafe](https://golang.org/pkg/unsafe/).
 - Full [permessage-deflate](https://tools.ietf.org/html/rfc7692) compression extension support
   - Gorilla only supports no context takeover mode
-  - Uses [klauspost/compress](https://github.com/klauspost/compress) for optimized compression
-  - See [gorilla/websocket#203](https://github.com/gorilla/websocket/issues/203)
+  - We use [klauspost/compress](https://github.com/klauspost/compress) for much lower memory usage ([gorilla/websocket#203](https://github.com/gorilla/websocket/issues/203))
 - [CloseRead](https://godoc.org/nhooyr.io/websocket#Conn.CloseRead) helper ([gorilla/websocket#492](https://github.com/gorilla/websocket/issues/492))
 - Actively maintained ([gorilla/websocket#370](https://github.com/gorilla/websocket/issues/370))
 
