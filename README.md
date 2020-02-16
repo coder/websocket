@@ -1,9 +1,7 @@
 # websocket
 
-[![release](https://img.shields.io/github/v/release/nhooyr/websocket?color=6b9ded&sort=semver)](https://github.com/nhooyr/websocket/releases)
 [![godoc](https://godoc.org/nhooyr.io/websocket?status.svg)](https://godoc.org/nhooyr.io/websocket)
-[![coverage](https://img.shields.io/coveralls/github/nhooyr/websocket?color=65d6a4)](https://coveralls.io/github/nhooyr/websocket)
-[![ci](https://github.com/nhooyr/websocket/workflows/ci/badge.svg)](https://github.com/nhooyr/websocket/actions)
+[![ci](https://img.shields.io/github/workflow/status/nhooyr/websocket/ci?label=ci)](https://github.com/nhooyr/websocket/actions)
 
 websocket is a minimal and idiomatic WebSocket library for Go.
 
@@ -17,7 +15,8 @@ go get nhooyr.io/websocket
 
 - Minimal and idiomatic API
 - First class [context.Context](https://blog.golang.org/context) support
-- Thorough tests, fully passes the WebSocket [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
+- Fully passes the WebSocket [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
+- Thorough unit tests with [90% coverage](https://coveralls.io/github/nhooyr/websocket)
 - [Minimal dependencies](https://godoc.org/nhooyr.io/websocket?imports)
 - JSON and protobuf helpers in the [wsjson](https://godoc.org/nhooyr.io/websocket/wsjson) and [wspb](https://godoc.org/nhooyr.io/websocket/wspb) subpackages
 - Zero alloc reads and writes

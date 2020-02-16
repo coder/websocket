@@ -7,7 +7,6 @@ ci/out/coverage.html: gotest
 	go tool cover -html=ci/out/coverage.prof -o=ci/out/coverage.html
 
 coveralls: gotest
-	# https://github.com/coverallsapp/github-action/blob/master/src/run.ts
 	echo "--- coveralls"
 	goveralls -coverprofile=ci/out/coverage.prof
 
