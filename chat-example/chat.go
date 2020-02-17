@@ -33,7 +33,7 @@ func (cs *chatServer) subscribeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if websocket.CloseStatus(err) == websocket.StatusNormalClosure ||
-			websocket.CloseStatus(err) == websocket.StatusGoingAway {
+		websocket.CloseStatus(err) == websocket.StatusGoingAway {
 		return
 	}
 	if err != nil {

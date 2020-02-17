@@ -3,7 +3,7 @@
 This directory contains a full stack example of a simple chat webapp using nhooyr.io/websocket.
 
 ```bash
-$ cd example
+$ cd chat-example
 $ go run . localhost:0
 listening on http://127.0.0.1:51055
 ```
