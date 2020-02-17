@@ -4,19 +4,21 @@
   function dial() {
     conn = new WebSocket(`ws://${location.host}/subscribe`)
 
-    conn.addEventListener("close", (ev) => {
-      console.error("subscribe WebSocket closed", ev)
-      console.info("reconnecting in 1000ms", ev)
+    conn.addEventListener("close", ev => {
+      console.info("websocket disconnected, reconnecting in 1000ms", ev)
       setTimeout(dial, 1000)
+    })
+    conn.addEventListener("open", ev => {
+      console.info("websocket connected")
     })
     conn.addEventListener("message", ev => {
       if (typeof ev.data !== "string") {
         console.error("unexpected message type", typeof ev.data)
         return
       }
-      appendLog(ev.data)
+      const p = appendLog(ev.data)
       if (expectingMessage) {
-        messageLog.scrollTo(0, messageLog.scrollHeight)
+        p.scrollIntoView()
         expectingMessage = false
       }
     })
@@ -31,6 +33,7 @@
     const p = document.createElement("p")
     p.innerText = `${new Date().toLocaleTimeString()}: ${text}`
     messageLog.append(p)
+    return p
   }
   appendLog("Submit a message to get started!")
 
@@ -47,8 +50,6 @@
     fetch("/publish", {
       method: "POST",
       body: msg,
-    }).catch(err => {
-      console.error("failed to publish", err)
     })
   }
 })()

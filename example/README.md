@@ -5,7 +5,7 @@ of a simple chat webapp using nhooyr.io/websocket.
 
 ```bash
 $ cd example
-$ go run .
+$ go run . localhost:0
 listening on http://127.0.0.1:51055
 ```
 
