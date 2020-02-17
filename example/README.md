@@ -1,7 +1,6 @@
 # Chat Example
 
-This directory contains a full stack example
-of a simple chat webapp using nhooyr.io/websocket.
+This directory contains a full stack example of a simple chat webapp using nhooyr.io/websocket.
 
 ```bash
 $ cd example
@@ -15,11 +14,11 @@ Visit the printed URL to submit and view broadcasted messages in a browser.
 
 ## Structure
 
-The frontend is contained in `index.html`, `index.js` and `index.css`. It setups the
-DOM with a form at the buttom to submit messages and at the top is a scrollable div
-that is populated with new messages as they are broadcast. The messages are received
-via a WebSocket and messages are published via a POST HTTP endpoint.
+The frontend is contained in `index.html`, `index.js` and `index.css`. It sets up the
+DOM with a scrollable div at the top that is populated with new messages as they are broadcast.
+At the bottom it adds a form to submit messages.
+The messages are received via the WebSocket `/subscribe` endpoint and published via
+the HTTP POST `/publish` endpoint.
 
 The server portion is `main.go` and `chat.go` and implements serving the static frontend
-assets as well as the `/subscribe` WebSocket endpoint for subscribing to
-broadcast messages and `/publish` for publishing messages.
+assets, the `/subscribe` WebSocket endpoint and the HTTP POST `/publish` endpoint.
