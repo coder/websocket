@@ -329,7 +329,7 @@ func newConnTest(t testing.TB, dialOpts *websocket.DialOptions, acceptOpts *webs
 	}
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 30)
 	tt = &connTest{t: t, ctx: ctx}
 	tt.appendDone(cancel)
 

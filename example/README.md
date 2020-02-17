@@ -22,3 +22,6 @@ the HTTP POST `/publish` endpoint.
 
 The server portion is `main.go` and `chat.go` and implements serving the static frontend
 assets, the `/subscribe` WebSocket endpoint and the HTTP POST `/publish` endpoint.
+
+The code is well commented. I would recommend starting in `main.go` and then `chat.go` followed by
+`index.html` and then `index.js`.

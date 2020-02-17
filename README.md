@@ -34,7 +34,7 @@ go get nhooyr.io/websocket
 
 For a production quality example that demonstrates the complete API, see the [echo example](https://godoc.org/nhooyr.io/websocket#example-package--Echo).
 
-For a full stack example, see the [./example](./example) subdirectory which contains a full chat example.
+For a full stack example, see the [./example](./example) subdirectory which contains a chat example with a browser client.
 
 ### Server
 
