@@ -10,7 +10,7 @@ listening on http://127.0.0.1:51055
 
 Visit the printed URL to submit and view broadcasted messages in a browser.
 
-![Image of Example](https://i.imgur.com/iSdpZFT.png)
+![Image of Example](https://i.imgur.com/VwJl9Bh.png)
 
 ## Structure
 
