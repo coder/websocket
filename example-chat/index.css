@@ -1,0 +1,67 @@
+body {
+  width: 100vw;
+  height: 100vh;
+  min-width: 320px;
+}
+
+#root {
+  padding: 20px;
+  max-width: 500px;
+  margin: auto;
+  max-height: 100vh;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+#root > * + * {
+  margin: 20px 0 0 0;
+}
+
+#message-log {
+  width: 100%;
+  height: 100vh;
+  flex-grow: 1;
+  overflow: auto;
+}
+
+#message-log p:first-child {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+#message-log > * + * {
+  margin: 10px 0 0 0;
+}
+
+#publish-form {
+  appearance: none;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+#publish-form input[type="text"] {
+  flex-grow: 1;
+  word-break: normal;
+  border-radius: 5px;
+}
+
+#publish-form input[type="submit"] {
+  color: white;
+  background-color: black;
+  border-radius: 5px;
+  margin-left: 10px;
+}
+
+#publish-form input[type="submit"]:hover {
+  background-color: red;
+}
+
+#publish-form input[type="submit"]:active {
+  background-color: red;
+}
