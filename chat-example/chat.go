@@ -27,6 +27,7 @@ func (cs *chatServer) subscribeHandler(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 		return
 	}
+	defer c.Close(websocket.StatusInternalError, "")
 
 	err = cs.subscribe(r.Context(), c)
 	if errors.Is(err, context.Canceled) {
