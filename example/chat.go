@@ -18,8 +18,6 @@ type chatServer struct {
 }
 
 func (cs *chatServer) subscribeHandler(w http.ResponseWriter, r *http.Request) {
-	println("HELLO")
-
 	c, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		log.Print(err)
@@ -30,6 +28,10 @@ func (cs *chatServer) subscribeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cs *chatServer) publishHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
 	body := io.LimitReader(r.Body, 8192)
 	msg, err := ioutil.ReadAll(body)
 	if err != nil {
