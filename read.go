@@ -109,11 +109,16 @@ func (mr *msgReader) putFlateReader() {
 }
 
 func (mr *msgReader) close() {
-	mr.c.readMu.Lock(context.Background())
+	mr.c.readMu.forceLock()
 	mr.putFlateReader()
 	mr.dict.close()
 	if mr.flateBufio != nil {
 		putBufioReader(mr.flateBufio)
+	}
+
+	if mr.c.client {
+		putBufioReader(mr.c.br)
+		mr.c.br = nil
 	}
 }
 
@@ -292,11 +297,11 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err error) {
 	defer errd.Wrap(&err, "failed to get reader")
 
-	err = c.readMu.Lock(ctx)
+	err = c.readMu.lock(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
-	defer c.readMu.Unlock()
+	defer c.readMu.unlock()
 
 	if !c.msgReader.fin {
 		return 0, nil, errors.New("previous message not read to completion")
@@ -368,11 +373,11 @@ func (mr *msgReader) Read(p []byte) (n int, err error) {
 		errd.Wrap(&err, "failed to read")
 	}()
 
-	err = mr.c.readMu.Lock(mr.ctx)
+	err = mr.c.readMu.lock(mr.ctx)
 	if err != nil {
 		return 0, err
 	}
-	defer mr.c.readMu.Unlock()
+	defer mr.c.readMu.unlock()
 
 	n, err = mr.limitReader.Read(p)
 	if mr.flate && mr.flateContextTakeover() {

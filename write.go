@@ -125,7 +125,7 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) (int, error
 	}
 
 	if !c.flate() {
-		defer c.msgWriterState.mu.Unlock()
+		defer c.msgWriterState.mu.unlock()
 		return c.writeFrame(ctx, true, false, c.msgWriterState.opcode, p)
 	}
 
@@ -139,7 +139,7 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) (int, error
 }
 
 func (mw *msgWriterState) reset(ctx context.Context, typ MessageType) error {
-	err := mw.mu.Lock(ctx)
+	err := mw.mu.lock(ctx)
 	if err != nil {
 		return err
 	}
@@ -204,11 +204,16 @@ func (mw *msgWriterState) Close() (err error) {
 	if mw.flate && !mw.flateContextTakeover() {
 		mw.dict.close()
 	}
-	mw.mu.Unlock()
+	mw.mu.unlock()
 	return nil
 }
 
 func (mw *msgWriterState) close() {
+	if mw.c.client {
+		mw.c.writeFrameMu.forceLock()
+		putBufioWriter(mw.c.bw)
+	}
+
 	mw.writeMu.Lock()
 	mw.dict.close()
 }
@@ -226,11 +231,11 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 
 // frame handles all writes to the connection.
 func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opcode, p []byte) (int, error) {
-	err := c.writeFrameMu.Lock(ctx)
+	err := c.writeFrameMu.lock(ctx)
 	if err != nil {
 		return 0, err
 	}
-	defer c.writeFrameMu.Unlock()
+	defer c.writeFrameMu.unlock()
 
 	select {
 	case <-c.closed:
