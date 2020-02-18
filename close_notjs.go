@@ -86,11 +86,11 @@ func (c *Conn) waitCloseHandshake() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	err := c.readMu.Lock(ctx)
+	err := c.readMu.lock(ctx)
 	if err != nil {
 		return err
 	}
-	defer c.readMu.Unlock()
+	defer c.readMu.unlock()
 
 	if c.readCloseFrameErr != nil {
 		return c.readCloseFrameErr

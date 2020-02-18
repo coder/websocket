@@ -253,10 +253,10 @@ func verifyServerExtensions(copts *compressionOptions, h http.Header) (*compress
 	return copts, nil
 }
 
-var readerPool sync.Pool
+var bufioReaderPool sync.Pool
 
 func getBufioReader(r io.Reader) *bufio.Reader {
-	br, ok := readerPool.Get().(*bufio.Reader)
+	br, ok := bufioReaderPool.Get().(*bufio.Reader)
 	if !ok {
 		return bufio.NewReader(r)
 	}
@@ -265,13 +265,13 @@ func getBufioReader(r io.Reader) *bufio.Reader {
 }
 
 func putBufioReader(br *bufio.Reader) {
-	readerPool.Put(br)
+	bufioReaderPool.Put(br)
 }
 
-var writerPool sync.Pool
+var bufioWriterPool sync.Pool
 
 func getBufioWriter(w io.Writer) *bufio.Writer {
-	bw, ok := writerPool.Get().(*bufio.Writer)
+	bw, ok := bufioWriterPool.Get().(*bufio.Writer)
 	if !ok {
 		return bufio.NewWriter(w)
 	}
@@ -280,5 +280,5 @@ func getBufioWriter(w io.Writer) *bufio.Writer {
 }
 
 func putBufioWriter(bw *bufio.Writer) {
-	writerPool.Put(bw)
+	bufioWriterPool.Put(bw)
 }
