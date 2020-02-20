@@ -304,7 +304,9 @@ func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err erro
 	defer c.readMu.unlock()
 
 	if !c.msgReader.fin {
-		return 0, nil, errors.New("previous message not read to completion")
+		err = errors.New("previous message not read to completion")
+		c.close(fmt.Errorf("failed to get reader: %w", err))
+		return 0, nil, err
 	}
 
 	h, err := c.readLoop(ctx)
@@ -361,21 +363,9 @@ func (mr *msgReader) setFrame(h header) {
 }
 
 func (mr *msgReader) Read(p []byte) (n int, err error) {
-	defer func() {
-		if errors.Is(err, io.ErrUnexpectedEOF) && mr.fin && mr.flate {
-			err = io.EOF
-		}
-		if errors.Is(err, io.EOF) {
-			err = io.EOF
-			mr.putFlateReader()
-			return
-		}
-		errd.Wrap(&err, "failed to read")
-	}()
-
 	err = mr.c.readMu.lock(mr.ctx)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to read: %w", err)
 	}
 	defer mr.c.readMu.unlock()
 
@@ -383,6 +373,14 @@ func (mr *msgReader) Read(p []byte) (n int, err error) {
 	if mr.flate && mr.flateContextTakeover() {
 		p = p[:n]
 		mr.dict.write(p)
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) && mr.fin && mr.flate {
+		mr.putFlateReader()
+		return n, io.EOF
+	}
+	if err != nil {
+		err = fmt.Errorf("failed to read: %w", err)
+		mr.c.close(err)
 	}
 	return n, err
 }

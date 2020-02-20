@@ -155,10 +155,15 @@ func (mw *msgWriterState) reset(ctx context.Context, typ MessageType) error {
 
 // Write writes the given bytes to the WebSocket connection.
 func (mw *msgWriterState) Write(p []byte) (_ int, err error) {
-	defer errd.Wrap(&err, "failed to write")
-
 	mw.writeMu.Lock()
 	defer mw.writeMu.Unlock()
+
+	defer func() {
+		err = fmt.Errorf("failed to write: %w", err)
+		if err != nil {
+			mw.c.close(err)
+		}
+	}()
 
 	if mw.c.flate() {
 		// Only enables flate if the length crosses the
@@ -230,8 +235,8 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 }
 
 // frame handles all writes to the connection.
-func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opcode, p []byte) (int, error) {
-	err := c.writeFrameMu.lock(ctx)
+func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opcode, p []byte) (_ int, err error) {
+	err = c.writeFrameMu.lock(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -242,6 +247,12 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 		return 0, c.closeErr
 	case c.writeTimeout <- ctx:
 	}
+
+	defer func() {
+		if err != nil {
+			c.close(fmt.Errorf("failed to write frame: %w", err))
+		}
+	}()
 
 	c.writeHeader.fin = fin
 	c.writeHeader.opcode = opcode
