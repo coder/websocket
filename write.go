@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sync"
 	"time"
 
 	"github.com/klauspost/compress/flate"
@@ -71,7 +70,7 @@ type msgWriterState struct {
 	c *Conn
 
 	mu      *mu
-	writeMu sync.Mutex
+	writeMu *mu
 
 	ctx    context.Context
 	opcode opcode
@@ -83,8 +82,9 @@ type msgWriterState struct {
 
 func newMsgWriterState(c *Conn) *msgWriterState {
 	mw := &msgWriterState{
-		c:  c,
-		mu: newMu(c),
+		c:       c,
+		mu:      newMu(c),
+		writeMu: newMu(c),
 	}
 	return mw
 }
@@ -155,10 +155,18 @@ func (mw *msgWriterState) reset(ctx context.Context, typ MessageType) error {
 
 // Write writes the given bytes to the WebSocket connection.
 func (mw *msgWriterState) Write(p []byte) (_ int, err error) {
-	defer errd.Wrap(&err, "failed to write")
+	err = mw.writeMu.lock(mw.ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to write: %w", err)
+	}
+	defer mw.writeMu.unlock()
 
-	mw.writeMu.Lock()
-	defer mw.writeMu.Unlock()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("failed to write: %w", err)
+			mw.c.close(err)
+		}
+	}()
 
 	if mw.c.flate() {
 		// Only enables flate if the length crosses the
@@ -193,8 +201,11 @@ func (mw *msgWriterState) write(p []byte) (int, error) {
 func (mw *msgWriterState) Close() (err error) {
 	defer errd.Wrap(&err, "failed to close writer")
 
-	mw.writeMu.Lock()
-	defer mw.writeMu.Unlock()
+	err = mw.writeMu.lock(mw.ctx)
+	if err != nil {
+		return err
+	}
+	defer mw.writeMu.unlock()
 
 	_, err = mw.c.writeFrame(mw.ctx, true, mw.flate, mw.opcode, nil)
 	if err != nil {
@@ -214,7 +225,7 @@ func (mw *msgWriterState) close() {
 		putBufioWriter(mw.c.bw)
 	}
 
-	mw.writeMu.Lock()
+	mw.writeMu.forceLock()
 	mw.dict.close()
 }
 
@@ -230,8 +241,8 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 }
 
 // frame handles all writes to the connection.
-func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opcode, p []byte) (int, error) {
-	err := c.writeFrameMu.lock(ctx)
+func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opcode, p []byte) (_ int, err error) {
+	err = c.writeFrameMu.lock(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -242,6 +253,13 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 		return 0, c.closeErr
 	case c.writeTimeout <- ctx:
 	}
+
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("failed to write frame: %w", err)
+			c.close(err)
+		}
+	}()
 
 	c.writeHeader.fin = fin
 	c.writeHeader.opcode = opcode
