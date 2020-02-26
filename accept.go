@@ -75,6 +75,13 @@ func Accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Conn, err error) {
 	defer errd.Wrap(&err, "failed to accept WebSocket connection")
 
+	g := graceFromRequest(r)
+	if g != nil && g.isClosing() {
+		err := errors.New("server closing")
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return nil, err
+	}
+
 	if opts == nil {
 		opts = &AcceptOptions{}
 	}
@@ -134,7 +141,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	b, _ := brw.Reader.Peek(brw.Reader.Buffered())
 	brw.Reader.Reset(io.MultiReader(bytes.NewReader(b), netConn))
 
-	return newConn(connConfig{
+	c := newConn(connConfig{
 		subprotocol:    w.Header().Get("Sec-WebSocket-Protocol"),
 		rwc:            netConn,
 		client:         false,
@@ -143,7 +150,16 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 
 		br: brw.Reader,
 		bw: brw.Writer,
-	}), nil
+	})
+
+	if g != nil {
+		err = g.addConn(c)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return c, nil
 }
 
 func verifyClientRequest(w http.ResponseWriter, r *http.Request) (errCode int, _ error) {
