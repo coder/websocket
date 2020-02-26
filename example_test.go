@@ -6,7 +6,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"net/url"
 	"time"
 
 	"nhooyr.io/websocket"
@@ -121,17 +120,8 @@ func Example_writeOnly() {
 // from the origin example.com.
 func Example_crossOrigin() {
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin != "" {
-			u, err := url.Parse(origin)
-			if err != nil || u.Host != "example.com" {
-				http.Error(w, "bad origin header", http.StatusForbidden)
-				return
-			}
-		}
-
 		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			InsecureSkipVerify: true,
+			OriginPatterns: []string{"example.com"},
 		})
 		if err != nil {
 			log.Println(err)
