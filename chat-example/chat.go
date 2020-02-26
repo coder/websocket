@@ -15,8 +15,28 @@ import (
 
 // chatServer enables broadcasting to a set of subscribers.
 type chatServer struct {
+	registerOnce sync.Once
+	m            http.ServeMux
+
 	subscribersMu sync.RWMutex
-	subscribers   map[chan<- []byte]struct{}
+	subscribers   map[*subscriber]struct{}
+}
+
+// subscriber represents a subscriber.
+// Messages are sent on the msgs channel and if the client
+// cannot keep up with the messages, closeSlow is called.
+type subscriber struct {
+	msgs      chan []byte
+	closeSlow func()
+}
+
+func (cs *chatServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	cs.registerOnce.Do(func() {
+		cs.m.Handle("/", http.FileServer(http.Dir(".")))
+		cs.m.HandleFunc("/subscribe", cs.subscribeHandler)
+		cs.m.HandleFunc("/publish", cs.publishHandler)
+	})
+	cs.m.ServeHTTP(w, r)
 }
 
 // subscribeHandler accepts the WebSocket connection and then subscribes
@@ -57,11 +77,13 @@ func (cs *chatServer) publishHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cs.publish(msg)
+
+	w.WriteHeader(http.StatusAccepted)
 }
 
 // subscribe subscribes the given WebSocket to all broadcast messages.
-// It creates a msgs chan with a buffer of 16 to give some room to slower
-// connections and then registers it. It then listens for all messages
+// It creates a subscriber with a buffered msgs chan to give some room to slower
+// connections and then registers the subscriber. It then listens for all messages
 // and writes them to the WebSocket. If the context is cancelled or
 // an error occurs, it returns and deletes the subscription.
 //
@@ -70,13 +92,18 @@ func (cs *chatServer) publishHandler(w http.ResponseWriter, r *http.Request) {
 func (cs *chatServer) subscribe(ctx context.Context, c *websocket.Conn) error {
 	ctx = c.CloseRead(ctx)
 
-	msgs := make(chan []byte, 16)
-	cs.addSubscriber(msgs)
-	defer cs.deleteSubscriber(msgs)
+	s := &subscriber{
+		msgs: make(chan []byte, 16),
+		closeSlow: func() {
+			c.Close(websocket.StatusPolicyViolation, "connection too slow to keep up with messages")
+		},
+	}
+	cs.addSubscriber(s)
+	defer cs.deleteSubscriber(s)
 
 	for {
 		select {
-		case msg := <-msgs:
+		case msg := <-s.msgs:
 			err := writeTimeout(ctx, time.Second*5, c, msg)
 			if err != nil {
 				return err
@@ -94,29 +121,29 @@ func (cs *chatServer) publish(msg []byte) {
 	cs.subscribersMu.RLock()
 	defer cs.subscribersMu.RUnlock()
 
-	for c := range cs.subscribers {
+	for s := range cs.subscribers {
 		select {
-		case c <- msg:
+		case s.msgs <- msg:
 		default:
+			go s.closeSlow()
 		}
 	}
 }
 
-// addSubscriber registers a subscriber with a channel
-// on which to send messages.
-func (cs *chatServer) addSubscriber(msgs chan<- []byte) {
+// addSubscriber registers a subscriber.
+func (cs *chatServer) addSubscriber(s *subscriber) {
 	cs.subscribersMu.Lock()
 	if cs.subscribers == nil {
-		cs.subscribers = make(map[chan<- []byte]struct{})
+		cs.subscribers = make(map[*subscriber]struct{})
 	}
-	cs.subscribers[msgs] = struct{}{}
+	cs.subscribers[s] = struct{}{}
 	cs.subscribersMu.Unlock()
 }
 
-// deleteSubscriber deletes the subscriber with the given msgs channel.
-func (cs *chatServer) deleteSubscriber(msgs chan []byte) {
+// deleteSubscriber deletes the given subscriber.
+func (cs *chatServer) deleteSubscriber(s *subscriber) {
 	cs.subscribersMu.Lock()
-	delete(cs.subscribers, msgs)
+	delete(cs.subscribers, s)
 	cs.subscribersMu.Unlock()
 }
 
