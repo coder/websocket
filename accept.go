@@ -76,8 +76,8 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	defer errd.Wrap(&err, "failed to accept WebSocket connection")
 
 	g := graceFromRequest(r)
-	if g != nil && g.isClosing() {
-		err := errors.New("server closing")
+	if g != nil && g.isShuttingdown() {
+		err := errors.New("server shutting down")
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return nil, err
 	}

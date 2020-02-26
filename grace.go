@@ -15,10 +15,13 @@ import (
 // and then use Close or Shutdown to gracefully close these connections.
 //
 // Grace is intended to be used in harmony with net/http.Server's Shutdown and Close methods.
+// It's required as net/http's Shutdown and Close methods do not keep track of WebSocket
+// connections.
 type Grace struct {
-	mu      sync.Mutex
-	closing bool
-	conns   map[*Conn]struct{}
+	mu           sync.Mutex
+	closed       bool
+	shuttingDown bool
+	conns        map[*Conn]struct{}
 }
 
 // Handler returns a handler that wraps around h to record
@@ -33,10 +36,10 @@ func (g *Grace) Handler(h http.Handler) http.Handler {
 	})
 }
 
-func (g *Grace) isClosing() bool {
+func (g *Grace) isShuttingdown() bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return g.closing
+	return g.shuttingDown
 }
 
 func graceFromRequest(r *http.Request) *Grace {
@@ -47,7 +50,7 @@ func graceFromRequest(r *http.Request) *Grace {
 func (g *Grace) addConn(c *Conn) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if g.closing {
+	if g.closed {
 		c.Close(StatusGoingAway, "server shutting down")
 		return errors.New("server shutting down")
 	}
@@ -72,7 +75,8 @@ type gracefulContextKey struct{}
 // connections with StatusGoingAway.
 func (g *Grace) Close() error {
 	g.mu.Lock()
-	g.closing = true
+	g.shuttingDown = true
+	g.closed = true
 	var wg sync.WaitGroup
 	for c := range g.conns {
 		wg.Add(1)
@@ -97,7 +101,7 @@ func (g *Grace) Shutdown(ctx context.Context) error {
 	defer g.Close()
 
 	g.mu.Lock()
-	g.closing = true
+	g.shuttingDown = true
 	g.mu.Unlock()
 
 	// Same poll period used by net/http.

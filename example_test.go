@@ -167,12 +167,20 @@ func ExampleGrace() {
 		ReadTimeout:  time.Second * 15,
 		WriteTimeout: time.Second * 15,
 	}
-	go s.ListenAndServe()
+
+	errc := make(chan error, 1)
+	go func() {
+		errc <- s.ListenAndServe()
+	}()
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, os.Interrupt)
-	sig := <-sigs
-	log.Printf("recieved %v, shutting down", sig)
+	select {
+	case err := <-errc:
+		log.Printf("failed to listen and serve: %v", err)
+	case sig := <-sigs:
+		log.Printf("terminating: %v", sig)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
