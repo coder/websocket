@@ -337,8 +337,10 @@ func newConnTest(t testing.TB, dialOpts *websocket.DialOptions, acceptOpts *webs
 	tt = &connTest{t: t, ctx: ctx}
 	tt.appendDone(cancel)
 
-	c1, c2, err := wstest.Pipe(dialOpts, acceptOpts)
-	assert.Success(tt.t, err)
+	c1, c2 = wstest.Pipe(dialOpts, acceptOpts)
+	if xrand.Bool() {
+		c1, c2 = c2, c1
+	}
 	tt.appendDone(func() {
 		c2.Close(websocket.StatusInternalError, "")
 		c1.Close(websocket.StatusInternalError, "")
