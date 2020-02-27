@@ -245,9 +245,11 @@ func (m *mu) lock(ctx context.Context) error {
 	case m.ch <- struct{}{}:
 		// To make sure the connection is certainly alive.
 		// As it's possible the send on m.ch was selected
-		// the receive on closed.
+		// over the receive on closed.
 		select {
 		case <-m.c.closed:
+			// Make sure to release.
+			m.unlock()
 			return m.c.closeErr
 		default:
 		}
