@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -272,11 +271,9 @@ func TestWasm(t *testing.T) {
 		t.Skip("skipping on CI")
 	}
 
-	var wg sync.WaitGroup
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		wg.Add(1)
-		defer wg.Done()
-
+	var g websocket.Grace
+	defer g.Close()
+	s := httptest.NewServer(g.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 			Subprotocols:       []string{"echo"},
 			InsecureSkipVerify: true,
@@ -294,8 +291,7 @@ func TestWasm(t *testing.T) {
 			t.Errorf("echo server failed: %v", err)
 			return
 		}
-	}))
-	defer wg.Wait()
+	})))
 	defer s.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

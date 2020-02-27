@@ -38,6 +38,8 @@ type Conn struct {
 	readSignal chan struct{}
 	readBufMu  sync.Mutex
 	readBuf    []wsjs.MessageEvent
+
+	g *Grace
 }
 
 func (c *Conn) close(err error, wasClean bool) {

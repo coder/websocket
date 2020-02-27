@@ -31,13 +31,15 @@ func Example_echo() {
 	}
 	defer l.Close()
 
+	var g websocket.Grace
+	defer g.Close()
 	s := &http.Server{
-		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		Handler: g.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			err := echoServer(w, r)
 			if err != nil {
 				log.Printf("echo server: %v", err)
 			}
-		}),
+		})),
 		ReadTimeout:  time.Second * 15,
 		WriteTimeout: time.Second * 15,
 	}

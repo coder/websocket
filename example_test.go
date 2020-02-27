@@ -6,6 +6,8 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"time"
 
 	"nhooyr.io/websocket"
@@ -132,4 +134,56 @@ func Example_crossOrigin() {
 
 	err := http.ListenAndServe("localhost:8080", fn)
 	log.Fatal(err)
+}
+
+// This example demonstrates how to create a WebSocket server
+// that gracefully exits when sent a signal.
+//
+// It starts a WebSocket server that keeps every connection open
+// for 10 seconds.
+// If you CTRL+C while a connection is open, it will wait at most 30s
+// for all connections to terminate before shutting down.
+func ExampleGrace() {
+	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		defer c.Close(websocket.StatusInternalError, "the sky is falling")
+
+		ctx := c.CloseRead(r.Context())
+		select {
+		case <-ctx.Done():
+		case <-time.After(time.Second * 10):
+		}
+
+		c.Close(websocket.StatusNormalClosure, "")
+	})
+
+	var g websocket.Grace
+	s := &http.Server{
+		Handler:      g.Handler(fn),
+		ReadTimeout:  time.Second * 15,
+		WriteTimeout: time.Second * 15,
+	}
+
+	errc := make(chan error, 1)
+	go func() {
+		errc <- s.ListenAndServe()
+	}()
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt)
+	select {
+	case err := <-errc:
+		log.Printf("failed to listen and serve: %v", err)
+	case sig := <-sigs:
+		log.Printf("terminating: %v", sig)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	s.Shutdown(ctx)
+	g.Shutdown(ctx)
 }

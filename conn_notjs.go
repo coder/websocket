@@ -33,6 +33,7 @@ type Conn struct {
 	flateThreshold int
 	br             *bufio.Reader
 	bw             *bufio.Writer
+	g              *Grace
 
 	readTimeout  chan context.Context
 	writeTimeout chan context.Context
@@ -137,6 +138,10 @@ func (c *Conn) close(err error) {
 	// from the connection being closed also sees that c.closed is closed and returns
 	// closeErr.
 	c.rwc.Close()
+
+	if c.g != nil {
+		c.g.delConn(c)
+	}
 
 	go func() {
 		c.msgWriterState.close()

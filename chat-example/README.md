@@ -25,3 +25,9 @@ assets, the `/subscribe` WebSocket endpoint and the HTTP POST `/publish` endpoin
 
 The code is well commented. I would recommend starting in `main.go` and then `chat.go` followed by
 `index.html` and then `index.js`.
+
+There are two automated tests for the server included in `chat_test.go`. The first is a simple one
+client echo test. It publishes a single message and ensures it's received.
+
+The second is a complex concurrency test where 10 clients send 128 unique messages
+of max 128 bytes concurrently. The test ensures all messages are seen by every client.
