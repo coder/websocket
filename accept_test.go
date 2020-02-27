@@ -244,10 +244,11 @@ func Test_authenticateOrigin(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name    string
-		origin  string
-		host    string
-		success bool
+		name           string
+		origin         string
+		host           string
+		originPatterns []string
+		success        bool
 	}{
 		{
 			name:    "none",
@@ -278,6 +279,26 @@ func Test_authenticateOrigin(t *testing.T) {
 			host:    "example.com",
 			success: true,
 		},
+		{
+			name:   "originPatterns",
+			origin: "https://two.examplE.com",
+			host:   "example.com",
+			originPatterns: []string{
+				"*.example.com",
+				"bar.com",
+			},
+			success: true,
+		},
+		{
+			name:   "originPatternsUnauthorized",
+			origin: "https://two.examplE.com",
+			host:   "example.com",
+			originPatterns: []string{
+				"exam3.com",
+				"bar.com",
+			},
+			success: false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -288,7 +309,7 @@ func Test_authenticateOrigin(t *testing.T) {
 			r := httptest.NewRequest("GET", "http://"+tc.host+"/", nil)
 			r.Header.Set("Origin", tc.origin)
 
-			err := authenticateOrigin(r)
+			err := authenticateOrigin(r, tc.originPatterns)
 			if tc.success {
 				assert.Success(t, err)
 			} else {
