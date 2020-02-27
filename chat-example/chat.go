@@ -3,23 +3,55 @@ package main
 import (
 	"context"
 	"errors"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"nhooyr.io/websocket"
 )
 
 // chatServer enables broadcasting to a set of subscribers.
 type chatServer struct {
-	registerOnce sync.Once
-	m            http.ServeMux
+	// subscriberMessageBuffer controls the max number
+	// of messages that can be queued for a subscriber
+	// before it is kicked.
+	//
+	// Defaults to 16.
+	subscriberMessageBuffer int
 
-	subscribersMu sync.RWMutex
+	// publishLimiter controls the rate limit applied to the publish endpoint.
+	//
+	// Defaults to one publish every 100ms with a burst of 8.
+	publishLimiter *rate.Limiter
+
+	// logf controls where logs are sent.
+	// Defaults to log.Printf.
+	logf func(f string, v ...interface{})
+
+	// serveMux routes the various endpoints to the appropriate handler.
+	serveMux http.ServeMux
+
+	subscribersMu sync.Mutex
 	subscribers   map[*subscriber]struct{}
+}
+
+// newChatServer constructs a chatServer with the defaults.
+func newChatServer() *chatServer {
+	cs := &chatServer{
+		subscriberMessageBuffer: 16,
+		logf:                    log.Printf,
+		subscribers:             make(map[*subscriber]struct{}),
+		publishLimiter:          rate.NewLimiter(rate.Every(time.Millisecond*100), 8),
+	}
+	cs.serveMux.Handle("/", http.FileServer(http.Dir(".")))
+	cs.serveMux.HandleFunc("/subscribe", cs.subscribeHandler)
+	cs.serveMux.HandleFunc("/publish", cs.publishHandler)
+
+	return cs
 }
 
 // subscriber represents a subscriber.
@@ -31,12 +63,7 @@ type subscriber struct {
 }
 
 func (cs *chatServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	cs.registerOnce.Do(func() {
-		cs.m.Handle("/", http.FileServer(http.Dir(".")))
-		cs.m.HandleFunc("/subscribe", cs.subscribeHandler)
-		cs.m.HandleFunc("/publish", cs.publishHandler)
-	})
-	cs.m.ServeHTTP(w, r)
+	cs.serveMux.ServeHTTP(w, r)
 }
 
 // subscribeHandler accepts the WebSocket connection and then subscribes
@@ -44,7 +71,7 @@ func (cs *chatServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (cs *chatServer) subscribeHandler(w http.ResponseWriter, r *http.Request) {
 	c, err := websocket.Accept(w, r, nil)
 	if err != nil {
-		log.Print(err)
+		cs.logf("%v", err)
 		return
 	}
 	defer c.Close(websocket.StatusInternalError, "")
@@ -58,7 +85,8 @@ func (cs *chatServer) subscribeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Print(err)
+		cs.logf("%v", err)
+		return
 	}
 }
 
@@ -69,7 +97,7 @@ func (cs *chatServer) publishHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return
 	}
-	body := io.LimitReader(r.Body, 8192)
+	body := http.MaxBytesReader(w, r.Body, 8192)
 	msg, err := ioutil.ReadAll(body)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
@@ -93,7 +121,7 @@ func (cs *chatServer) subscribe(ctx context.Context, c *websocket.Conn) error {
 	ctx = c.CloseRead(ctx)
 
 	s := &subscriber{
-		msgs: make(chan []byte, 16),
+		msgs: make(chan []byte, cs.subscriberMessageBuffer),
 		closeSlow: func() {
 			c.Close(websocket.StatusPolicyViolation, "connection too slow to keep up with messages")
 		},
@@ -118,8 +146,10 @@ func (cs *chatServer) subscribe(ctx context.Context, c *websocket.Conn) error {
 // It never blocks and so messages to slow subscribers
 // are dropped.
 func (cs *chatServer) publish(msg []byte) {
-	cs.subscribersMu.RLock()
-	defer cs.subscribersMu.RUnlock()
+	cs.subscribersMu.Lock()
+	defer cs.subscribersMu.Unlock()
+
+	cs.publishLimiter.Wait(context.Background())
 
 	for s := range cs.subscribers {
 		select {
@@ -133,9 +163,6 @@ func (cs *chatServer) publish(msg []byte) {
 // addSubscriber registers a subscriber.
 func (cs *chatServer) addSubscriber(s *subscriber) {
 	cs.subscribersMu.Lock()
-	if cs.subscribers == nil {
-		cs.subscribers = make(map[*subscriber]struct{})
-	}
 	cs.subscribers[s] = struct{}{}
 	cs.subscribersMu.Unlock()
 }

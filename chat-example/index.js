@@ -51,7 +51,7 @@
   appendLog("Submit a message to get started!")
 
   // onsubmit publishes the message from the user when the form is submitted.
-  publishForm.onsubmit = ev => {
+  publishForm.onsubmit = async ev => {
     ev.preventDefault()
 
     const msg = messageInput.value
@@ -61,9 +61,16 @@
     messageInput.value = ""
 
     expectingMessage = true
-    fetch("/publish", {
-      method: "POST",
-      body: msg,
-    })
+    try {
+      const resp = await fetch("/publish", {
+        method: "POST",
+        body: msg,
+      })
+      if (resp.status !== 202) {
+        throw new Error(`Unexpected HTTP Status ${resp.status} ${resp.statusText}`)
+      }
+    } catch (err) {
+      appendLog(`Publish failed: ${err.message}`, true)
+    }
   }
 })()

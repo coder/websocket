@@ -35,10 +35,10 @@ func run() error {
 	}
 	log.Printf("listening on http://%v", l.Addr())
 
-	var cs chatServer
+	cs := newChatServer()
 	var g websocket.Grace
 	s := http.Server{
-		Handler:      g.Handler(&cs),
+		Handler:      g.Handler(cs),
 		ReadTimeout:  time.Second * 10,
 		WriteTimeout: time.Second * 10,
 	}
