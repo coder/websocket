@@ -1,5 +1,3 @@
-// +build !js
-
 package websocket_test
 
 import (
@@ -186,4 +184,9 @@ func ExampleGrace() {
 	defer cancel()
 	s.Shutdown(ctx)
 	g.Shutdown(ctx)
+}
+
+// This example demonstrates full stack chat with an automated test.
+func Example_fullStackChat() {
+	// https://github.com/nhooyr/websocket/tree/master/chat-example
 }

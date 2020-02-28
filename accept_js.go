@@ -9,6 +9,7 @@ import (
 type AcceptOptions struct {
 	Subprotocols         []string
 	InsecureSkipVerify   bool
+	OriginPatterns       []string
 	CompressionMode      CompressionMode
 	CompressionThreshold int
 }

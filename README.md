@@ -1,6 +1,6 @@
 # websocket
 
-[![godoc](https://godoc.org/nhooyr.io/websocket?status.svg)](https://godoc.org/nhooyr.io/websocket)
+[![godoc](https://godoc.org/nhooyr.io/websocket?status.svg)](https://pkg.go.dev/nhooyr.io/websocket)
 
 websocket is a minimal and idiomatic WebSocket library for Go.
 
@@ -16,8 +16,8 @@ go get nhooyr.io/websocket
 - First class [context.Context](https://blog.golang.org/context) support
 - Fully passes the WebSocket [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 - Thorough unit tests with [90% coverage](https://coveralls.io/github/nhooyr/websocket)
-- [Minimal dependencies](https://godoc.org/nhooyr.io/websocket?imports)
-- JSON and protobuf helpers in the [wsjson](https://godoc.org/nhooyr.io/websocket/wsjson) and [wspb](https://godoc.org/nhooyr.io/websocket/wspb) subpackages
+- [Minimal dependencies](https://pkg.go.dev/nhooyr.io/websocket?tab=imports)
+- JSON and protobuf helpers in the [wsjson](https://pkg.go.dev/nhooyr.io/websocket/wsjson?tab=doc) and [wspb](https://pkg.go.dev/nhooyr.io/websocket/wspb?tab=doc) subpackages
 - Zero alloc reads and writes
 - Concurrent writes
 - [Close handshake](https://godoc.org/nhooyr.io/websocket#Conn.Close)
@@ -98,7 +98,7 @@ Advantages of nhooyr.io/websocket:
 - [net.Conn](https://godoc.org/nhooyr.io/websocket#NetConn) wrapper
 - Zero alloc reads and writes ([gorilla/websocket#535](https://github.com/gorilla/websocket/issues/535))
 - Full [context.Context](https://blog.golang.org/context) support
-- Dial uses [net/http.Client](https://golang.org/pkg/net/http/#Client)
+- Dials use [net/http.Client](https://golang.org/pkg/net/http/#Client)
   - Will enable easy HTTP/2 support in the future
   - Gorilla writes directly to a net.Conn and so duplicates features of net/http.Client.
 - Concurrent writes

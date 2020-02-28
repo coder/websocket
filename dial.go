@@ -58,6 +58,8 @@ type DialOptions struct {
 // This function requires at least Go 1.12 as it uses a new feature
 // in net/http to perform WebSocket handshakes.
 // See docs on the HTTPClient option and https://github.com/golang/go/issues/26937#issuecomment-415855861
+//
+// URLs with http/https schemes will work and translated into ws/wss.
 func Dial(ctx context.Context, u string, opts *DialOptions) (*Conn, *http.Response, error) {
 	return dial(ctx, u, opts, nil)
 }
@@ -145,6 +147,7 @@ func handshakeRequest(ctx context.Context, urls string, opts *DialOptions, copts
 		u.Scheme = "http"
 	case "wss":
 		u.Scheme = "https"
+	case "http", "https":
 	default:
 		return nil, fmt.Errorf("unexpected url scheme: %q", u.Scheme)
 	}

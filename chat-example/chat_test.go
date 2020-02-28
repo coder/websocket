@@ -61,7 +61,7 @@ func Test_chatServer(t *testing.T) {
 
 		const nmessages = 128
 		const maxMessageSize = 128
-		const nclients = 10
+		const nclients = 16
 
 		url, closeFn := setupTest(t)
 		defer closeFn()
@@ -191,8 +191,7 @@ type client struct {
 }
 
 func newClient(ctx context.Context, url string) (*client, error) {
-	wsURL := strings.Replace(url, "http://", "ws://", 1)
-	c, _, err := websocket.Dial(ctx, wsURL+"/subscribe", nil)
+	c, _, err := websocket.Dial(ctx, url+"/subscribe", nil)
 	if err != nil {
 		return nil, err
 	}
