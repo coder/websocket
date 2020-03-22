@@ -18,6 +18,11 @@ import (
 	"nhooyr.io/websocket/wsjson"
 )
 
+// TODO IMPROVE CANCELLATION AND SHUTDOWN
+// TODO on context cancel send websocket going away and fix the read timeout error to be dependant on context deadline reached.
+// TODO this way you cancel your context and the right message automatically gets sent. Furthrmore, then u can just use a simple waitgroup to wait for connections.
+// TODO grace is wrong as it doesn't wait for the individual goroutines.
+
 // This example starts a WebSocket echo server,
 // dials the server and then sends 5 different messages
 // and prints out the server's responses.

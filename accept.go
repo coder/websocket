@@ -75,13 +75,6 @@ func Accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Conn, err error) {
 	defer errd.Wrap(&err, "failed to accept WebSocket connection")
 
-	g := graceFromRequest(r)
-	if g != nil && g.isShuttingdown() {
-		err := errors.New("server shutting down")
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return nil, err
-	}
-
 	if opts == nil {
 		opts = &AcceptOptions{}
 	}
@@ -151,13 +144,6 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 		br: brw.Reader,
 		bw: brw.Writer,
 	})
-
-	if g != nil {
-		err = g.addConn(c)
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	return c, nil
 }

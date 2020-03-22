@@ -2,7 +2,6 @@ package websocket
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -17,79 +16,75 @@ import (
 // Grace is intended to be used in harmony with net/http.Server's Shutdown and Close methods.
 // It's required as net/http's Shutdown and Close methods do not keep track of WebSocket
 // connections.
+//
+// Make sure to Close or Shutdown the *http.Server first as you don't want to accept
+// any new connections while the existing websockets are being shut down.
 type Grace struct {
-	mu           sync.Mutex
-	closed       bool
-	shuttingDown bool
-	conns        map[*Conn]struct{}
+	handlersMu sync.Mutex
+	closing    bool
+	handlers   map[context.Context]context.CancelFunc
 }
 
 // Handler returns a handler that wraps around h to record
 // all WebSocket connections accepted.
 //
 // Use Close or Shutdown to gracefully close recorded connections.
+// Make sure to Close or Shutdown the *http.Server first.
 func (g *Grace) Handler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), gracefulContextKey{}, g)
+		ctx, cancel := context.WithCancel(r.Context())
+		defer cancel()
+
 		r = r.WithContext(ctx)
+
+		ok := g.add(w, ctx, cancel)
+		if !ok {
+			return
+		}
+		defer g.del(ctx)
+
 		h.ServeHTTP(w, r)
 	})
 }
 
-func (g *Grace) isShuttingdown() bool {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return g.shuttingDown
-}
+func (g *Grace) add(w http.ResponseWriter, ctx context.Context, cancel context.CancelFunc) bool {
+	g.handlersMu.Lock()
+	defer g.handlersMu.Unlock()
 
-func graceFromRequest(r *http.Request) *Grace {
-	g, _ := r.Context().Value(gracefulContextKey{}).(*Grace)
-	return g
-}
-
-func (g *Grace) addConn(c *Conn) error {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	if g.closed {
-		c.Close(StatusGoingAway, "server shutting down")
-		return errors.New("server shutting down")
+	if g.closing {
+		http.Error(w, "shutting down", http.StatusServiceUnavailable)
+		return false
 	}
-	if g.conns == nil {
-		g.conns = make(map[*Conn]struct{})
+
+	if g.handlers == nil {
+		g.handlers = make(map[context.Context]context.CancelFunc)
 	}
-	g.conns[c] = struct{}{}
-	c.g = g
-	return nil
+	g.handlers[ctx] = cancel
+
+	return true
 }
 
-func (g *Grace) delConn(c *Conn) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	delete(g.conns, c)
-}
+func (g *Grace) del(ctx context.Context) {
+	g.handlersMu.Lock()
+	defer g.handlersMu.Unlock()
 
-type gracefulContextKey struct{}
+	delete(g.handlers, ctx)
+}
 
 // Close prevents the acceptance of new connections with
 // http.StatusServiceUnavailable and closes all accepted
 // connections with StatusGoingAway.
+//
+// Make sure to Close or Shutdown the *http.Server first.
 func (g *Grace) Close() error {
-	g.mu.Lock()
-	g.shuttingDown = true
-	g.closed = true
-	var wg sync.WaitGroup
-	for c := range g.conns {
-		wg.Add(1)
-		go func(c *Conn) {
-			defer wg.Done()
-			c.Close(StatusGoingAway, "server shutting down")
-		}(c)
-
-		delete(g.conns, c)
+	g.handlersMu.Lock()
+	for _, cancel := range g.handlers {
+		cancel()
 	}
-	g.mu.Unlock()
+	g.handlersMu.Unlock()
 
-	wg.Wait()
+	// Wait for all goroutines to exit.
+	g.Shutdown(context.Background())
 
 	return nil
 }
@@ -97,18 +92,16 @@ func (g *Grace) Close() error {
 // Shutdown prevents the acceptance of new connections and waits until
 // all connections close. If the context is cancelled before that, it
 // calls Close to close all connections immediately.
+//
+// Make sure to Close or Shutdown the *http.Server first.
 func (g *Grace) Shutdown(ctx context.Context) error {
 	defer g.Close()
-
-	g.mu.Lock()
-	g.shuttingDown = true
-	g.mu.Unlock()
 
 	// Same poll period used by net/http.
 	t := time.NewTicker(500 * time.Millisecond)
 	defer t.Stop()
 	for {
-		if g.zeroConns() {
+		if g.zeroHandlers() {
 			return nil
 		}
 
@@ -120,8 +113,8 @@ func (g *Grace) Shutdown(ctx context.Context) error {
 	}
 }
 
-func (g *Grace) zeroConns() bool {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return len(g.conns) == 0
+func (g *Grace) zeroHandlers() bool {
+	g.handlersMu.Lock()
+	defer g.handlersMu.Unlock()
+	return len(g.handlers) == 0
 }
