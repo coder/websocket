@@ -268,10 +268,6 @@ func TestConn(t *testing.T) {
 func TestWasm(t *testing.T) {
 	t.Parallel()
 
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping on CI")
-	}
-
 	var wg sync.WaitGroup
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
