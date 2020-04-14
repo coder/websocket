@@ -130,11 +130,10 @@ func setupTest(t *testing.T) (url string, closeFn func()) {
 	cs.subscriberMessageBuffer = 4096
 	cs.publishLimiter.SetLimit(rate.Inf)
 
-	var g websocket.Grace
-	s := httptest.NewServer(g.Handler(cs))
+	// TODO grace
+	s := httptest.NewServer(cs)
 	return s.URL, func() {
 		s.Close()
-		g.Close()
 	}
 }
 

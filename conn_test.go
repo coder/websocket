@@ -271,12 +271,11 @@ func TestWasm(t *testing.T) {
 		t.Skip("skipping on CI")
 	}
 
-	var g websocket.Grace
-	defer g.Close()
-	s := httptest.NewServer(g.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// TODO grace
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			Subprotocols:       []string{"echo"},
-			InsecureSkipVerify: true,
+			Subprotocols:   []string{"echo"},
+			OriginPatterns: []string{"*"},
 		})
 		if err != nil {
 			t.Errorf("echo server failed: %v", err)
@@ -291,7 +290,7 @@ func TestWasm(t *testing.T) {
 			t.Errorf("echo server failed: %v", err)
 			return
 		}
-	})))
+	}))
 	defer s.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

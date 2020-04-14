@@ -9,8 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"time"
-
-	"nhooyr.io/websocket"
 )
 
 func main() {
@@ -36,9 +34,9 @@ func run() error {
 	log.Printf("listening on http://%v", l.Addr())
 
 	cs := newChatServer()
-	var g websocket.Grace
+	// TODO grace
 	s := http.Server{
-		Handler:      g.Handler(cs),
+		Handler:      cs,
 		ReadTimeout:  time.Second * 10,
 		WriteTimeout: time.Second * 10,
 	}
@@ -59,8 +57,5 @@ func run() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	s.Shutdown(ctx)
-	g.Shutdown(ctx)
-
-	return nil
+	return s.Shutdown(ctx)
 }
