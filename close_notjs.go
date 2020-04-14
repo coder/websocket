@@ -63,6 +63,7 @@ func (c *Conn) writeClose(code StatusCode, reason string) error {
 		Reason: reason,
 	}
 
+	// TODO one problem with this is that if the connection is actually closed in the meantime, the error returned below will be this one lol.
 	c.setCloseErr(fmt.Errorf("sent close frame: %w", ce))
 
 	var p []byte
