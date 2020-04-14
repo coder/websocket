@@ -16,7 +16,7 @@ go get nhooyr.io/websocket
 - First class [context.Context](https://blog.golang.org/context) support
 - Fully passes the WebSocket [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 - Thorough tests with [90% coverage](https://coveralls.io/github/nhooyr/websocket)
-- [Minimal dependencies](https://pkg.go.dev/nhooyr.io/websocket?tab=imports)
+- [Single dependency](https://pkg.go.dev/nhooyr.io/websocket?tab=imports)
 - JSON and protobuf helpers in the [wsjson](https://pkg.go.dev/nhooyr.io/websocket/wsjson) and [wspb](https://pkg.go.dev/nhooyr.io/websocket/wspb) subpackages
 - Zero alloc reads and writes
 - Concurrent writes
