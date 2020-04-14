@@ -28,8 +28,7 @@ type AcceptOptions struct {
 
 	// InsecureSkipVerify is used to disable Accept's origin verification behaviour.
 	//
-	// Deprecated: Use OriginPatterns with a match all pattern of * instead to control
-	// origin authorization yourself.
+	// You probably want to use OriginPatterns instead.
 	InsecureSkipVerify bool
 
 	// OriginPatterns lists the host patterns for authorized origins.
@@ -46,6 +45,9 @@ type AcceptOptions struct {
 	//
 	// Please ensure you understand the ramifications of enabling this.
 	// If used incorrectly your WebSocket server will be open to CSRF attacks.
+	//
+	// Do not use * as a pattern to allow any origin, prefer to use InsecureSkipVerify instead
+	// to bring attention to the danger of such a setting.
 	OriginPatterns []string
 
 	// CompressionMode controls the compression mode.
