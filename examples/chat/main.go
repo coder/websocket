@@ -34,8 +34,7 @@ func run() error {
 	log.Printf("listening on http://%v", l.Addr())
 
 	cs := newChatServer()
-	// TODO grace
-	s := http.Server{
+	s := &http.Server{
 		Handler:      cs,
 		ReadTimeout:  time.Second * 10,
 		WriteTimeout: time.Second * 10,

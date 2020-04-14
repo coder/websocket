@@ -271,7 +271,6 @@ func TestWasm(t *testing.T) {
 		t.Skip("skipping on CI")
 	}
 
-	// TODO grace
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 			Subprotocols:   []string{"echo"},

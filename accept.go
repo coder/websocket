@@ -134,7 +134,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	b, _ := brw.Reader.Peek(brw.Reader.Buffered())
 	brw.Reader.Reset(io.MultiReader(bytes.NewReader(b), netConn))
 
-	c := newConn(connConfig{
+	return newConn(connConfig{
 		subprotocol:    w.Header().Get("Sec-WebSocket-Protocol"),
 		rwc:            netConn,
 		client:         false,
@@ -143,9 +143,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 
 		br: brw.Reader,
 		bw: brw.Writer,
-	})
-
-	return c, nil
+	}), nil
 }
 
 func verifyClientRequest(w http.ResponseWriter, r *http.Request) (errCode int, _ error) {
