@@ -246,7 +246,13 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 	if err != nil {
 		return 0, err
 	}
-	defer c.writeFrameMu.unlock()
+	defer func() {
+		// We leave it locked when writing the close frame to avoid
+		// any other goroutine writing any other frame.
+		if opcode != opClose {
+			c.writeFrameMu.unlock()
+		}
+	}()
 
 	select {
 	case <-c.closed:
