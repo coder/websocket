@@ -7,8 +7,11 @@
     const conn = new WebSocket(`ws://${location.host}/subscribe`)
 
     conn.addEventListener("close", ev => {
-      console.info("websocket disconnected, reconnecting in 1000ms", ev)
-      setTimeout(dial, 1000)
+      appendLog(`WebSocket Disconnected code: ${ev.code}, reason: ${ev.reason}`, true)
+      if (ev.code !== 1001) {
+        appendLog("Reconnecting in 1s", true)
+        setTimeout(dial, 1000)
+      }
     })
     conn.addEventListener("open", ev => {
       console.info("websocket connected")
@@ -34,17 +37,21 @@
   const messageInput = document.getElementById("message-input")
 
   // appendLog appends the passed text to messageLog.
-  function appendLog(text) {
+  function appendLog(text, error) {
     const p = document.createElement("p")
     // Adding a timestamp to each message makes the log easier to read.
     p.innerText = `${new Date().toLocaleTimeString()}: ${text}`
+    if (error) {
+      p.style.color = "red"
+      p.style.fontStyle = "bold"
+    }
     messageLog.append(p)
     return p
   }
   appendLog("Submit a message to get started!")
 
   // onsubmit publishes the message from the user when the form is submitted.
-  publishForm.onsubmit = ev => {
+  publishForm.onsubmit = async ev => {
     ev.preventDefault()
 
     const msg = messageInput.value
@@ -54,9 +61,16 @@
     messageInput.value = ""
 
     expectingMessage = true
-    fetch("/publish", {
-      method: "POST",
-      body: msg,
-    })
+    try {
+      const resp = await fetch("/publish", {
+        method: "POST",
+        body: msg,
+      })
+      if (resp.status !== 202) {
+        throw new Error(`Unexpected HTTP Status ${resp.status} ${resp.statusText}`)
+      }
+    } catch (err) {
+      appendLog(`Publish failed: ${err.message}`, true)
+    }
   }
 })()

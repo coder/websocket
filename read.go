@@ -52,7 +52,7 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 //
 // Call CloseRead when you do not expect to read any more messages.
 // Since it actively reads from the connection, it will ensure that ping, pong and close
-// frames are responded to.
+// frames are responded to. This means c.Ping and c.Close will still work as expected.
 func (c *Conn) CloseRead(ctx context.Context) context.Context {
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {

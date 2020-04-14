@@ -5,26 +5,19 @@ package wstest
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
 
 	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/internal/errd"
-	"nhooyr.io/websocket/internal/test/xrand"
 )
 
 // Pipe is used to create an in memory connection
 // between two websockets analogous to net.Pipe.
-func Pipe(dialOpts *websocket.DialOptions, acceptOpts *websocket.AcceptOptions) (_ *websocket.Conn, _ *websocket.Conn, err error) {
-	defer errd.Wrap(&err, "failed to create ws pipe")
-
-	var serverConn *websocket.Conn
-	var acceptErr error
+func Pipe(dialOpts *websocket.DialOptions, acceptOpts *websocket.AcceptOptions) (clientConn, serverConn *websocket.Conn) {
 	tt := fakeTransport{
 		h: func(w http.ResponseWriter, r *http.Request) {
-			serverConn, acceptErr = websocket.Accept(w, r, acceptOpts)
+			serverConn, _ = websocket.Accept(w, r, acceptOpts)
 		},
 	}
 
@@ -36,19 +29,8 @@ func Pipe(dialOpts *websocket.DialOptions, acceptOpts *websocket.AcceptOptions) 
 		Transport: tt,
 	}
 
-	clientConn, _, err := websocket.Dial(context.Background(), "ws://example.com", dialOpts)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to dial with fake transport: %w", err)
-	}
-
-	if serverConn == nil {
-		return nil, nil, fmt.Errorf("failed to get server conn from fake transport: %w", acceptErr)
-	}
-
-	if xrand.Bool() {
-		return serverConn, clientConn, nil
-	}
-	return clientConn, serverConn, nil
+	clientConn, _, _ = websocket.Dial(context.Background(), "ws://example.com", dialOpts)
+	return clientConn, serverConn
 }
 
 type fakeTransport struct {

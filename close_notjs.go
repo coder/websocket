@@ -34,15 +34,17 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 func (c *Conn) closeHandshake(code StatusCode, reason string) (err error) {
 	defer errd.Wrap(&err, "failed to close WebSocket")
 
-	err = c.writeClose(code, reason)
-	if err != nil && CloseStatus(err) == -1 && err != errAlreadyWroteClose {
-		return err
+	writeErr := c.writeClose(code, reason)
+	closeHandshakeErr := c.waitCloseHandshake()
+
+	if writeErr != nil {
+		return writeErr
 	}
 
-	err = c.waitCloseHandshake()
-	if CloseStatus(err) == -1 {
-		return err
+	if CloseStatus(closeHandshakeErr) == -1 {
+		return closeHandshakeErr
 	}
+
 	return nil
 }
 
@@ -50,10 +52,10 @@ var errAlreadyWroteClose = errors.New("already wrote close")
 
 func (c *Conn) writeClose(code StatusCode, reason string) error {
 	c.closeMu.Lock()
-	closing := c.wroteClose
+	wroteClose := c.wroteClose
 	c.wroteClose = true
 	c.closeMu.Unlock()
-	if closing {
+	if wroteClose {
 		return errAlreadyWroteClose
 	}
 
@@ -62,28 +64,34 @@ func (c *Conn) writeClose(code StatusCode, reason string) error {
 		Reason: reason,
 	}
 
-	c.setCloseErr(fmt.Errorf("sent close frame: %w", ce))
-
 	var p []byte
-	var err error
+	var marshalErr error
 	if ce.Code != StatusNoStatusRcvd {
-		p, err = ce.bytes()
-		if err != nil {
-			log.Printf("websocket: %v", err)
+		p, marshalErr = ce.bytes()
+		if marshalErr != nil {
+			log.Printf("websocket: %v", marshalErr)
 		}
 	}
 
-	werr := c.writeControl(context.Background(), opClose, p)
-	if err != nil {
-		return err
+	writeErr := c.writeControl(context.Background(), opClose, p)
+	if CloseStatus(writeErr) != -1 {
+		// Not a real error if it's due to a close frame being received.
+		writeErr = nil
 	}
-	return werr
+
+	// We do this after in case there was an error writing the close frame.
+	c.setCloseErr(fmt.Errorf("sent close frame: %w", ce))
+
+	if marshalErr != nil {
+		return marshalErr
+	}
+	return writeErr
 }
 
 func (c *Conn) waitCloseHandshake() error {
 	defer c.close(nil)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
 	err := c.readMu.lock(ctx)

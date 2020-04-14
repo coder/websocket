@@ -1,6 +1,4 @@
-// +build !js
-
-package websocket_test
+package main
 
 import (
 	"context"
@@ -21,7 +19,7 @@ import (
 // This example starts a WebSocket echo server,
 // dials the server and then sends 5 different messages
 // and prints out the server's responses.
-func Example_echo() {
+func main() {
 	// First we listen on port 0 which means the OS will
 	// assign us a random free port. This is the listener
 	// the server will serve on and the client will connect to.
@@ -56,6 +54,7 @@ func Example_echo() {
 	if err != nil {
 		log.Fatalf("client failed: %v", err)
 	}
+
 	// Output:
 	// received: map[i:0]
 	// received: map[i:1]

@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -268,14 +267,14 @@ func TestConn(t *testing.T) {
 func TestWasm(t *testing.T) {
 	t.Parallel()
 
-	var wg sync.WaitGroup
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		wg.Add(1)
-		defer wg.Done()
+	if os.Getenv("CI") != "" {
+		t.Skip("skipping on CI")
+	}
 
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			Subprotocols:       []string{"echo"},
-			InsecureSkipVerify: true,
+			Subprotocols:   []string{"echo"},
+			OriginPatterns: []string{"*"},
 		})
 		if err != nil {
 			t.Errorf("echo server failed: %v", err)
@@ -291,14 +290,13 @@ func TestWasm(t *testing.T) {
 			return
 		}
 	}))
-	defer wg.Wait()
 	defer s.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "go", "test", "-exec=wasmbrowsertest", "./...")
-	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm", fmt.Sprintf("WS_ECHO_SERVER_URL=%v", wstest.URL(s)))
+	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm", fmt.Sprintf("WS_ECHO_SERVER_URL=%v", s.URL))
 
 	b, err := cmd.CombinedOutput()
 	if err != nil {
@@ -333,8 +331,10 @@ func newConnTest(t testing.TB, dialOpts *websocket.DialOptions, acceptOpts *webs
 	tt = &connTest{t: t, ctx: ctx}
 	tt.appendDone(cancel)
 
-	c1, c2, err := wstest.Pipe(dialOpts, acceptOpts)
-	assert.Success(tt.t, err)
+	c1, c2 = wstest.Pipe(dialOpts, acceptOpts)
+	if xrand.Bool() {
+		c1, c2 = c2, c1
+	}
 	tt.appendDone(func() {
 		c2.Close(websocket.StatusInternalError, "")
 		c1.Close(websocket.StatusInternalError, "")

@@ -13,7 +13,7 @@ goimports: gen
 	goimports -w "-local=$$(go list -m)" .
 
 prettier:
-	prettier --write --print-width=120 --no-semi --trailing-comma=all --loglevel=warn $$(git ls-files "*.yml" "*.md" "*.js" "*.css" "*.html")
+	prettier --write --print-width=120 --no-semi --trailing-comma=all --loglevel=warn --arrow-parens=avoid $$(git ls-files "*.yml" "*.md" "*.js" "*.css" "*.html")
 
 gen:
 	stringer -type=opcode,MessageType,StatusCode -output=stringer.go
