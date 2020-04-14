@@ -44,6 +44,7 @@ func (c *Conn) closeHandshake(code StatusCode, reason string) (err error) {
 	if CloseStatus(closeHandshakeErr) == -1 {
 		return closeHandshakeErr
 	}
+
 	return nil
 }
 
@@ -63,23 +64,28 @@ func (c *Conn) writeClose(code StatusCode, reason string) error {
 		Reason: reason,
 	}
 
-	// TODO one problem with this is that if the connection is actually closed in the meantime, the error returned below will be this one lol.
-	c.setCloseErr(fmt.Errorf("sent close frame: %w", ce))
-
 	var p []byte
-	var err error
+	var marshalErr error
 	if ce.Code != StatusNoStatusRcvd {
-		p, err = ce.bytes()
-		if err != nil {
-			log.Printf("websocket: %v", err)
+		p, marshalErr = ce.bytes()
+		if marshalErr != nil {
+			log.Printf("websocket: %v", marshalErr)
 		}
 	}
 
-	werr := c.writeControl(context.Background(), opClose, p)
-	if err != nil {
-		return err
+	writeErr := c.writeControl(context.Background(), opClose, p)
+	if CloseStatus(writeErr) != -1 {
+		// Not a real error if it's due to a close frame being received.
+		writeErr = nil
 	}
-	return werr
+
+	// We do this after in case there was an error writing the close frame.
+	c.setCloseErr(fmt.Errorf("sent close frame: %w", ce))
+
+	if marshalErr != nil {
+		return marshalErr
+	}
+	return writeErr
 }
 
 func (c *Conn) waitCloseHandshake() error {
