@@ -3,158 +3,59 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"time"
-
-	"golang.org/x/time/rate"
-
-	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/wsjson"
 )
 
-// This example starts a WebSocket echo server,
-// dials the server and then sends 5 different messages
-// and prints out the server's responses.
 func main() {
-	// First we listen on port 0 which means the OS will
-	// assign us a random free port. This is the listener
-	// the server will serve on and the client will connect to.
-	l, err := net.Listen("tcp", "localhost:0")
+	log.SetFlags(0)
+
+	err := run()
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		log.Fatal(err)
 	}
-	defer l.Close()
+}
+
+// run starts a http.Server for the passed in address
+// with all requests handled by echoServer.
+func run() error {
+	if len(os.Args) < 2 {
+		return errors.New("please provide an address to listen on as the first argument")
+	}
+
+	l, err := net.Listen("tcp", os.Args[1])
+	if err != nil {
+		return err
+	}
+	log.Printf("listening on http://%v", l.Addr())
 
 	s := &http.Server{
-		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			err := echoServer(w, r)
-			if err != nil {
-				log.Printf("echo server: %v", err)
-			}
-		}),
-		ReadTimeout:  time.Second * 15,
-		WriteTimeout: time.Second * 15,
+		Handler: echoServer{
+			logf: log.Printf,
+		},
+		ReadTimeout:  time.Second * 10,
+		WriteTimeout: time.Second * 10,
 	}
-	defer s.Close()
-
-	// This starts the echo server on the listener.
+	errc := make(chan error, 1)
 	go func() {
-		err := s.Serve(l)
-		if err != http.ErrServerClosed {
-			log.Fatalf("failed to listen and serve: %v", err)
-		}
+		errc <- s.Serve(l)
 	}()
 
-	// Now we dial the server, send the messages and echo the responses.
-	err = client("ws://" + l.Addr().String())
-	if err != nil {
-		log.Fatalf("client failed: %v", err)
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt)
+	select {
+	case err := <-errc:
+		log.Printf("failed to serve: %v", err)
+	case sig := <-sigs:
+		log.Printf("terminating: %v", sig)
 	}
 
-	// Output:
-	// received: map[i:0]
-	// received: map[i:1]
-	// received: map[i:2]
-	// received: map[i:3]
-	// received: map[i:4]
-}
-
-// echoServer is the WebSocket echo server implementation.
-// It ensures the client speaks the echo subprotocol and
-// only allows one message every 100ms with a 10 message burst.
-func echoServer(w http.ResponseWriter, r *http.Request) error {
-	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		Subprotocols: []string{"echo"},
-	})
-	if err != nil {
-		return err
-	}
-	defer c.Close(websocket.StatusInternalError, "the sky is falling")
-
-	if c.Subprotocol() != "echo" {
-		c.Close(websocket.StatusPolicyViolation, "client must speak the echo subprotocol")
-		return errors.New("client does not speak echo sub protocol")
-	}
-
-	l := rate.NewLimiter(rate.Every(time.Millisecond*100), 10)
-	for {
-		err = echo(r.Context(), c, l)
-		if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("failed to echo with %v: %w", r.RemoteAddr, err)
-		}
-	}
-}
-
-// echo reads from the WebSocket connection and then writes
-// the received message back to it.
-// The entire function has 10s to complete.
-func echo(ctx context.Context, c *websocket.Conn, l *rate.Limiter) error {
-	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	err := l.Wait(ctx)
-	if err != nil {
-		return err
-	}
-
-	typ, r, err := c.Reader(ctx)
-	if err != nil {
-		return err
-	}
-
-	w, err := c.Writer(ctx, typ)
-	if err != nil {
-		return err
-	}
-
-	_, err = io.Copy(w, r)
-	if err != nil {
-		return fmt.Errorf("failed to io.Copy: %w", err)
-	}
-
-	err = w.Close()
-	return err
-}
-
-// client dials the WebSocket echo server at the given url.
-// It then sends it 5 different messages and echo's the server's
-// response to each.
-func client(url string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
-	c, _, err := websocket.Dial(ctx, url, &websocket.DialOptions{
-		Subprotocols: []string{"echo"},
-	})
-	if err != nil {
-		return err
-	}
-	defer c.Close(websocket.StatusInternalError, "the sky is falling")
-
-	for i := 0; i < 5; i++ {
-		err = wsjson.Write(ctx, c, map[string]int{
-			"i": i,
-		})
-		if err != nil {
-			return err
-		}
-
-		v := map[string]int{}
-		err = wsjson.Read(ctx, c, &v)
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("received: %v\n", v)
-	}
-
-	c.Close(websocket.StatusNormalClosure, "")
-	return nil
+	return s.Shutdown(ctx)
 }

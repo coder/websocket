@@ -20,7 +20,7 @@ func main() {
 	}
 }
 
-// run initializes the chatServer and routes and then
+// run initializes the chatServer and then
 // starts a http.Server for the passed in address.
 func run() error {
 	if len(os.Args) < 2 {
