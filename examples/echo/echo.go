@@ -1,6 +1,4 @@
-// +build !js
-
-package websocket_test
+package main
 
 import (
 	"context"
