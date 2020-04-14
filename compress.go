@@ -7,6 +7,7 @@ package websocket
 // by safari. See https://tools.ietf.org/html/draft-tyoshino-hybi-websocket-perframe-deflate-06
 // It will work the same in every way except that we cannot signal to the peer we
 // want to use no context takeover on our side, we can only signal that they should.
+// It is however currently disabled due to Safari bugs. See https://github.com/nhooyr/websocket/issues/218
 type CompressionMode int
 
 const (
