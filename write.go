@@ -262,8 +262,14 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 
 	defer func() {
 		if err != nil {
-			err = fmt.Errorf("failed to write frame: %w", err)
+			select {
+			case <-c.closed:
+				err = c.closeErr
+			case <-ctx.Done():
+				err = ctx.Err()
+			}
 			c.close(err)
+			err = fmt.Errorf("failed to write frame: %w", err)
 		}
 	}()
 
