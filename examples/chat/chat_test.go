@@ -1,5 +1,3 @@
-// +build !js
-
 package main
 
 import (

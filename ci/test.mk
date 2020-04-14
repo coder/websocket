@@ -14,4 +14,4 @@ gotest:
 	go test -timeout=30m -covermode=atomic -coverprofile=ci/out/coverage.prof -coverpkg=./... $${GOTESTFLAGS-} ./...
 	sed -i '/stringer\.go/d' ci/out/coverage.prof
 	sed -i '/nhooyr.io\/websocket\/internal\/test/d' ci/out/coverage.prof
-	sed -i '/example/d' ci/out/coverage.prof
+	sed -i '/examples/d' ci/out/coverage.prof
