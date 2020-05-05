@@ -20,14 +20,9 @@ func Read(ctx context.Context, c *websocket.Conn, v interface{}) error {
 func read(ctx context.Context, c *websocket.Conn, v interface{}) (err error) {
 	defer errd.Wrap(&err, "failed to read JSON message")
 
-	typ, r, err := c.Reader(ctx)
+	_, r, err := c.Reader(ctx)
 	if err != nil {
 		return err
-	}
-
-	if typ != websocket.MessageText {
-		c.Close(websocket.StatusUnsupportedData, "expected text message")
-		return fmt.Errorf("expected text message for JSON but got: %v", typ)
 	}
 
 	b := bpool.Get()
