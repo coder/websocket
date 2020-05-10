@@ -67,7 +67,7 @@ type AcceptOptions struct {
 // the connection to a WebSocket.
 //
 // Accept will not allow cross origin requests by default.
-// See the InsecureSkipVerify option to allow cross origin requests.
+// See the InsecureSkipVerify and OriginPatterns options to allow cross origin requests.
 //
 // Accept will write a response to w on all errors.
 func Accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn, error) {
