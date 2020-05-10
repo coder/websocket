@@ -273,8 +273,8 @@ func TestWasm(t *testing.T) {
 
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			Subprotocols:   []string{"echo"},
-			OriginPatterns: []string{"*"},
+			Subprotocols:       []string{"echo"},
+			InsecureSkipVerify: true,
 		})
 		if err != nil {
 			t.Errorf("echo server failed: %v", err)
