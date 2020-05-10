@@ -17,8 +17,10 @@ Visit the printed URL to submit and view broadcasted messages in a browser.
 The frontend is contained in `index.html`, `index.js` and `index.css`. It sets up the
 DOM with a scrollable div at the top that is populated with new messages as they are broadcast.
 At the bottom it adds a form to submit messages.
+
 The messages are received via the WebSocket `/subscribe` endpoint and published via
-the HTTP POST `/publish` endpoint.
+the HTTP POST `/publish` endpoint. The reason for not publishing messages over the WebSocket
+is so that you can easily publish a message with curl.
 
 The server portion is `main.go` and `chat.go` and implements serving the static frontend
 assets, the `/subscribe` WebSocket endpoint and the HTTP POST `/publish` endpoint.
