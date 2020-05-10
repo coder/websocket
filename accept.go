@@ -124,6 +124,12 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	}
 
 	w.WriteHeader(http.StatusSwitchingProtocols)
+	// See https://github.com/nhooyr/websocket/issues/166
+	if ginWriter, ok := w.(interface {
+		WriteHeaderNow()
+	}); ok {
+		ginWriter.WriteHeaderNow()
+	}
 
 	netConn, brw, err := hj.Hijack()
 	if err != nil {

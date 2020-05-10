@@ -16,10 +16,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/duration"
 
 	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/internal/errd"
 	"nhooyr.io/websocket/internal/test/assert"
 	"nhooyr.io/websocket/internal/test/wstest"
 	"nhooyr.io/websocket/internal/test/xrand"
@@ -268,22 +270,12 @@ func TestWasm(t *testing.T) {
 	t.Parallel()
 
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		err := echoServer(w, r, &websocket.AcceptOptions{
 			Subprotocols:       []string{"echo"},
 			InsecureSkipVerify: true,
 		})
 		if err != nil {
-			t.Errorf("echo server failed: %v", err)
-			return
-		}
-		defer c.Close(websocket.StatusInternalError, "")
-
-		err = wstest.EchoLoop(r.Context(), c)
-
-		err = assertCloseStatus(websocket.StatusNormalClosure, err)
-		if err != nil {
-			t.Errorf("echo server failed: %v", err)
-			return
+			t.Error(err)
 		}
 	}))
 	defer s.Close()
@@ -489,7 +481,49 @@ func BenchmarkConn(b *testing.B) {
 	}
 }
 
-func TestCompression(t *testing.T) {
+func echoServer(w http.ResponseWriter, r *http.Request, opts *websocket.AcceptOptions) (err error) {
+	defer errd.Wrap(&err, "echo server failed")
+
+	c, err := websocket.Accept(w, r, opts)
+	if err != nil {
+		return err
+	}
+	defer c.Close(websocket.StatusInternalError, "")
+
+	err = wstest.EchoLoop(r.Context(), c)
+	return assertCloseStatus(websocket.StatusNormalClosure, err)
+}
+
+func TestGin(t *testing.T) {
 	t.Parallel()
 
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+	r.GET("/", func(ginCtx *gin.Context) {
+		err := echoServer(ginCtx.Writer, ginCtx.Request, nil)
+		if err != nil {
+			t.Error(err)
+		}
+	})
+
+	s := httptest.NewServer(r)
+	defer s.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+
+	c, _, err := websocket.Dial(ctx, s.URL, nil)
+	assert.Success(t, err)
+	defer c.Close(websocket.StatusInternalError, "")
+
+	err = wsjson.Write(ctx, c, "hello")
+	assert.Success(t, err)
+
+	var v interface{}
+	err = wsjson.Read(ctx, c, &v)
+	assert.Success(t, err)
+	assert.Equal(t, "read msg", "hello", v)
+
+	err = c.Close(websocket.StatusNormalClosure, "")
+	assert.Success(t, err)
 }
