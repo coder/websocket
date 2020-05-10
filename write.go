@@ -246,13 +246,24 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 	if err != nil {
 		return 0, err
 	}
-	defer func() {
-		// We leave it locked when writing the close frame to avoid
-		// any other goroutine writing any other frame.
-		if opcode != opClose {
-			c.writeFrameMu.unlock()
+	defer c.writeFrameMu.unlock()
+
+	// If the state says a close has already been written, we wait until
+	// the connection is closed and return that error.
+	//
+	// However, if the frame being written is a close, that means its the close from
+	// the state being set so we let it go through.
+	c.closeMu.Lock()
+	wroteClose := c.wroteClose
+	c.closeMu.Unlock()
+	if wroteClose && opcode != opClose {
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		case <-c.closed:
+			return 0, c.closeErr
 		}
-	}()
+	}
 
 	select {
 	case <-c.closed:

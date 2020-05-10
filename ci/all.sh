@@ -6,7 +6,7 @@ main() {
 
   ./ci/fmt.sh
   ./ci/lint.sh
-  ./ci/test.sh
+  ./ci/test.sh "$@"
 }
 
 main "$@"
