@@ -14,7 +14,7 @@ main() {
 
   go tool cover -html=ci/out/coverage.prof -o=ci/out/coverage.html
 
-  if [[ ${CI} && ${GITHUB_REF-} == *master ]]; then
+  if [[ ${CI-} && ${GITHUB_REF-} == *master ]]; then
     local deployDir
     deployDir="$(mktemp -d)"
     cp ci/out/coverage.html "$deployDir/index.html"
