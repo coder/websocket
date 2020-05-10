@@ -1,0 +1,39 @@
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Run ./ci/fmt.sh
+        uses: ./ci/container
+        with:
+          args: ./ci/fmt.sh
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Run ./ci/lint.sh
+        uses: ./ci/container
+        with:
+          args: ./ci/lint.sh
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Run ./ci/test.sh
+        uses: ./ci/container
+        with:
+          args: ./ci/test.sh
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: 9b3ee4dc-8297-4774-b4b9-a61561fbbce7
+      - name: Upload coverage.html
+        uses: actions/upload-artifact@v2
+        with:
+          name: coverage.html
+          path: ./ci/out/coverage.html
