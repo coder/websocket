@@ -135,6 +135,31 @@ func Example_crossOrigin() {
 	log.Fatal(err)
 }
 
+func ExampleConn_Ping() {
+	// Dials a server and pings it 5 times.
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	c, _, err := websocket.Dial(ctx, "ws://localhost:8080", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer c.Close(websocket.StatusInternalError, "the sky is falling")
+
+	// Required to read the Pongs from the server.
+	ctx = c.CloseRead(ctx)
+
+	for i := 0; i < 5; i++ {
+		err = c.Ping(ctx)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	c.Close(websocket.StatusNormalClosure, "")
+}
+
 // This example demonstrates how to create a WebSocket server
 // that gracefully exits when sent a signal.
 //

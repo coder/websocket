@@ -36,11 +36,12 @@ var autobahnCases = []string{"*"}
 func TestAutobahn(t *testing.T) {
 	t.Parallel()
 
-	if os.Getenv("AUTOBAHN_TEST") == "" {
+	if os.Getenv("AUTOBAHN") == "" {
 		t.SkipNow()
 	}
 
-	if os.Getenv("AUTOBAHN_FAST") != "" {
+	if os.Getenv("AUTOBAHN") == "fast" {
+		// These are the slow tests.
 		excludedAutobahnCases = append(excludedAutobahnCases,
 			"9.*", "13.*", "12.*",
 		)
