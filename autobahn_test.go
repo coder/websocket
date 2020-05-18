@@ -61,7 +61,9 @@ func TestAutobahn(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 				defer cancel()
 
-				c, _, err := websocket.Dial(ctx, fmt.Sprintf(wstestURL+"/runCase?case=%v&agent=main", i), nil)
+				c, _, err := websocket.Dial(ctx, fmt.Sprintf(wstestURL+"/runCase?case=%v&agent=main", i), &websocket.DialOptions{
+					CompressionMode: websocket.CompressionContextTakeover,
+				})
 				assert.Success(t, err)
 				err = wstest.EchoLoop(ctx, c)
 				t.Logf("echoLoop: %v", err)
