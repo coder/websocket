@@ -246,6 +246,15 @@ func (m *mu) forceLock() {
 	m.ch <- struct{}{}
 }
 
+func (m *mu) tryLock() bool {
+	select {
+	case m.ch <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
 func (m *mu) lock(ctx context.Context) error {
 	select {
 	case <-m.c.closed:

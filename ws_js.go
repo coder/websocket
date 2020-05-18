@@ -511,3 +511,35 @@ const (
 	// MessageBinary is for binary messages like protobufs.
 	MessageBinary
 )
+
+type mu struct {
+	c  *Conn
+	ch chan struct{}
+}
+
+func newMu(c *Conn) *mu {
+	return &mu{
+		c:  c,
+		ch: make(chan struct{}, 1),
+	}
+}
+
+func (m *mu) forceLock() {
+	m.ch <- struct{}{}
+}
+
+func (m *mu) tryLock() bool {
+	select {
+	case m.ch <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func (m *mu) unlock() {
+	select {
+	case <-m.ch:
+	default:
+	}
+}
