@@ -55,7 +55,9 @@ func TestAccept(t *testing.T) {
 		r.Header.Set("Sec-WebSocket-Key", "meow123")
 		r.Header.Set("Sec-WebSocket-Extensions", "permessage-deflate; harharhar")
 
-		_, err := Accept(w, r, nil)
+		_, err := Accept(w, r, &AcceptOptions{
+			CompressionMode: CompressionContextTakeover,
+		})
 		assert.Contains(t, err, `unsupported permessage-deflate parameter`)
 	})
 

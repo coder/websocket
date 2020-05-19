@@ -12,7 +12,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/klauspost/compress/flate"
+	"compress/flate"
 
 	"nhooyr.io/websocket/internal/errd"
 )
@@ -76,8 +76,8 @@ type msgWriterState struct {
 	opcode opcode
 	flate  bool
 
-	trimWriter *trimLastFourBytesWriter
-	dict       slidingWindow
+	trimWriter  *trimLastFourBytesWriter
+	flateWriter *flate.Writer
 }
 
 func newMsgWriterState(c *Conn) *msgWriterState {
@@ -96,7 +96,9 @@ func (mw *msgWriterState) ensureFlate() {
 		}
 	}
 
-	mw.dict.init(8192)
+	if mw.flateWriter == nil {
+		mw.flateWriter = getFlateWriter(mw.trimWriter)
+	}
 	mw.flate = true
 }
 
@@ -153,6 +155,13 @@ func (mw *msgWriterState) reset(ctx context.Context, typ MessageType) error {
 	return nil
 }
 
+func (mw *msgWriterState) putFlateWriter() {
+	if mw.flateWriter != nil {
+		putFlateWriter(mw.flateWriter)
+		mw.flateWriter = nil
+	}
+}
+
 // Write writes the given bytes to the WebSocket connection.
 func (mw *msgWriterState) Write(p []byte) (_ int, err error) {
 	err = mw.writeMu.lock(mw.ctx)
@@ -177,12 +186,7 @@ func (mw *msgWriterState) Write(p []byte) (_ int, err error) {
 	}
 
 	if mw.flate {
-		err = flate.StatelessDeflate(mw.trimWriter, p, false, mw.dict.buf)
-		if err != nil {
-			return 0, err
-		}
-		mw.dict.write(p)
-		return len(p), nil
+		return mw.flateWriter.Write(p)
 	}
 
 	return mw.write(p)
@@ -207,13 +211,20 @@ func (mw *msgWriterState) Close() (err error) {
 	}
 	defer mw.writeMu.unlock()
 
+	if mw.flate {
+		err = mw.flateWriter.Flush()
+		if err != nil {
+			return fmt.Errorf("failed to flush flate: %w", err)
+		}
+	}
+
 	_, err = mw.c.writeFrame(mw.ctx, true, mw.flate, mw.opcode, nil)
 	if err != nil {
 		return fmt.Errorf("failed to write fin frame: %w", err)
 	}
 
 	if mw.flate && !mw.flateContextTakeover() {
-		mw.dict.close()
+		mw.putFlateWriter()
 	}
 	mw.mu.unlock()
 	return nil
@@ -226,7 +237,7 @@ func (mw *msgWriterState) close() {
 	}
 
 	mw.writeMu.forceLock()
-	mw.dict.close()
+	mw.putFlateWriter()
 }
 
 func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error {

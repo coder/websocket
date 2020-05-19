@@ -28,7 +28,6 @@ var excludedAutobahnCases = []string{
 
 	// We skip the tests related to requestMaxWindowBits as that is unimplemented due
 	// to limitations in compress/flate. See https://github.com/golang/go/issues/3155
-	// Same with klauspost/compress which doesn't allow adjusting the sliding window size.
 	"13.3.*", "13.4.*", "13.5.*", "13.6.*",
 }
 
@@ -37,8 +36,15 @@ var autobahnCases = []string{"*"}
 func TestAutobahn(t *testing.T) {
 	t.Parallel()
 
-	if os.Getenv("AUTOBAHN_TEST") == "" {
+	if os.Getenv("AUTOBAHN") == "" {
 		t.SkipNow()
+	}
+
+	if os.Getenv("AUTOBAHN") == "fast" {
+		// These are the slow tests.
+		excludedAutobahnCases = append(excludedAutobahnCases,
+			"9.*", "13.*", "12.*",
+		)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*15)
@@ -61,7 +67,9 @@ func TestAutobahn(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 				defer cancel()
 
-				c, _, err := websocket.Dial(ctx, fmt.Sprintf(wstestURL+"/runCase?case=%v&agent=main", i), nil)
+				c, _, err := websocket.Dial(ctx, fmt.Sprintf(wstestURL+"/runCase?case=%v&agent=main", i), &websocket.DialOptions{
+					CompressionMode: websocket.CompressionContextTakeover,
+				})
 				assert.Success(t, err)
 				err = wstest.EchoLoop(ctx, c)
 				t.Logf("echoLoop: %v", err)
