@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"sync"
@@ -13,6 +13,26 @@ import (
 
 	"nhooyr.io/websocket"
 )
+
+type clientJoin struct {
+	ClientID   string `json:"client_id"`
+	ClientName string `json:"client_name"`
+}
+
+type clientLeave struct {
+	ClientID string `json:"client_id"`
+}
+
+type clientRename struct {
+	ClientID string `json:"client_id"`
+	ClientName string `json:"client_name"`
+}
+
+type messageBroadcast struct {
+	ClientID string `json:"client_id"`
+	Time    time.Time `json:"time"`
+	Message string    `json:"msg"`
+}
 
 // chatServer enables broadcasting to a set of subscribers.
 type chatServer struct {
@@ -81,7 +101,7 @@ func (cs *chatServer) subscribeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if websocket.CloseStatus(err) == websocket.StatusNormalClosure ||
-		websocket.CloseStatus(err) == websocket.StatusGoingAway {
+			websocket.CloseStatus(err) == websocket.StatusGoingAway {
 		return
 	}
 	if err != nil {
@@ -98,13 +118,18 @@ func (cs *chatServer) publishHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body := http.MaxBytesReader(w, r.Body, 8192)
-	msg, err := ioutil.ReadAll(body)
+
+	var msg message
+	err := json.NewDecoder(body).Decode(&msg)
 	if err != nil {
-		http.Error(w, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
-	cs.publish(msg)
+	msg.Author =
+
+	// TODO improve
+	cs.publish([]byte(msg.Message))
 
 	w.WriteHeader(http.StatusAccepted)
 }

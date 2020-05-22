@@ -64,7 +64,10 @@
     try {
       const resp = await fetch("/publish", {
         method: "POST",
-        body: msg,
+        body: {
+          time: new Date(),
+          msg: msg,
+        },
       })
       if (resp.status !== 202) {
         throw new Error(`Unexpected HTTP Status ${resp.status} ${resp.statusText}`)
