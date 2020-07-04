@@ -21,11 +21,11 @@ main() {
   stringer -type=opcode,MessageType,StatusCode -output=stringer.go
 
   if [[ ${CI-} ]]; then
-    ensure_fmt
+    assert_no_changes
   fi
 }
 
-ensure_fmt() {
+assert_no_changes() {
   if [[ $(git ls-files --other --modified --exclude-standard) ]]; then
     git -c color.ui=always --no-pager diff
     echo
