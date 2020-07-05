@@ -106,6 +106,8 @@ type netConn struct {
 var _ net.Conn = &netConn{}
 
 func (nc *netConn) Close() error {
+	nc.writeTimer.Stop()
+	nc.readTimer.Stop()
 	return nc.c.Close(StatusNormalClosure, "")
 }
 
