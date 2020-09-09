@@ -422,22 +422,6 @@ func Test_selectDeflate(t *testing.T) {
 			},
 			expOK: true,
 		},
-		// {
-		// 	name:                       "x-webkit-deflate-frame",
-		// 	mode:                       CompressionNoContextTakeover,
-		// 	reqSecWebSocketExtensions:  "x-webkit-deflate-frame; no_context_takeover",
-		// 	respSecWebSocketExtensions: "x-webkit-deflate-frame; no_context_takeover",
-		// 	expCopts: &compressionOptions{
-		// 		clientNoContextTakeover: true,
-		// 		serverNoContextTakeover: true,
-		// 	},
-		// },
-		// {
-		// 	name:                      "x-webkit-deflate/error",
-		// 	mode:                      CompressionNoContextTakeover,
-		// 	reqSecWebSocketExtensions: "x-webkit-deflate-frame; max_window_bits",
-		// 	error:                     true,
-		// },
 	}
 
 	for _, tc := range testCases {

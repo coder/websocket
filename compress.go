@@ -12,11 +12,7 @@ import (
 // CompressionMode represents the modes available to the deflate extension.
 // See https://tools.ietf.org/html/rfc7692
 //
-// A compatibility layer is implemented for the older deflate-frame extension used
-// by safari. See https://tools.ietf.org/html/draft-tyoshino-hybi-websocket-perframe-deflate-06
-// It will work the same in every way except that we cannot signal to the peer we
-// want to use no context takeover on our side, we can only signal that they should.
-// But it is currently disabled due to Safari bugs. See https://github.com/nhooyr/websocket/issues/218
+// Works in all browsers except Safari which does not implement the deflate extension.
 type CompressionMode int
 
 const (
