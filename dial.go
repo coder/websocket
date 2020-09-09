@@ -185,7 +185,7 @@ func handshakeRequest(ctx context.Context, urls string, opts *DialOptions, copts
 		req.Header.Set("Sec-WebSocket-Protocol", strings.Join(opts.Subprotocols, ","))
 	}
 	if copts != nil {
-		copts.setHeader(req.Header)
+		req.Header.Set("Sec-WebSocket-Extensions", copts.String())
 	}
 
 	resp, err := opts.HTTPClient.Do(req)

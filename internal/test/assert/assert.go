@@ -1,6 +1,7 @@
 package assert
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -41,5 +42,14 @@ func Contains(t testing.TB, v interface{}, sub string) {
 	s := fmt.Sprint(v)
 	if !strings.Contains(s, sub) {
 		t.Fatalf("expected %q to contain %q", s, sub)
+	}
+}
+
+// ErrorIs asserts errors.Is(got, exp)
+func ErrorIs(t testing.TB, exp, got error) {
+	t.Helper()
+
+	if !errors.Is(got, exp) {
+		t.Fatalf("expected %v but got %v", exp, got)
 	}
 }
