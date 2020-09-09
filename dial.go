@@ -273,6 +273,10 @@ func verifyServerExtensions(copts *compressionOptions, h http.Header) (*compress
 			copts.serverNoContextTakeover = true
 			continue
 		}
+		if strings.HasPrefix(p, "server_max_window_bits=") {
+			// We can't adjust the deflate window, but decoding with a larger window is acceptable.
+			continue
+		}
 
 		return nil, fmt.Errorf("unsupported permessage-deflate parameter: %q", p)
 	}
