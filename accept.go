@@ -265,6 +265,8 @@ func acceptDeflate(w http.ResponseWriter, ext websocketExtension, mode Compressi
 		case "server_no_context_takeover":
 			copts.serverNoContextTakeover = true
 			continue
+		case "server_max_window_bits=15":
+			continue
 		}
 
 		if strings.HasPrefix(p, "client_max_window_bits") {
