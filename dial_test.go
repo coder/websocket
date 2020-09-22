@@ -37,15 +37,6 @@ func TestBadDials(t *testing.T) {
 				url:  "ftp://nhooyr.io",
 			},
 			{
-				name: "badHTTPClient",
-				url:  "ws://nhooyr.io",
-				opts: &DialOptions{
-					HTTPClient: &http.Client{
-						Timeout: time.Minute,
-					},
-				},
-			},
-			{
 				name: "badTLS",
 				url:  "wss://totallyfake.nhooyr.io",
 			},

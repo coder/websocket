@@ -8,7 +8,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -26,6 +25,7 @@ type DialOptions struct {
 	// HTTPClient is used for the connection.
 	// Its Transport must return writable bodies for WebSocket handshakes.
 	// http.Transport does beginning with Go 1.12.
+	// Non-zero timeout will be ignored, see https://github.com/nhooyr/websocket/issues/67.
 	HTTPClient *http.Client
 
 	// HTTPHeader specifies the HTTP headers included in the handshake request.
@@ -74,7 +74,15 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 	opts = &*opts
 	if opts.HTTPClient == nil {
 		opts.HTTPClient = http.DefaultClient
+	} else if opts.HTTPClient.Timeout > 0 {
+		// remove timeout
+		opts.HTTPClient = &http.Client{
+			Transport:     opts.HTTPClient.Transport,
+			CheckRedirect: opts.HTTPClient.CheckRedirect,
+			Jar:           opts.HTTPClient.Jar,
+		}
 	}
+
 	if opts.HTTPHeader == nil {
 		opts.HTTPHeader = http.Header{}
 	}
@@ -133,10 +141,6 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 }
 
 func handshakeRequest(ctx context.Context, urls string, opts *DialOptions, copts *compressionOptions, secWebSocketKey string) (*http.Response, error) {
-	if opts.HTTPClient.Timeout > 0 {
-		return nil, errors.New("use context for cancellation instead of http.Client.Timeout; see https://github.com/nhooyr/websocket/issues/67")
-	}
-
 	u, err := url.Parse(urls)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url: %w", err)
