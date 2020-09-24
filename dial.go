@@ -47,6 +47,20 @@ type DialOptions struct {
 	CompressionThreshold int
 }
 
+func (opts *DialOptions) cloneWithDefaults() *DialOptions {
+	var o DialOptions
+	if opts != nil {
+		o = *opts
+	}
+	if o.HTTPClient == nil {
+		o.HTTPClient = http.DefaultClient
+	}
+	if o.HTTPHeader == nil {
+		o.HTTPHeader = http.Header{}
+	}
+	return &o
+}
+
 // Dial performs a WebSocket handshake on url.
 //
 // The response is the WebSocket handshake response from the server.
@@ -67,17 +81,7 @@ func Dial(ctx context.Context, u string, opts *DialOptions) (*Conn, *http.Respon
 func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (_ *Conn, _ *http.Response, err error) {
 	defer errd.Wrap(&err, "failed to WebSocket dial")
 
-	if opts == nil {
-		opts = &DialOptions{}
-	}
-
-	opts = &*opts
-	if opts.HTTPClient == nil {
-		opts.HTTPClient = http.DefaultClient
-	}
-	if opts.HTTPHeader == nil {
-		opts.HTTPHeader = http.Header{}
-	}
+	opts = opts.cloneWithDefaults()
 
 	secWebSocketKey, err := secWebSocketKey(rand)
 	if err != nil {

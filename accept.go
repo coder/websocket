@@ -63,6 +63,14 @@ type AcceptOptions struct {
 	CompressionThreshold int
 }
 
+func (opts *AcceptOptions) cloneWithDefaults() *AcceptOptions {
+	var o AcceptOptions
+	if opts != nil {
+		o = *opts
+	}
+	return &o
+}
+
 // Accept accepts a WebSocket handshake from a client and upgrades the
 // the connection to a WebSocket.
 //
@@ -77,17 +85,13 @@ func Accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Conn, err error) {
 	defer errd.Wrap(&err, "failed to accept WebSocket connection")
 
-	if opts == nil {
-		opts = &AcceptOptions{}
-	}
-	opts = &*opts
-
 	errCode, err := verifyClientRequest(w, r)
 	if err != nil {
 		http.Error(w, err.Error(), errCode)
 		return nil, err
 	}
 
+	opts = opts.cloneWithDefaults()
 	if !opts.InsecureSkipVerify {
 		err = authenticateOrigin(r, opts.OriginPatterns)
 		if err != nil {
