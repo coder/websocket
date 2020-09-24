@@ -25,7 +25,6 @@ type DialOptions struct {
 	// HTTPClient is used for the connection.
 	// Its Transport must return writable bodies for WebSocket handshakes.
 	// http.Transport does beginning with Go 1.12.
-	// Non-zero timeout will be ignored, see https://github.com/nhooyr/websocket/issues/67.
 	HTTPClient *http.Client
 
 	// HTTPHeader specifies the HTTP headers included in the handshake request.
@@ -75,7 +74,11 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 	if opts.HTTPClient == nil {
 		opts.HTTPClient = http.DefaultClient
 	} else if opts.HTTPClient.Timeout > 0 {
-		// remove timeout
+		var cancel context.CancelFunc
+
+		ctx, cancel = context.WithTimeout(ctx, opts.HTTPClient.Timeout)
+		defer cancel()
+
 		opts.HTTPClient = &http.Client{
 			Transport:     opts.HTTPClient.Transport,
 			CheckRedirect: opts.HTTPClient.CheckRedirect,
