@@ -79,11 +79,9 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 		ctx, cancel = context.WithTimeout(ctx, opts.HTTPClient.Timeout)
 		defer cancel()
 
-		opts.HTTPClient = &http.Client{
-			Transport:     opts.HTTPClient.Transport,
-			CheckRedirect: opts.HTTPClient.CheckRedirect,
-			Jar:           opts.HTTPClient.Jar,
-		}
+		newClient := *opts.HTTPClient
+		newClient.Timeout = 0
+		opts.HTTPClient = &newClient
 	}
 
 	if opts.HTTPHeader == nil {
