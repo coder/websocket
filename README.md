@@ -12,6 +12,7 @@ websocket is a minimal and idiomatic WebSocket library for Go.
 1. [Roadmap](#roadmap)
 1. [Examples](#examples)
 1. [Comparison With Other Packages](#comparison-with-other-packages)
+1. [Ping/Pong](#pingpong)
 
 ## Install
 
@@ -138,3 +139,15 @@ to nhooyr.io/websocket.
 in an event driven style for performance. See the author's [blog post](https://medium.freecodecamp.org/million-websockets-and-go-cc58418460bb).
 
 However when writing idiomatic Go, nhooyr.io/websocket will be faster and easier to use.
+
+## Ping/Pong
+
+Some WebSocket libraries and WebSocket applications implement pings and pongs. Is this necessary?
+
+The WebSocket protocol (layer 7) is built on top of the HTTP protocol (layer 7), which is built on top of the TCP protocol (layer 4). TCP has a feature called [keepalive](https://tldp.org/HOWTO/TCP-Keepalive-HOWTO/overview.html), which, as its name suggests, keeps long connections alive. keepalive is automatically enabled in the Golang standard standard library, so any HTTP server that you create with Golang should inherit it. By default, it [sends probes every 15 seconds and has a timeout of 3 minutes](https://golang.org/pkg/net/#Dialer).
+
+WebSocket applications almost always need to detect when an end-user's internet has died, so that they can properly disconnect the user and clean up the relevant data structures. Using TCP keepalives for this purpose should be sufficient - meaning that we don't need to write any additional code.
+
+Some Golang authors, such as the creators of the [melody WebSocket framework](https://github.com/olahol/melody), have implemented WebSocket-level ping/pong code inside their frameworks as an extra failsafe in case that TCP keepalives aren't working. Additionally, [some people claim](https://github.com/nhooyr/websocket/issues/265#issuecomment-734095675) that TCP keepalives don't work well when going through proxy servers, which would seem to justify this extra code.
+
+However, reliable data for TCP keepalives not working properly is scant. After [careful consideration](https://github.com/nhooyr/websocket/issues/1), this library does not include automatic ping/pong code like the melody WebSocket framework does. Until more evidence is gathered either way, the authors of this library do not recommend putting pong/pong code in your application. However, we always welcome [more discussion on the topic](https://github.com/nhooyr/websocket/issues/1).
