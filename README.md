@@ -5,6 +5,14 @@
 
 websocket is a minimal and idiomatic WebSocket library for Go.
 
+## Table of Contents
+
+1. [Install](#install)
+1. [Highlights](#highlights)
+1. [Roadmap](#roadmap)
+1. [Examples](#examples)
+1. [Comparison With Other Packages](#comparison-with-other-packages)
+
 ## Install
 
 ```bash
@@ -82,7 +90,7 @@ if err != nil {
 c.Close(websocket.StatusNormalClosure, "")
 ```
 
-## Comparison
+## Comparison With Other Packages
 
 ### gorilla/websocket
 
