@@ -224,6 +224,12 @@ func Test_selectSubprotocol(t *testing.T) {
 			serverProtocols: []string{"echo2", "echo3"},
 			negotiated:      "echo3",
 		},
+		{
+			name:            "clientCasePresered",
+			clientProtocols: []string{"Echo1"},
+			serverProtocols: []string{"echo1"},
+			negotiated:      "Echo1",
+		},
 	}
 
 	for _, tc := range testCases {

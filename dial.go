@@ -194,11 +194,11 @@ func verifyServerResponse(opts *DialOptions, copts *compressionOptions, secWebSo
 		return nil, fmt.Errorf("expected handshake response status code %v but got %v", http.StatusSwitchingProtocols, resp.StatusCode)
 	}
 
-	if !headerContainsToken(resp.Header, "Connection", "Upgrade") {
+	if !headerContainsTokenIgnoreCase(resp.Header, "Connection", "Upgrade") {
 		return nil, fmt.Errorf("WebSocket protocol violation: Connection header %q does not contain Upgrade", resp.Header.Get("Connection"))
 	}
 
-	if !headerContainsToken(resp.Header, "Upgrade", "WebSocket") {
+	if !headerContainsTokenIgnoreCase(resp.Header, "Upgrade", "WebSocket") {
 		return nil, fmt.Errorf("WebSocket protocol violation: Upgrade header %q does not contain websocket", resp.Header.Get("Upgrade"))
 	}
 
