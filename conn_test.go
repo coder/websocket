@@ -208,6 +208,37 @@ func TestConn(t *testing.T) {
 		}
 	})
 
+	t.Run("netConn/readLimit", func(t *testing.T) {
+		tt, c1, c2 := newConnTest(t, nil, nil)
+
+		n1 := websocket.NetConn(tt.ctx, c1, websocket.MessageBinary)
+		n2 := websocket.NetConn(tt.ctx, c2, websocket.MessageBinary)
+
+		s := strings.Repeat("papa", 1 << 20)
+		errs := xsync.Go(func() error {
+			_, err := n2.Write([]byte(s))
+			if err != nil {
+				return err
+			}
+			return n2.Close()
+		})
+
+		b, err := ioutil.ReadAll(n1)
+		assert.Success(t, err)
+
+		_, err = n1.Read(nil)
+		assert.Equal(t, "read error", err, io.EOF)
+
+		select {
+		case err := <-errs:
+			assert.Success(t, err)
+		case <-tt.ctx.Done():
+			t.Fatal(tt.ctx.Err())
+		}
+
+		assert.Equal(t, "read msg", s, string(b))
+	})
+
 	t.Run("wsjson", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
 
