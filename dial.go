@@ -250,7 +250,8 @@ func verifyServerExtensions(copts *compressionOptions, h http.Header) (*compress
 		return nil, fmt.Errorf("WebSocket protcol violation: unsupported extensions from server: %+v", exts[1:])
 	}
 
-	copts = &*copts
+	_copts := *copts
+	copts = &_copts
 
 	for _, p := range ext.params {
 		switch p {
