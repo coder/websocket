@@ -214,7 +214,7 @@ func TestConn(t *testing.T) {
 		n1 := websocket.NetConn(tt.ctx, c1, websocket.MessageBinary)
 		n2 := websocket.NetConn(tt.ctx, c2, websocket.MessageBinary)
 
-		s := strings.Repeat("papa", 1 << 20)
+		s := strings.Repeat("papa", 1<<20)
 		errs := xsync.Go(func() error {
 			_, err := n2.Write([]byte(s))
 			if err != nil {
