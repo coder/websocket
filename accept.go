@@ -215,7 +215,10 @@ func authenticateOrigin(r *http.Request, originHosts []string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host)
+	if u.Host == "" {
+		return fmt.Errorf("request Origin %q is not a valid URL with a host", origin)
+	}
+	return fmt.Errorf("request Origin %q is not authorized for Host %q", u.Host, r.Host)
 }
 
 func match(pattern, s string) (bool, error) {
