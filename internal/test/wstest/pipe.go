@@ -24,7 +24,8 @@ func Pipe(dialOpts *websocket.DialOptions, acceptOpts *websocket.AcceptOptions) 
 	if dialOpts == nil {
 		dialOpts = &websocket.DialOptions{}
 	}
-	dialOpts = &*dialOpts
+	_dialOpts := *dialOpts
+	dialOpts = &_dialOpts
 	dialOpts.HTTPClient = &http.Client{
 		Transport: tt,
 	}

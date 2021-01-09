@@ -8,7 +8,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -47,18 +46,27 @@ type DialOptions struct {
 	CompressionThreshold int
 }
 
-func (opts *DialOptions) cloneWithDefaults() *DialOptions {
+func (opts *DialOptions) cloneWithDefaults(ctx context.Context) (context.Context, context.CancelFunc, *DialOptions) {
+	var cancel context.CancelFunc
+
 	var o DialOptions
 	if opts != nil {
 		o = *opts
 	}
 	if o.HTTPClient == nil {
 		o.HTTPClient = http.DefaultClient
+	} else if opts.HTTPClient.Timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, opts.HTTPClient.Timeout)
+
+		newClient := *opts.HTTPClient
+		newClient.Timeout = 0
+		opts.HTTPClient = &newClient
 	}
 	if o.HTTPHeader == nil {
 		o.HTTPHeader = http.Header{}
 	}
-	return &o
+
+	return ctx, cancel, &o
 }
 
 // Dial performs a WebSocket handshake on url.
@@ -81,7 +89,11 @@ func Dial(ctx context.Context, u string, opts *DialOptions) (*Conn, *http.Respon
 func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (_ *Conn, _ *http.Response, err error) {
 	defer errd.Wrap(&err, "failed to WebSocket dial")
 
-	opts = opts.cloneWithDefaults()
+	var cancel context.CancelFunc
+	ctx, cancel, opts = opts.cloneWithDefaults(ctx)
+	if cancel != nil {
+		defer cancel()
+	}
 
 	secWebSocketKey, err := secWebSocketKey(rand)
 	if err != nil {
@@ -137,10 +149,6 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 }
 
 func handshakeRequest(ctx context.Context, urls string, opts *DialOptions, copts *compressionOptions, secWebSocketKey string) (*http.Response, error) {
-	if opts.HTTPClient.Timeout > 0 {
-		return nil, errors.New("use context for cancellation instead of http.Client.Timeout; see https://github.com/nhooyr/websocket/issues/67")
-	}
-
 	u, err := url.Parse(urls)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url: %w", err)
@@ -193,11 +201,11 @@ func verifyServerResponse(opts *DialOptions, copts *compressionOptions, secWebSo
 		return nil, fmt.Errorf("expected handshake response status code %v but got %v", http.StatusSwitchingProtocols, resp.StatusCode)
 	}
 
-	if !headerContainsToken(resp.Header, "Connection", "Upgrade") {
+	if !headerContainsTokenIgnoreCase(resp.Header, "Connection", "Upgrade") {
 		return nil, fmt.Errorf("WebSocket protocol violation: Connection header %q does not contain Upgrade", resp.Header.Get("Connection"))
 	}
 
-	if !headerContainsToken(resp.Header, "Upgrade", "WebSocket") {
+	if !headerContainsTokenIgnoreCase(resp.Header, "Upgrade", "WebSocket") {
 		return nil, fmt.Errorf("WebSocket protocol violation: Upgrade header %q does not contain websocket", resp.Header.Get("Upgrade"))
 	}
 
@@ -242,7 +250,8 @@ func verifyServerExtensions(copts *compressionOptions, h http.Header) (*compress
 		return nil, fmt.Errorf("WebSocket protcol violation: unsupported extensions from server: %+v", exts[1:])
 	}
 
-	copts = &*copts
+	_copts := *copts
+	copts = &_copts
 
 	for _, p := range ext.params {
 		switch p {
