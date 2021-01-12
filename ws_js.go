@@ -237,6 +237,7 @@ func (c *Conn) Subprotocol() string {
 type DialOptions struct {
 	// Subprotocols lists the subprotocols to negotiate with the server.
 	Subprotocols []string
+	Options 	 map[string]interface{}
 }
 
 // Dial creates a new WebSocket connection to the given url with the given options.
@@ -259,7 +260,7 @@ func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Resp
 	url = strings.Replace(url, "http://", "ws://", 1)
 	url = strings.Replace(url, "https://", "wss://", 1)
 
-	ws, err := wsjs.New(url, opts.Subprotocols)
+	ws, err := wsjs.New(url, opts.Subprotocols, opts.Options)
 	if err != nil {
 		return nil, nil, err
 	}

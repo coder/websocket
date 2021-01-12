@@ -27,7 +27,7 @@ func handleJSError(err *error, onErr func()) {
 }
 
 // New is a wrapper around the javascript WebSocket constructor.
-func New(url string, protocols []string) (c WebSocket, err error) {
+func New(url string, protocols []string, options map[string]interface{}) (c WebSocket, err error) {
 	defer handleJSError(&err, func() {
 		c = WebSocket{}
 	})
@@ -38,7 +38,7 @@ func New(url string, protocols []string) (c WebSocket, err error) {
 	}
 
 	c = WebSocket{
-		v: js.Global().Get("WebSocket").New(url, jsProtocols),
+		v: js.Global().Get("WebSocket").New(url, jsProtocols, options),
 	}
 
 	c.setBinaryType("arraybuffer")
