@@ -237,7 +237,7 @@ func (c *Conn) Subprotocol() string {
 type DialOptions struct {
 	// Subprotocols lists the subprotocols to negotiate with the server.
 	Subprotocols []string
-	Options 	 map[string]interface{}
+	Options      map[string]interface{}
 }
 
 // Dial creates a new WebSocket connection to the given url with the given options.
