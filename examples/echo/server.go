@@ -16,7 +16,6 @@ import (
 // It ensures the client speaks the echo subprotocol and
 // only allows one message every 100ms with a 10 message burst.
 type echoServer struct {
-
 	// logf controls where logs are sent.
 	logf func(f string, v ...interface{})
 }
