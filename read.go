@@ -75,6 +75,30 @@ func (c *Conn) SetReadLimit(n int64) {
 	c.msgReader.limitReader.limit.Store(n + 1)
 }
 
+// SetPingHandler set the handler for pong handler
+// From 5.5.2 of RFC 6455
+// "Upon receipt of a Ping frame, an endpoint MUST send a Pong frame in response"
+func (c *Conn) SetPingHandler(f func(ctx context.Context, p []byte) error) {
+	c.pingHandler = func(ctx context.Context, p []byte) error {
+		if err := c.writeControl(ctx, opPong, p); err != nil {
+			return err
+		}
+		if f != nil {
+			return f(ctx, p)
+		}
+		return nil
+	}
+}
+
+// SetPongHandler set the handler for ping message
+// By default, do nothing
+func (c *Conn) SetPongHandler(f func(ctx context.Context, p []byte) error) {
+	if f == nil {
+		f = func(context.Context, []byte) error { return nil }
+	}
+	c.pongHandler = f
+}
+
 const defaultReadLimit = 32768
 
 func newMsgReader(c *Conn) *msgReader {
@@ -265,7 +289,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 
 	switch h.opcode {
 	case opPing:
-		return c.writeControl(ctx, opPong, b)
+		return c.pingHandler(ctx, b)
 	case opPong:
 		c.activePingsMu.Lock()
 		pong, ok := c.activePings[string(b)]
@@ -276,7 +300,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 			default:
 			}
 		}
-		return nil
+		return c.pongHandler(ctx, b)
 	}
 
 	defer func() {
