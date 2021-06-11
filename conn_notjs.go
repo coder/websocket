@@ -197,6 +197,7 @@ func (c *Conn) ping(ctx context.Context, p string) error {
 
 	defer func() {
 		c.activePingsMu.Lock()
+		close(pong)
 		delete(c.activePings, p)
 		c.activePingsMu.Unlock()
 	}()
