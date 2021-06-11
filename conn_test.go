@@ -103,6 +103,51 @@ func TestConn(t *testing.T) {
 		assert.Contains(t, err, "failed to wait for pong")
 	})
 
+	t.Run("pingHandler", func(t *testing.T) {
+		tt, c1, c2 := newConnTest(t, nil, nil)
+		defer tt.cleanup()
+
+		var count int
+		c2.SetPingHandler(func(context.Context, []byte) error {
+			count++
+			return nil
+		})
+
+		c1.CloseRead(tt.ctx)
+		c2.CloseRead(tt.ctx)
+
+		for i := 0; i < 10; i++ {
+			err := c1.Ping(tt.ctx)
+			assert.Success(t, err)
+		}
+
+		err := c1.Close(websocket.StatusNormalClosure, "")
+		assert.Success(t, err)
+		assert.Equal(t, "count", 10, count)
+	})
+
+	t.Run("pongHandler", func(t *testing.T) {
+		tt, c1, c2 := newConnTest(t, nil, nil)
+		defer tt.cleanup()
+
+		var count int
+		c1.SetPongHandler(func(context.Context, []byte) error {
+			count++
+			return nil
+		})
+
+		c1.CloseRead(tt.ctx)
+		c2.CloseRead(tt.ctx)
+		for i := 0; i < 10; i++ {
+			err := c1.Ping(tt.ctx)
+			assert.Success(t, err)
+		}
+
+		err := c1.Close(websocket.StatusNormalClosure, "")
+		assert.Success(t, err)
+		assert.Equal(t, "count", 10, count)
+	})
+
 	t.Run("concurrentWrite", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
 		defer tt.cleanup()
