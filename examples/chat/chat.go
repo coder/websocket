@@ -76,6 +76,7 @@ func (cs *chatServer) subscribeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer c.Close(websocket.StatusInternalError, "")
 
+	c.SetReadLimit(8192)
 	err = cs.subscribe(r.Context(), c)
 	if errors.Is(err, context.Canceled) {
 		return
@@ -118,8 +119,6 @@ func (cs *chatServer) publishHandler(w http.ResponseWriter, r *http.Request) {
 // It uses CloseRead to keep reading from the connection to process control
 // messages and cancel the context if the connection drops.
 func (cs *chatServer) subscribe(ctx context.Context, c *websocket.Conn) error {
-	ctx = c.CloseRead(ctx)
-
 	s := &subscriber{
 		msgs: make(chan []byte, cs.subscriberMessageBuffer),
 		closeSlow: func() {
@@ -128,6 +127,22 @@ func (cs *chatServer) subscribe(ctx context.Context, c *websocket.Conn) error {
 	}
 	cs.addSubscriber(s)
 	defer cs.deleteSubscriber(s)
+
+	go func() {
+		for {
+			typ, msg, err := c.Read(ctx)
+			if err != nil {
+				if websocket.CloseStatus(err) != websocket.StatusGoingAway {
+					cs.logf("%v", err)
+				}
+				break
+			}
+			if typ != websocket.MessageText {
+				continue
+			}
+			cs.publish(msg)
+		}
+	}()
 
 	for {
 		select {
