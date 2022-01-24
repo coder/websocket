@@ -184,7 +184,7 @@ func writeFrameHeader(h header, w *bufio.Writer, buf []byte) (err error) {
 // to be in little endian.
 //
 // See https://github.com/golang/go/issues/31586
-func mask(key uint32, b []byte) uint32 {
+func maskGo(key uint32, b []byte) uint32 {
 	if len(b) >= 8 {
 		key64 := uint64(key)<<32 | uint64(key)
 
