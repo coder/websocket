@@ -73,7 +73,7 @@ func (c *Conn) writeClose(code StatusCode, reason string) error {
 		}
 	}
 
-	writeErr := c.writeControl(context.Background(), opClose, p)
+	writeErr := c.writeControl(c.msgWriterState.ctx, opClose, p)
 	if CloseStatus(writeErr) != -1 {
 		// Not a real error if it's due to a close frame being received.
 		writeErr = nil
