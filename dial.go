@@ -1,3 +1,4 @@
+//go:build !js
 // +build !js
 
 package websocket
@@ -125,9 +126,9 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 		return nil, resp, err
 	}
 
-	rwc, ok := respBody.(io.ReadWriteCloser)
+	rwc, ok := respBody.(io.ReadCloser)
 	if !ok {
-		return nil, resp, fmt.Errorf("response body is not a io.ReadWriteCloser: %T", respBody)
+		return nil, resp, fmt.Errorf("response body is not a io.ReadCloser: %T", respBody)
 	}
 
 	return newConn(connConfig{
