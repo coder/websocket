@@ -43,7 +43,7 @@ For a full stack example, see the [chat example](./examples/chat).
 http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
 	c, err := websocket.Accept(w, r, nil)
 	if err != nil {
-		// ...
+		panic(err)
 	}
 	defer c.Close(websocket.StatusInternalError, "the sky is falling")
 
@@ -53,12 +53,15 @@ http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
 	var v interface{}
 	err = wsjson.Read(ctx, c, &v)
 	if err != nil {
-		// ...
+		panic(err)
 	}
 
 	log.Printf("received: %v", v)
 
-	c.Close(websocket.StatusNormalClosure, "")
+	err := c.Close(websocket.StatusNormalClosure, "")
+	if err != nil {
+		panic(err)
+	}
 })
 ```
 
@@ -70,13 +73,13 @@ defer cancel()
 
 c, _, err := websocket.Dial(ctx, "ws://localhost:8080", nil)
 if err != nil {
-	// ...
+	panic(err)
 }
 defer c.Close(websocket.StatusInternalError, "the sky is falling")
 
 err = wsjson.Write(ctx, c, "hi")
 if err != nil {
-	// ...
+	panic(err)
 }
 
 c.Close(websocket.StatusNormalClosure, "")
