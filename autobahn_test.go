@@ -1,3 +1,4 @@
+//go:build !js
 // +build !js
 
 package websocket_test
@@ -15,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/internal/errd"
-	"nhooyr.io/websocket/internal/test/assert"
-	"nhooyr.io/websocket/internal/test/wstest"
+	"github.com/fortytw2/websocket"
+	"github.com/fortytw2/websocket/internal/errd"
+	"github.com/fortytw2/websocket/internal/test/assert"
+	"github.com/fortytw2/websocket/internal/test/wstest"
 )
 
 var excludedAutobahnCases = []string{

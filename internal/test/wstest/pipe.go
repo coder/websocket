@@ -1,3 +1,4 @@
+//go:build !js
 // +build !js
 
 package wstest
@@ -9,7 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"nhooyr.io/websocket"
+	"github.com/fortytw2/websocket"
 )
 
 // Pipe is used to create an in memory connection

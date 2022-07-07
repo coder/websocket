@@ -1,3 +1,4 @@
+//go:build !js
 // +build !js
 
 package websocket_test
@@ -8,26 +9,16 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/http"
-	"net/http/httptest"
-	"os"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/golang/protobuf/ptypes"
-	"github.com/golang/protobuf/ptypes/duration"
-
-	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/internal/errd"
-	"nhooyr.io/websocket/internal/test/assert"
-	"nhooyr.io/websocket/internal/test/wstest"
-	"nhooyr.io/websocket/internal/test/xrand"
-	"nhooyr.io/websocket/internal/xsync"
-	"nhooyr.io/websocket/wsjson"
-	"nhooyr.io/websocket/wspb"
+	"github.com/fortytw2/websocket"
+	"github.com/fortytw2/websocket/internal/test/assert"
+	"github.com/fortytw2/websocket/internal/test/wstest"
+	"github.com/fortytw2/websocket/internal/test/xrand"
+	"github.com/fortytw2/websocket/internal/xsync"
+	"github.com/fortytw2/websocket/wsjson"
 )
 
 func TestConn(t *testing.T) {
@@ -245,51 +236,6 @@ func TestConn(t *testing.T) {
 		err = c1.Close(websocket.StatusNormalClosure, "")
 		assert.Success(t, err)
 	})
-
-	t.Run("wspb", func(t *testing.T) {
-		tt, c1, c2 := newConnTest(t, nil, nil)
-		defer tt.cleanup()
-
-		tt.goEchoLoop(c2)
-
-		exp := ptypes.DurationProto(100)
-		err := wspb.Write(tt.ctx, c1, exp)
-		assert.Success(t, err)
-
-		act := &duration.Duration{}
-		err = wspb.Read(tt.ctx, c1, act)
-		assert.Success(t, err)
-		assert.Equal(t, "read msg", exp, act)
-
-		err = c1.Close(websocket.StatusNormalClosure, "")
-		assert.Success(t, err)
-	})
-}
-
-func TestWasm(t *testing.T) {
-	t.Parallel()
-
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err := echoServer(w, r, &websocket.AcceptOptions{
-			Subprotocols:       []string{"echo"},
-			InsecureSkipVerify: true,
-		})
-		if err != nil {
-			t.Error(err)
-		}
-	}))
-	defer s.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "go", "test", "-exec=wasmbrowsertest", ".")
-	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm", fmt.Sprintf("WS_ECHO_SERVER_URL=%v", s.URL))
-
-	b, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("wasm test binary failed: %v:\n%s", err, b)
-	}
 }
 
 func assertCloseStatus(exp websocket.StatusCode, err error) error {
@@ -479,51 +425,4 @@ func BenchmarkConn(b *testing.B) {
 			assert.Success(b, err)
 		})
 	}
-}
-
-func echoServer(w http.ResponseWriter, r *http.Request, opts *websocket.AcceptOptions) (err error) {
-	defer errd.Wrap(&err, "echo server failed")
-
-	c, err := websocket.Accept(w, r, opts)
-	if err != nil {
-		return err
-	}
-	defer c.Close(websocket.StatusInternalError, "")
-
-	err = wstest.EchoLoop(r.Context(), c)
-	return assertCloseStatus(websocket.StatusNormalClosure, err)
-}
-
-func TestGin(t *testing.T) {
-	t.Parallel()
-
-	gin.SetMode(gin.ReleaseMode)
-	r := gin.New()
-	r.GET("/", func(ginCtx *gin.Context) {
-		err := echoServer(ginCtx.Writer, ginCtx.Request, nil)
-		if err != nil {
-			t.Error(err)
-		}
-	})
-
-	s := httptest.NewServer(r)
-	defer s.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-
-	c, _, err := websocket.Dial(ctx, s.URL, nil)
-	assert.Success(t, err)
-	defer c.Close(websocket.StatusInternalError, "")
-
-	err = wsjson.Write(ctx, c, "hello")
-	assert.Success(t, err)
-
-	var v interface{}
-	err = wsjson.Read(ctx, c, &v)
-	assert.Success(t, err)
-	assert.Equal(t, "read msg", "hello", v)
-
-	err = c.Close(websocket.StatusNormalClosure, "")
-	assert.Success(t, err)
 }

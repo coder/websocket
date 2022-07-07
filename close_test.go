@@ -1,3 +1,4 @@
+//go:build !js
 // +build !js
 
 package websocket
@@ -8,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"nhooyr.io/websocket/internal/test/assert"
+	"github.com/fortytw2/websocket/internal/test/assert"
 )
 
 func TestCloseError(t *testing.T) {

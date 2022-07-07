@@ -11,4 +11,3 @@ RUN go get golang.org/x/lint/golint
 RUN go get github.com/agnivade/wasmbrowsertest
 
 RUN npm --unsafe-perm=true install -g prettier
-RUN npm --unsafe-perm=true install -g netlify-cli

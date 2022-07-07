@@ -1,3 +1,4 @@
+//go:build !js
 // +build !js
 
 package websocket
@@ -13,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"nhooyr.io/websocket/internal/test/assert"
+	"github.com/fortytw2/websocket/internal/test/assert"
 )
 
 func TestBadDials(t *testing.T) {

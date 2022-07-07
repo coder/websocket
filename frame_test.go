@@ -1,3 +1,4 @@
+//go:build !js
 // +build !js
 
 package websocket
@@ -11,12 +12,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
-	_ "unsafe"
 
-	"github.com/gobwas/ws"
-	_ "github.com/gorilla/websocket"
-
-	"nhooyr.io/websocket/internal/test/assert"
+	"github.com/fortytw2/websocket/internal/test/assert"
 )
 
 func TestHeader(t *testing.T) {
@@ -115,9 +112,6 @@ func basicMask(maskKey [4]byte, pos int, b []byte) int {
 	return pos & 3
 }
 
-//go:linkname gorillaMaskBytes github.com/gorilla/websocket.maskBytes
-func gorillaMaskBytes(key [4]byte, pos int, b []byte) int
-
 func Benchmark_mask(b *testing.B) {
 	sizes := []int{
 		2,
@@ -153,22 +147,6 @@ func Benchmark_mask(b *testing.B) {
 
 				for i := 0; i < b.N; i++ {
 					mask(key32, p)
-				}
-			},
-		},
-		{
-			name: "gorilla",
-			fn: func(b *testing.B, key [4]byte, p []byte) {
-				for i := 0; i < b.N; i++ {
-					gorillaMaskBytes(key, 0, p)
-				}
-			},
-		},
-		{
-			name: "gobwas",
-			fn: func(b *testing.B, key [4]byte, p []byte) {
-				for i := 0; i < b.N; i++ {
-					ws.Cipher(p, key, 0)
 				}
 			},
 		},
