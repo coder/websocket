@@ -1,7 +1,7 @@
 # websocket
 
 [![godoc](https://godoc.org/github.com/fortytw2/websocket?status.svg)](https://pkg.go.dev/github.com/fortytw2/websocket)
-[![coverage](https://img.shields.io/badge/coverage-88%25-success)](https://nhooyrio-websocket-coverage.netlify.app)
+[![ci](https://github.com/fortytw2/websocket/actions/workflows/ci.yaml/badge.svg)](https://github.com/fortytw2/websocket/actions/workflows/ci.yaml)
 
 websocket is a minimal and idiomatic WebSocket library for Go.
 
