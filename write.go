@@ -17,6 +17,8 @@ import (
 	"nhooyr.io/websocket/internal/errd"
 )
 
+var errClosedWriter = errors.New("cannot use closed writer")
+
 // Writer returns a writer bounded by the context that will write
 // a WebSocket message of type dataType to the connection.
 //
@@ -53,14 +55,14 @@ type msgWriter struct {
 
 func (mw *msgWriter) Write(p []byte) (int, error) {
 	if mw.closed {
-		return 0, errors.New("cannot use closed writer")
+		return 0, errClosedWriter
 	}
 	return mw.mw.Write(p)
 }
 
 func (mw *msgWriter) Close() error {
 	if mw.closed {
-		return errors.New("cannot use closed writer")
+		return errClosedWriter
 	}
 	mw.closed = true
 	return mw.mw.Close()
