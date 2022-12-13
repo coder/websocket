@@ -9,6 +9,7 @@ websocket is a minimal and idiomatic WebSocket library for Go.
 > read through and I don't believe there are any outstanding bugs. There are certainly
 > some nice to haves that I should merge in/figure out but nothing critical. I haven't
 > given up on adding new features and cleaning up the code further, just been busy.
+> Should anything critical arise, I will fix it.
 
 ## Install
 
