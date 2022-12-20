@@ -1,3 +1,4 @@
+//go:build !js
 // +build !js
 
 package websocket
@@ -226,6 +227,16 @@ func Test_verifyClientHandshake(t *testing.T) {
 				"Upgrade":               "websocket",
 				"Sec-WebSocket-Version": "13",
 				"Sec-WebSocket-Key":     xrand.Base64(16),
+			},
+			success: true,
+		},
+		{
+			name: "successSecKeyExtraSpace",
+			h: map[string]string{
+				"Connection":            "keep-alive, Upgrade",
+				"Upgrade":               "websocket",
+				"Sec-WebSocket-Version": "13",
+				"Sec-WebSocket-Key":     "   " + xrand.Base64(16) + "  ",
 			},
 			success: true,
 		},

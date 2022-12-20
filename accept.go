@@ -1,3 +1,4 @@
+//go:build !js
 // +build !js
 
 package websocket
@@ -185,6 +186,8 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) (errCode int, _
 	}
 
 	websocketSecKey := r.Header.Get("Sec-WebSocket-Key")
+	// The RFC states to remove any leading or trailing whitespace.
+	websocketSecKey = strings.TrimSpace(websocketSecKey)
 	if websocketSecKey == "" {
 		return http.StatusBadRequest, errors.New("WebSocket protocol violation: missing Sec-WebSocket-Key")
 	}
