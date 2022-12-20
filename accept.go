@@ -185,8 +185,13 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) (errCode int, _
 		return http.StatusBadRequest, fmt.Errorf("unsupported WebSocket protocol version (only 13 is supported): %q", r.Header.Get("Sec-WebSocket-Version"))
 	}
 
-	if r.Header.Get("Sec-WebSocket-Key") == "" {
+	websocketSecKey := r.Header.Get("Sec-WebSocket-Key")
+	if websocketSecKey == "" {
 		return http.StatusBadRequest, errors.New("WebSocket protocol violation: missing Sec-WebSocket-Key")
+	}
+
+	if v, err := base64.StdEncoding.DecodeString(websocketSecKey); err != nil || len(v) != 16 {
+		return http.StatusBadRequest, fmt.Errorf("WebSocket protocol violation: invalid Sec-WebSocket-Key %q, must be a 16 byte base64 encoded string", websocketSecKey)
 	}
 
 	return 0, nil

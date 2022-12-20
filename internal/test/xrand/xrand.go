@@ -2,6 +2,7 @@ package xrand
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"math/big"
 	"strings"
@@ -44,4 +45,8 @@ func Int(max int) int {
 		panic(fmt.Sprintf("failed to get random int: %v", err))
 	}
 	return int(x.Int64())
+}
+
+func Base64(n int) string {
+	return base64.StdEncoding.EncodeToString(Bytes(n))
 }
