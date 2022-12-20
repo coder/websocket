@@ -189,6 +189,14 @@ func Test_verifyClientHandshake(t *testing.T) {
 				"Connection":            "Upgrade",
 				"Upgrade":               "websocket",
 				"Sec-WebSocket-Version": "13",
+			},
+		},
+		{
+			name: "emptyWebSocketKey",
+			h: map[string]string{
+				"Connection":            "Upgrade",
+				"Upgrade":               "websocket",
+				"Sec-WebSocket-Version": "13",
 				"Sec-WebSocket-Key":     "",
 			},
 		},
@@ -208,6 +216,18 @@ func Test_verifyClientHandshake(t *testing.T) {
 				"Upgrade":               "websocket",
 				"Sec-WebSocket-Version": "13",
 				"Sec-WebSocket-Key":     "notbase64",
+			},
+		},
+		{
+			name: "extraWebSocketKey",
+			h: map[string]string{
+				"Connection":            "Upgrade",
+				"Upgrade":               "websocket",
+				"Sec-WebSocket-Version": "13",
+				// Kinda cheeky, but http headers are case-insensitive.
+				// If 2 sec keys are present, this is a failure condition.
+				"Sec-WebSocket-Key": xrand.Base64(16),
+				"sec-webSocket-key": xrand.Base64(16),
 			},
 		},
 		{
@@ -256,7 +276,7 @@ func Test_verifyClientHandshake(t *testing.T) {
 			}
 
 			for k, v := range tc.h {
-				r.Header.Set(k, v)
+				r.Header.Add(k, v)
 			}
 
 			_, err := verifyClientRequest(httptest.NewRecorder(), r)
