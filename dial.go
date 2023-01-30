@@ -157,7 +157,10 @@ func handshakeRequest(ctx context.Context, urls string, opts *DialOptions, copts
 		return nil, fmt.Errorf("unexpected url scheme: %q", u.Scheme)
 	}
 
-	req, _ := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build HTTP request: %w", err)
+	}
 	req.Header = opts.HTTPHeader.Clone()
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "websocket")

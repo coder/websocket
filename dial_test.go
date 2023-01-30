@@ -23,10 +23,11 @@ func TestBadDials(t *testing.T) {
 		t.Parallel()
 
 		testCases := []struct {
-			name string
-			url  string
-			opts *DialOptions
-			rand readerFunc
+			name   string
+			url    string
+			opts   *DialOptions
+			rand   readerFunc
+			nilCtx bool
 		}{
 			{
 				name: "badURL",
@@ -46,6 +47,11 @@ func TestBadDials(t *testing.T) {
 					return 0, io.EOF
 				},
 			},
+			{
+				name:   "nilContext",
+				url:    "http://localhost",
+				nilCtx: true,
+			},
 		}
 
 		for _, tc := range testCases {
@@ -53,8 +59,12 @@ func TestBadDials(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				t.Parallel()
 
-				ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-				defer cancel()
+				var ctx context.Context
+				var cancel func()
+				if !tc.nilCtx {
+					ctx, cancel = context.WithTimeout(context.Background(), time.Second*5)
+					defer cancel()
+				}
 
 				if tc.rand == nil {
 					tc.rand = rand.Reader.Read
