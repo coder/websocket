@@ -1,3 +1,4 @@
+//go:build !js
 // +build !js
 
 package websocket_test
@@ -16,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/duration"
 
@@ -494,19 +494,18 @@ func echoServer(w http.ResponseWriter, r *http.Request, opts *websocket.AcceptOp
 	return assertCloseStatus(websocket.StatusNormalClosure, err)
 }
 
-func TestGin(t *testing.T) {
+func TestEndToEnd(t *testing.T) {
 	t.Parallel()
 
-	gin.SetMode(gin.ReleaseMode)
-	r := gin.New()
-	r.GET("/", func(ginCtx *gin.Context) {
-		err := echoServer(ginCtx.Writer, ginCtx.Request, nil)
+	mux := http.NewServeMux()
+	mux.Handle("/", http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		err := echoServer(rw, r, nil)
 		if err != nil {
 			t.Error(err)
 		}
-	})
+	}))
 
-	s := httptest.NewServer(r)
+	s := httptest.NewServer(mux)
 	defer s.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
