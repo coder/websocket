@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"errors"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -98,7 +98,7 @@ func (cs *chatServer) publishHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body := http.MaxBytesReader(w, r.Body, 8192)
-	msg, err := ioutil.ReadAll(body)
+	msg, err := io.ReadAll(body)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
 		return

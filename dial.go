@@ -10,7 +10,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -114,9 +113,9 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 			})
 			defer timer.Stop()
 
-			b, _ := ioutil.ReadAll(r)
+			b, _ := io.ReadAll(r)
 			respBody.Close()
-			resp.Body = ioutil.NopCloser(bytes.NewReader(b))
+			resp.Body = io.NopCloser(bytes.NewReader(b))
 		}
 	}()
 
