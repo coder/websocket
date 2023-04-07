@@ -21,7 +21,7 @@ func EchoLoop(ctx context.Context, c *websocket.Conn) error {
 
 	c.SetReadLimit(1 << 30)
 
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
 	defer cancel()
 
 	b := make([]byte, 32<<10)

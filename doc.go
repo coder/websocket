@@ -1,3 +1,4 @@
+//go:build !js
 // +build !js
 
 // Package websocket implements the RFC 6455 WebSocket protocol.
@@ -16,7 +17,7 @@
 //
 // More documentation at https://nhooyr.io/websocket.
 //
-// Wasm
+// # Wasm
 //
 // The client side supports compiling to Wasm.
 // It wraps the WebSocket browser API.
@@ -25,8 +26,8 @@
 //
 // Some important caveats to be aware of:
 //
-//  - Accept always errors out
-//  - Conn.Ping is no-op
-//  - HTTPClient, HTTPHeader and CompressionMode in DialOptions are no-op
-//  - *http.Response from Dial is &http.Response{} with a 101 status code on success
+//   - Accept always errors out
+//   - Conn.Ping is no-op
+//   - HTTPClient, HTTPHeader and CompressionMode in DialOptions are no-op
+//   - *http.Response from Dial is &http.Response{} with a 101 status code on success
 package websocket // import "nhooyr.io/websocket"

@@ -1,3 +1,4 @@
+//go:build !js
 // +build !js
 
 package websocket_test
@@ -33,6 +34,12 @@ var excludedAutobahnCases = []string{
 
 var autobahnCases = []string{"*"}
 
+// Used to run individual test cases. autobahnCases runs only those cases matched
+// and not excluded by excludedAutobahnCases. Adding cases here means excludedAutobahnCases
+// is niled.
+// TODO:
+var forceAutobahnCases = []string{}
+
 func TestAutobahn(t *testing.T) {
 	t.Parallel()
 
@@ -43,16 +50,18 @@ func TestAutobahn(t *testing.T) {
 	if os.Getenv("AUTOBAHN") == "fast" {
 		// These are the slow tests.
 		excludedAutobahnCases = append(excludedAutobahnCases,
-			"9.*", "13.*", "12.*",
+			"9.*", "12.*", "13.*",
 		)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*15)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
 	defer cancel()
 
-	wstestURL, closeFn, err := wstestClientServer(ctx)
+	wstestURL, closeFn, err := wstestServer(ctx)
 	assert.Success(t, err)
-	defer closeFn()
+	defer func() {
+		assert.Success(t, closeFn())
+	}()
 
 	err = waitWS(ctx, wstestURL)
 	assert.Success(t, err)
@@ -100,17 +109,24 @@ func waitWS(ctx context.Context, url string) error {
 	return ctx.Err()
 }
 
-func wstestClientServer(ctx context.Context) (url string, closeFn func(), err error) {
+// TODO: Let docker pick the port and use docker port to find it.
+// Does mean we can't use -i but that's fine.
+func wstestServer(ctx context.Context) (url string, closeFn func() error, err error) {
 	serverAddr, err := unusedListenAddr()
+	if err != nil {
+		return "", nil, err
+	}
+	_, serverPort, err := net.SplitHostPort(serverAddr)
 	if err != nil {
 		return "", nil, err
 	}
 
 	url = "ws://" + serverAddr
+	const outDir = "ci/out/wstestClientReports"
 
 	specFile, err := tempJSONFile(map[string]interface{}{
 		"url":           url,
-		"outdir":        "ci/out/wstestClientReports",
+		"outdir":        outDir,
 		"cases":         autobahnCases,
 		"exclude-cases": excludedAutobahnCases,
 	})
@@ -118,26 +134,48 @@ func wstestClientServer(ctx context.Context) (url string, closeFn func(), err er
 		return "", nil, fmt.Errorf("failed to write spec: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*15)
+	ctx, cancel := context.WithTimeout(ctx, time.Hour)
 	defer func() {
 		if err != nil {
 			cancel()
 		}
 	}()
 
-	args := []string{"--mode", "fuzzingserver", "--spec", specFile,
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", nil, err
+	}
+
+	var args []string
+	args = append(args, "run", "-i", "--rm",
+		"-v", fmt.Sprintf("%s:%[1]s", specFile),
+		"-v", fmt.Sprintf("%s/ci:/ci", wd),
+		fmt.Sprintf("-p=%s:%s", serverAddr, serverPort),
+		"crossbario/autobahn-testsuite",
+	)
+	args = append(args, "wstest", "--mode", "fuzzingserver", "--spec", specFile,
 		// Disables some server that runs as part of fuzzingserver mode.
 		// See https://github.com/crossbario/autobahn-testsuite/blob/058db3a36b7c3a1edf68c282307c6b899ca4857f/autobahntestsuite/autobahntestsuite/wstest.py#L124
 		"--webport=0",
-	}
-	wstest := exec.CommandContext(ctx, "wstest", args...)
+	)
+	fmt.Println(strings.Join(args, " "))
+	// TODO: pull image in advance
+	wstest := exec.CommandContext(ctx, "docker", args...)
+	// TODO: log to *testing.T
+	wstest.Stdout = os.Stdout
+	wstest.Stderr = os.Stderr
 	err = wstest.Start()
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to start wstest: %w", err)
 	}
 
-	return url, func() {
-		wstest.Process.Kill()
+	// TODO: kill
+	return url, func() error {
+		err = wstest.Process.Kill()
+		if err != nil {
+			return fmt.Errorf("failed to kill wstest: %w", err)
+		}
+		return nil
 	}, nil
 }
 
