@@ -90,14 +90,6 @@ c.Close(websocket.StatusNormalClosure, "")
 
 ## Comparison
 
-### gorilla/websocket
-
-Advantages of [gorilla/websocket](https://github.com/gorilla/websocket):
-
-- Mature and widely used
-- [Prepared writes](https://pkg.go.dev/github.com/gorilla/websocket#PreparedMessage)
-- Configurable [buffer sizes](https://pkg.go.dev/github.com/gorilla/websocket#hdr-Buffers)
-
 Advantages of nhooyr.io/websocket:
 
 - Minimal and idiomatic API
@@ -121,6 +113,12 @@ Advantages of nhooyr.io/websocket:
   - We use [klauspost/compress](https://github.com/klauspost/compress) for much lower memory usage ([gorilla/websocket#203](https://github.com/gorilla/websocket/issues/203))
 - [CloseRead](https://pkg.go.dev/nhooyr.io/websocket#Conn.CloseRead) helper ([gorilla/websocket#492](https://github.com/gorilla/websocket/issues/492))
 - Actively maintained ([gorilla/websocket#370](https://github.com/gorilla/websocket/issues/370))
+
+### gorilla/websocket
+
+[gorilla/websocket](https://github.com/gorilla/websocket) is deprecated.
+See [Gorilla project status](https://github.com/gorilla/.github/blob/master/profile/README.md).
+
 
 #### golang.org/x/net/websocket
 
