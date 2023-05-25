@@ -553,3 +553,26 @@ func assertClose(tb testing.TB, c *websocket.Conn) {
 	err := c.Close(websocket.StatusNormalClosure, "")
 	assert.Success(tb, err)
 }
+
+func TestConcurrentClosePing(t *testing.T) {
+	t.Parallel()
+	for i := 0; i < 64; i++ {
+		func() {
+			c1, c2 := wstest.Pipe(nil, nil)
+			defer c1.CloseNow()
+			defer c2.CloseNow()
+			c1.CloseRead(context.Background())
+			c2.CloseRead(context.Background())
+			go func() {
+				for range time.Tick(time.Millisecond) {
+					if err := c1.Ping(context.Background()); err != nil {
+						return
+					}
+				}
+			}()
+
+			time.Sleep(10 * time.Millisecond)
+			assert.Success(t, c1.Close(websocket.StatusNormalClosure, ""))
+		}()
+	}
+}
