@@ -286,6 +286,13 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 
 	switch h.opcode {
 	case opPing:
+		c.closeMu.Lock()
+		wroteClose := c.wroteClose
+		c.closeMu.Unlock()
+		if wroteClose {
+			// Cannot respond to ping with a pong because we already sent a close frame.
+			return nil
+		}
 		return c.writeControl(ctx, opPong, b)
 	case opPong:
 		c.activePingsMu.Lock()
