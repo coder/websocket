@@ -283,7 +283,10 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 		pong, ok := c.activePings[string(b)]
 		c.activePingsMu.Unlock()
 		if ok {
-			close(pong)
+			select {
+			case pong <- struct{}{}:
+			default:
+			}
 		}
 		return nil
 	}
