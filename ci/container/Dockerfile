@@ -4,11 +4,11 @@ RUN apt-get update
 RUN apt-get install -y npm shellcheck chromium
 
 ENV GO111MODULE=on
-RUN go get golang.org/x/tools/cmd/goimports
-RUN go get mvdan.cc/sh/v3/cmd/shfmt
-RUN go get golang.org/x/tools/cmd/stringer
-RUN go get golang.org/x/lint/golint
-RUN go get github.com/agnivade/wasmbrowsertest
+RUN go install golang.org/x/tools/cmd/goimports@latest
+RUN go install mvdan.cc/sh/v3/cmd/shfmt@latest
+RUN go install golang.org/x/tools/cmd/stringer@latest
+RUN go install golang.org/x/lint/golint@latest
+RUN go install github.com/agnivade/wasmbrowsertest@latest
 
 RUN npm --unsafe-perm=true install -g prettier
 RUN npm --unsafe-perm=true install -g netlify-cli
