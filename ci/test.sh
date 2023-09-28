@@ -1,25 +1,14 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
+cd -- "$(dirname "$0")/.."
 
-main() {
-  cd "$(dirname "$0")/.."
+go install github.com/agnivade/wasmbrowsertest@latest
+go test --race --timeout=1h --covermode=atomic --coverprofile=ci/out/coverage.prof --coverpkg=./... "$@" ./...
+sed -i.bak '/stringer\.go/d' ci/out/coverage.prof
+sed -i.bak '/nhooyr.io\/websocket\/internal\/test/d' ci/out/coverage.prof
+sed -i.bak '/examples/d' ci/out/coverage.prof
 
-  go test -timeout=30m -covermode=atomic -coverprofile=ci/out/coverage.prof -coverpkg=./... "$@" ./...
-  sed -i.bak '/stringer\.go/d' ci/out/coverage.prof
-  sed -i.bak '/nhooyr.io\/websocket\/internal\/test/d' ci/out/coverage.prof
-  sed -i.bak '/examples/d' ci/out/coverage.prof
+# Last line is the total coverage.
+go tool cover -func ci/out/coverage.prof | tail -n1
 
-  # Last line is the total coverage.
-  go tool cover -func ci/out/coverage.prof | tail -n1
-
-  go tool cover -html=ci/out/coverage.prof -o=ci/out/coverage.html
-
-  if [[ ${CI-} && ${GITHUB_REF-} == *master ]]; then
-    local deployDir
-    deployDir="$(mktemp -d)"
-    cp ci/out/coverage.html "$deployDir/index.html"
-    netlify deploy --prod "--dir=$deployDir"
-  fi
-}
-
-main "$@"
+go tool cover -html=ci/out/coverage.prof -o=ci/out/coverage.html
