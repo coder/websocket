@@ -112,6 +112,8 @@ func waitWS(ctx context.Context, url string) error {
 // TODO: Let docker pick the port and use docker port to find it.
 // Does mean we can't use -i but that's fine.
 func wstestServer(ctx context.Context) (url string, closeFn func() error, err error) {
+	defer errd.Wrap(&err, "failed to start autobahn wstest server")
+
 	serverAddr, err := unusedListenAddr()
 	if err != nil {
 		return "", nil, err
@@ -141,6 +143,15 @@ func wstestServer(ctx context.Context) (url string, closeFn func() error, err er
 		}
 	}()
 
+	dockerPull := exec.CommandContext(ctx, "docker", "pull", "crossbario/autobahn-testsuite")
+	// TODO: log to *testing.T
+	dockerPull.Stdout = os.Stdout
+	dockerPull.Stderr = os.Stderr
+	err = dockerPull.Run()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to pull docker image: %w", err)
+	}
+
 	wd, err := os.Getwd()
 	if err != nil {
 		return "", nil, err
@@ -159,7 +170,6 @@ func wstestServer(ctx context.Context) (url string, closeFn func() error, err er
 		"--webport=0",
 	)
 	fmt.Println(strings.Join(args, " "))
-	// TODO: pull image in advance
 	wstest := exec.CommandContext(ctx, "docker", args...)
 	// TODO: log to *testing.T
 	wstest.Stdout = os.Stdout
