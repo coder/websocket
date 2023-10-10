@@ -1,6 +1,6 @@
 module nhooyr.io/websocket
 
-go 1.18
+go 1.19
 
 require (
 	github.com/gin-gonic/gin v1.9.1
