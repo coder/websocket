@@ -32,8 +32,7 @@ jobs:
         with:
           go-version-file: ./go.mod
       - run: ./ci/test.sh
-      - uses: actions/upload-artifact@v2
-        if: always()
+      - uses: actions/upload-artifact@v3
         with:
           name: coverage.html
           path: ./ci/out/coverage.html
