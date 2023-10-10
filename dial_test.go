@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/rand"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -76,7 +75,7 @@ func TestBadDials(t *testing.T) {
 		_, _, err := Dial(ctx, "ws://example.com", &DialOptions{
 			HTTPClient: mockHTTPClient(func(*http.Request) (*http.Response, error) {
 				return &http.Response{
-					Body: ioutil.NopCloser(strings.NewReader("hi")),
+					Body: io.NopCloser(strings.NewReader("hi")),
 				}, nil
 			}),
 		})
@@ -98,7 +97,7 @@ func TestBadDials(t *testing.T) {
 			return &http.Response{
 				StatusCode: http.StatusSwitchingProtocols,
 				Header:     h,
-				Body:       ioutil.NopCloser(strings.NewReader("hi")),
+				Body:       io.NopCloser(strings.NewReader("hi")),
 			}, nil
 		}
 

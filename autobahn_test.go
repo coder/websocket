@@ -7,7 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -202,7 +202,7 @@ func wstestCaseCount(ctx context.Context, url string) (cases int, err error) {
 	if err != nil {
 		return 0, err
 	}
-	b, err := ioutil.ReadAll(r)
+	b, err := io.ReadAll(r)
 	if err != nil {
 		return 0, err
 	}
@@ -217,7 +217,7 @@ func wstestCaseCount(ctx context.Context, url string) (cases int, err error) {
 }
 
 func checkWSTestIndex(t *testing.T, path string) {
-	wstestOut, err := ioutil.ReadFile(path)
+	wstestOut, err := os.ReadFile(path)
 	assert.Success(t, err)
 
 	var indexJSON map[string]map[string]struct {
@@ -262,7 +262,7 @@ func unusedListenAddr() (_ string, err error) {
 }
 
 func tempJSONFile(v interface{}) (string, error) {
-	f, err := ioutil.TempFile("", "temp.json")
+	f, err := os.CreateTemp("", "temp.json")
 	if err != nil {
 		return "", fmt.Errorf("temp file: %w", err)
 	}

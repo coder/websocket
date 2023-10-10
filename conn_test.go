@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -170,7 +169,7 @@ func TestConn(t *testing.T) {
 			return n2.Close()
 		})
 
-		b, err := ioutil.ReadAll(n1)
+		b, err := io.ReadAll(n1)
 		assert.Success(t, err)
 
 		_, err = n1.Read(nil)
@@ -198,7 +197,7 @@ func TestConn(t *testing.T) {
 			return err
 		})
 
-		_, err := ioutil.ReadAll(n1)
+		_, err := io.ReadAll(n1)
 		assert.Contains(t, err, `unexpected frame type read (expected MessageBinary): MessageText`)
 
 		select {
