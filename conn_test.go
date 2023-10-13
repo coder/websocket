@@ -17,8 +17,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang/protobuf/ptypes"
-	"github.com/golang/protobuf/ptypes/duration"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/errd"
@@ -27,7 +25,6 @@ import (
 	"nhooyr.io/websocket/internal/test/xrand"
 	"nhooyr.io/websocket/internal/xsync"
 	"nhooyr.io/websocket/wsjson"
-	"nhooyr.io/websocket/wspb"
 )
 
 func TestConn(t *testing.T) {
@@ -263,24 +260,6 @@ func TestConn(t *testing.T) {
 		case <-tt.ctx.Done():
 			t.Fatal(tt.ctx.Err())
 		}
-
-		err = c1.Close(websocket.StatusNormalClosure, "")
-		assert.Success(t, err)
-	})
-
-	t.Run("wspb", func(t *testing.T) {
-		tt, c1, c2 := newConnTest(t, nil, nil)
-
-		tt.goEchoLoop(c2)
-
-		exp := ptypes.DurationProto(100)
-		err := wspb.Write(tt.ctx, c1, exp)
-		assert.Success(t, err)
-
-		act := &duration.Duration{}
-		err = wspb.Read(tt.ctx, c1, act)
-		assert.Success(t, err)
-		assert.Equal(t, "read msg", exp, act)
 
 		err = c1.Close(websocket.StatusNormalClosure, "")
 		assert.Success(t, err)
