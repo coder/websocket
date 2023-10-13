@@ -33,8 +33,13 @@ import (
 // where only the reading/writing goroutines are interrupted but the connection
 // is kept alive.
 //
-// The Addr methods will return a mock net.Addr that returns "websocket" for Network
-// and "websocket/unknown-addr" for String.
+// The Addr methods will return the real addresses for connections obtained
+// from websocket.Accept. But for connections obtained from websocket.Dial, a mock net.Addr
+// will be returned that gives "websocket" for Network() and "websocket/unknown-addr" for
+// String(). This is because websocket.Dial only exposes a io.ReadWriteCloser instead of the
+// full net.Conn to us.
+//
+// When running as WASM, the Addr methods will always return the mock address described above.
 //
 // A received StatusNormalClosure or StatusGoingAway close frame will be translated to
 // io.EOF when reading.
@@ -179,14 +184,6 @@ func (a websocketAddr) Network() string {
 
 func (a websocketAddr) String() string {
 	return "websocket/unknown-addr"
-}
-
-func (nc *netConn) RemoteAddr() net.Addr {
-	return websocketAddr{}
-}
-
-func (nc *netConn) LocalAddr() net.Addr {
-	return websocketAddr{}
 }
 
 func (nc *netConn) SetDeadline(t time.Time) error {

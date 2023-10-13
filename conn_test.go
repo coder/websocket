@@ -155,8 +155,8 @@ func TestConn(t *testing.T) {
 		n1.SetDeadline(time.Time{})
 
 		assert.Equal(t, "remote addr", n1.RemoteAddr(), n1.LocalAddr())
-		assert.Equal(t, "remote addr string", "websocket/unknown-addr", n1.RemoteAddr().String())
-		assert.Equal(t, "remote addr network", "websocket", n1.RemoteAddr().Network())
+		assert.Equal(t, "remote addr string", "pipe", n1.RemoteAddr().String())
+		assert.Equal(t, "remote addr network", "pipe", n1.RemoteAddr().Network())
 
 		errs := xsync.Go(func() error {
 			_, err := n2.Write([]byte("hello"))
