@@ -166,7 +166,7 @@ func handshakeRequest(ctx context.Context, urls string, opts *DialOptions, copts
 
 	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("http.NewRequestWithContext failed: %w", err)
+		return nil, fmt.Errorf("failed to create new http request: %w", err)
 	}
 	req.Header = opts.HTTPHeader.Clone()
 	req.Header.Set("Connection", "Upgrade")
