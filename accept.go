@@ -269,6 +269,7 @@ func acceptDeflate(w http.ResponseWriter, ext websocketExtension, mode Compressi
 
 		if strings.HasPrefix(p, "client_max_window_bits") {
 			// We cannot adjust the read sliding window so cannot make use of this.
+			// By not responding to it, we tell the client we're ignoring it.
 			continue
 		}
 

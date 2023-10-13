@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"nhooyr.io/websocket/internal/errd"
+	"nhooyr.io/websocket/internal/util"
 	"nhooyr.io/websocket/internal/xsync"
 )
 
@@ -101,13 +102,20 @@ func newMsgReader(c *Conn) *msgReader {
 
 func (mr *msgReader) resetFlate() {
 	if mr.flateContextTakeover() {
+		if mr.dict == nil {
+			mr.dict = &slidingWindow{}
+		}
 		mr.dict.init(32768)
 	}
 	if mr.flateBufio == nil {
 		mr.flateBufio = getBufioReader(mr.readFunc)
 	}
 
-	mr.flateReader = getFlateReader(mr.flateBufio, mr.dict.buf)
+	if mr.flateContextTakeover() {
+		mr.flateReader = getFlateReader(mr.flateBufio, mr.dict.buf)
+	} else {
+		mr.flateReader = getFlateReader(mr.flateBufio, nil)
+	}
 	mr.limitReader.r = mr.flateReader
 	mr.flateTail.Reset(deflateMessageTail)
 }
@@ -122,7 +130,10 @@ func (mr *msgReader) putFlateReader() {
 func (mr *msgReader) close() {
 	mr.c.readMu.forceLock()
 	mr.putFlateReader()
-	mr.dict.close()
+	if mr.dict != nil {
+		mr.dict.close()
+		mr.dict = nil
+	}
 	if mr.flateBufio != nil {
 		putBufioReader(mr.flateBufio)
 	}
@@ -348,14 +359,14 @@ type msgReader struct {
 	flateBufio  *bufio.Reader
 	flateTail   strings.Reader
 	limitReader *limitReader
-	dict        slidingWindow
+	dict        *slidingWindow
 
 	fin           bool
 	payloadLength int64
 	maskKey       uint32
 
-	// readerFunc(mr.Read) to avoid continuous allocations.
-	readFunc readerFunc
+	// util.ReaderFunc(mr.Read) to avoid continuous allocations.
+	readFunc util.ReaderFunc
 }
 
 func (mr *msgReader) reset(ctx context.Context, h header) {
@@ -483,10 +494,4 @@ func (lr *limitReader) Read(p []byte) (int, error) {
 		lr.n = 0
 	}
 	return n, err
-}
-
-type readerFunc func(p []byte) (int, error)
-
-func (f readerFunc) Read(p []byte) (int, error) {
-	return f(p)
 }

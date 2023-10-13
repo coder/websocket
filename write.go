@@ -16,6 +16,7 @@ import (
 	"compress/flate"
 
 	"nhooyr.io/websocket/internal/errd"
+	"nhooyr.io/websocket/internal/util"
 )
 
 // Writer returns a writer bounded by the context that will write
@@ -93,7 +94,7 @@ func newMsgWriterState(c *Conn) *msgWriterState {
 func (mw *msgWriterState) ensureFlate() {
 	if mw.trimWriter == nil {
 		mw.trimWriter = &trimLastFourBytesWriter{
-			w: writerFunc(mw.write),
+			w: util.WriterFunc(mw.write),
 		}
 	}
 
@@ -380,17 +381,11 @@ func (c *Conn) writeFramePayload(p []byte) (n int, err error) {
 	return n, nil
 }
 
-type writerFunc func(p []byte) (int, error)
-
-func (f writerFunc) Write(p []byte) (int, error) {
-	return f(p)
-}
-
 // extractBufioWriterBuf grabs the []byte backing a *bufio.Writer
 // and returns it.
 func extractBufioWriterBuf(bw *bufio.Writer, w io.Writer) []byte {
 	var writeBuf []byte
-	bw.Reset(writerFunc(func(p2 []byte) (int, error) {
+	bw.Reset(util.WriterFunc(func(p2 []byte) (int, error) {
 		writeBuf = p2[:cap(p2)]
 		return len(p2), nil
 	}))

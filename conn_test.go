@@ -267,7 +267,7 @@ func TestConn(t *testing.T) {
 
 	t.Run("HTTPClient.Timeout", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, &websocket.DialOptions{
-			HTTPClient: &http.Client{Timeout: time.Second*5},
+			HTTPClient: &http.Client{Timeout: time.Second * 5},
 		}, nil)
 
 		tt.goEchoLoop(c2)
@@ -458,7 +458,7 @@ func BenchmarkConn(b *testing.B) {
 
 				typ, r, err := c1.Reader(bb.ctx)
 				if err != nil {
-					b.Fatal(err)
+					b.Fatal(i, err)
 				}
 				if websocket.MessageText != typ {
 					assert.Equal(b, "data type", websocket.MessageText, typ)

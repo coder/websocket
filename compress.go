@@ -31,7 +31,7 @@ const (
 	CompressionDisabled CompressionMode = iota
 
 	// CompressionContextTakeover uses a 32 kB sliding window and flate.Writer per connection.
-	// It reusing the sliding window from previous messages.
+	// It reuses the sliding window from previous messages.
 	// As most WebSocket protocols are repetitive, this can be very efficient.
 	// It carries an overhead of 32 kB + 1.2 MB for every connection compared to CompressionNoContextTakeover.
 	//
@@ -80,7 +80,7 @@ func (copts *compressionOptions) setHeader(h http.Header) {
 // They are removed when sending to avoid the overhead as
 // WebSocket framing tell's when the message has ended but then
 // we need to add them back otherwise flate.Reader keeps
-// trying to return more bytes.
+// trying to read more bytes.
 const deflateMessageTail = "\x00\x00\xff\xff"
 
 type trimLastFourBytesWriter struct {
@@ -201,23 +201,19 @@ func (sw *slidingWindow) init(n int) {
 	}
 
 	p := slidingWindowPool(n)
-	buf, ok := p.Get().(*[]byte)
+	sw2, ok := p.Get().(*slidingWindow)
 	if ok {
-		sw.buf = (*buf)[:0]
+		*sw = *sw2
 	} else {
 		sw.buf = make([]byte, 0, n)
 	}
 }
 
 func (sw *slidingWindow) close() {
-	if sw.buf == nil {
-		return
-	}
-
+	sw.buf = sw.buf[:0]
 	swPoolMu.Lock()
-	swPool[cap(sw.buf)].Put(&sw.buf)
+	swPool[cap(sw.buf)].Put(sw)
 	swPoolMu.Unlock()
-	sw.buf = nil
 }
 
 func (sw *slidingWindow) write(p []byte) {

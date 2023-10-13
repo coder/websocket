@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"nhooyr.io/websocket/internal/test/assert"
+	"nhooyr.io/websocket/internal/util"
 )
 
 func TestBadDials(t *testing.T) {
@@ -27,7 +28,7 @@ func TestBadDials(t *testing.T) {
 			name   string
 			url    string
 			opts   *DialOptions
-			rand   readerFunc
+			rand   util.ReaderFunc
 			nilCtx bool
 		}{
 			{
