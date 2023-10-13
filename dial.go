@@ -59,12 +59,13 @@ func (opts *DialOptions) cloneWithDefaults(ctx context.Context) (context.Context
 	}
 	if o.HTTPClient == nil {
 		o.HTTPClient = http.DefaultClient
-	} else if opts.HTTPClient.Timeout > 0 {
-		ctx, cancel = context.WithTimeout(ctx, opts.HTTPClient.Timeout)
+	}
+	if o.HTTPClient.Timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, o.HTTPClient.Timeout)
 
-		newClient := *opts.HTTPClient
+		newClient := *o.HTTPClient
 		newClient.Timeout = 0
-		opts.HTTPClient = &newClient
+		o.HTTPClient = &newClient
 	}
 	if o.HTTPHeader == nil {
 		o.HTTPHeader = http.Header{}

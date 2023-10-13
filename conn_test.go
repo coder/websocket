@@ -264,6 +264,37 @@ func TestConn(t *testing.T) {
 		err = c1.Close(websocket.StatusNormalClosure, "")
 		assert.Success(t, err)
 	})
+
+	t.Run("HTTPClient.Timeout", func(t *testing.T) {
+		tt, c1, c2 := newConnTest(t, &websocket.DialOptions{
+			HTTPClient: &http.Client{Timeout: time.Second*5},
+		}, nil)
+
+		tt.goEchoLoop(c2)
+
+		c1.SetReadLimit(1 << 30)
+
+		exp := xrand.String(xrand.Int(131072))
+
+		werr := xsync.Go(func() error {
+			return wsjson.Write(tt.ctx, c1, exp)
+		})
+
+		var act interface{}
+		err := wsjson.Read(tt.ctx, c1, &act)
+		assert.Success(t, err)
+		assert.Equal(t, "read msg", exp, act)
+
+		select {
+		case err := <-werr:
+			assert.Success(t, err)
+		case <-tt.ctx.Done():
+			t.Fatal(tt.ctx.Err())
+		}
+
+		err = c1.Close(websocket.StatusNormalClosure, "")
+		assert.Success(t, err)
+	})
 }
 
 func TestWasm(t *testing.T) {
