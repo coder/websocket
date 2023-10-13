@@ -8,8 +8,8 @@ import (
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/bpool"
-	"nhooyr.io/websocket/internal/util"
 	"nhooyr.io/websocket/internal/errd"
+	"nhooyr.io/websocket/internal/util"
 )
 
 // Read reads a JSON message from c into v.
