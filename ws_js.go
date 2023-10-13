@@ -40,6 +40,7 @@ const (
 
 // Conn provides a wrapper around the browser WebSocket API.
 type Conn struct {
+	noCopy
 	ws wsjs.WebSocket
 
 	// read limit for a message in bytes.
@@ -563,3 +564,6 @@ func (m *mu) unlock() {
 	default:
 	}
 }
+
+type noCopy struct{}
+func (*noCopy) Lock() {}
