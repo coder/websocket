@@ -5,24 +5,14 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
-// Diff returns a human readable diff between v1 and v2
-func Diff(v1, v2 interface{}) string {
-	return cmp.Diff(v1, v2, cmpopts.EquateErrors(), cmp.Exporter(func(r reflect.Type) bool {
-		return true
-	}))
-}
-
 // Equal asserts exp == act.
-func Equal(t testing.TB, name string, exp, act interface{}) {
+func Equal(t testing.TB, name string, exp, got interface{}) {
 	t.Helper()
 
-	if diff := Diff(exp, act); diff != "" {
-		t.Fatalf("unexpected %v: %v", name, diff)
+	if !reflect.DeepEqual(exp, got) {
+		t.Fatalf("unexpected %v: expected %#v but got %#v", name, exp, got)
 	}
 }
 

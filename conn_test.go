@@ -1,11 +1,11 @@
 //go:build !js
-// +build !js
 
 package websocket_test
 
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,8 +15,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/gin-gonic/gin"
 
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/errd"
@@ -140,7 +138,9 @@ func TestConn(t *testing.T) {
 		defer cancel()
 
 		err = c1.Write(ctx, websocket.MessageText, []byte("x"))
-		assert.Equal(t, "write error", context.DeadlineExceeded, err)
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("unexpected error: %#v", err)
+		}
 	})
 
 	t.Run("netConn", func(t *testing.T) {
@@ -481,38 +481,4 @@ func echoServer(w http.ResponseWriter, r *http.Request, opts *websocket.AcceptOp
 
 	err = wstest.EchoLoop(r.Context(), c)
 	return assertCloseStatus(websocket.StatusNormalClosure, err)
-}
-
-func TestGin(t *testing.T) {
-	t.Parallel()
-
-	gin.SetMode(gin.ReleaseMode)
-	r := gin.New()
-	r.GET("/", func(ginCtx *gin.Context) {
-		err := echoServer(ginCtx.Writer, ginCtx.Request, nil)
-		if err != nil {
-			t.Error(err)
-		}
-	})
-
-	s := httptest.NewServer(r)
-	defer s.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-
-	c, _, err := websocket.Dial(ctx, s.URL, nil)
-	assert.Success(t, err)
-	defer c.Close(websocket.StatusInternalError, "")
-
-	err = wsjson.Write(ctx, c, "hello")
-	assert.Success(t, err)
-
-	var v interface{}
-	err = wsjson.Read(ctx, c, &v)
-	assert.Success(t, err)
-	assert.Equal(t, "read msg", "hello", v)
-
-	err = c.Close(websocket.StatusNormalClosure, "")
-	assert.Success(t, err)
 }

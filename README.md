@@ -39,9 +39,9 @@ go get nhooyr.io/websocket
 ## Examples
 
 For a production quality example that demonstrates the complete API, see the
-[echo example](./examples/echo).
+[echo example](./internal/examples/echo).
 
-For a full stack example, see the [chat example](./examples/chat).
+For a full stack example, see the [chat example](./internal/examples/chat).
 
 ### Server
 

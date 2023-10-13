@@ -12,3 +12,12 @@ sed -i.bak '/examples/d' ci/out/coverage.prof
 go tool cover -func ci/out/coverage.prof | tail -n1
 
 go tool cover -html=ci/out/coverage.prof -o=ci/out/coverage.html
+
+(
+  cd ./internal/examples
+  go test "$@" ./...
+)
+(
+  cd ./internal/thirdparty
+  go test "$@" ./...
+)

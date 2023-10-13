@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/internal/test/assert"
 	"nhooyr.io/websocket/internal/test/xrand"
 	"nhooyr.io/websocket/internal/xsync"
 )
@@ -76,7 +75,7 @@ func Echo(ctx context.Context, c *websocket.Conn, max int) error {
 	}
 
 	if !bytes.Equal(msg, act) {
-		return fmt.Errorf("unexpected msg read: %v", assert.Diff(msg, act))
+		return fmt.Errorf("unexpected msg read: %#v", act)
 	}
 
 	return nil
