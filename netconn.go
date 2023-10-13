@@ -141,6 +141,19 @@ func (nc *netConn) Read(p []byte) (int, error) {
 	nc.readMu.forceLock()
 	defer nc.readMu.unlock()
 
+	for {
+		n, err := nc.read(p)
+		if err != nil {
+			return n, err
+		}
+		if n == 0 {
+			continue
+		}
+		return n, nil
+	}
+}
+
+func (nc *netConn) read(p []byte) (int, error) {
 	if atomic.LoadInt64(&nc.readExpired) == 1 {
 		return 0, fmt.Errorf("failed to read: %w", context.DeadlineExceeded)
 	}
