@@ -119,15 +119,13 @@ func (c *Conn) closeHandshake(code StatusCode, reason string) (err error) {
 	return nil
 }
 
-var errAlreadyWroteClose = errors.New("already wrote close")
-
 func (c *Conn) writeClose(code StatusCode, reason string) error {
 	c.closeMu.Lock()
 	wroteClose := c.wroteClose
 	c.wroteClose = true
 	c.closeMu.Unlock()
 	if wroteClose {
-		return errAlreadyWroteClose
+		return errClosed
 	}
 
 	ce := CloseError{
