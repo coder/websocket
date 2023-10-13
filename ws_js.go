@@ -18,6 +18,26 @@ import (
 	"nhooyr.io/websocket/internal/xsync"
 )
 
+// opcode represents a WebSocket opcode.
+type opcode int
+
+// https://tools.ietf.org/html/rfc6455#section-11.8.
+const (
+	opContinuation opcode = iota
+	opText
+	opBinary
+	// 3 - 7 are reserved for further non-control frames.
+	_
+	_
+	_
+	_
+	_
+	opClose
+	opPing
+	opPong
+	// 11-16 are reserved for further control frames.
+)
+
 // Conn provides a wrapper around the browser WebSocket API.
 type Conn struct {
 	ws wsjs.WebSocket
@@ -302,7 +322,7 @@ func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 // It buffers the entire message in memory and then sends it when the writer
 // is closed.
 func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, error) {
-	return writer{
+	return &writer{
 		c:   c,
 		ctx: ctx,
 		typ: typ,
@@ -320,7 +340,7 @@ type writer struct {
 	b *bytes.Buffer
 }
 
-func (w writer) Write(p []byte) (int, error) {
+func (w *writer) Write(p []byte) (int, error) {
 	if w.closed {
 		return 0, errors.New("cannot write to closed writer")
 	}
@@ -331,7 +351,7 @@ func (w writer) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-func (w writer) Close() error {
+func (w *writer) Close() error {
 	if w.closed {
 		return errors.New("cannot close closed writer")
 	}

@@ -55,7 +55,7 @@ func TestHeader(t *testing.T) {
 
 		r := rand.New(rand.NewSource(time.Now().UnixNano()))
 		randBool := func() bool {
-			return r.Intn(1) == 0
+			return r.Intn(2) == 0
 		}
 
 		for i := 0; i < 10000; i++ {
@@ -67,8 +67,10 @@ func TestHeader(t *testing.T) {
 				opcode: opcode(r.Intn(16)),
 
 				masked:        randBool(),
-				maskKey:       r.Uint32(),
 				payloadLength: r.Int63(),
+			}
+			if h.masked {
+				h.maskKey = r.Uint32()
 			}
 
 			testHeader(t, h)

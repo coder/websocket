@@ -38,7 +38,7 @@ var autobahnCases = []string{"*"}
 // and not excluded by excludedAutobahnCases. Adding cases here means excludedAutobahnCases
 // is niled.
 // TODO:
-var forceAutobahnCases = []string{}
+// var forceAutobahnCases = []string{}
 
 func TestAutobahn(t *testing.T) {
 	t.Parallel()

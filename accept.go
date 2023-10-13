@@ -245,11 +245,10 @@ func acceptCompression(r *http.Request, w http.ResponseWriter, mode CompressionM
 
 	for _, ext := range websocketExtensions(r.Header) {
 		switch ext.name {
+		// We used to implement x-webkit-deflate-fram too but Safari has bugs.
+		// See https://github.com/nhooyr/websocket/issues/218
 		case "permessage-deflate":
 			return acceptDeflate(w, ext, mode)
-			// Disabled for now, see https://github.com/nhooyr/websocket/issues/218
-			// case "x-webkit-deflate-frame":
-			// 	return acceptWebkitDeflate(w, ext, mode)
 		}
 	}
 	return nil, nil
@@ -279,40 +278,6 @@ func acceptDeflate(w http.ResponseWriter, ext websocketExtension, mode Compressi
 	}
 
 	copts.setHeader(w.Header())
-
-	return copts, nil
-}
-
-func acceptWebkitDeflate(w http.ResponseWriter, ext websocketExtension, mode CompressionMode) (*compressionOptions, error) {
-	copts := mode.opts()
-	// The peer must explicitly request it.
-	copts.serverNoContextTakeover = false
-
-	for _, p := range ext.params {
-		if p == "no_context_takeover" {
-			copts.serverNoContextTakeover = true
-			continue
-		}
-
-		// We explicitly fail on x-webkit-deflate-frame's max_window_bits parameter instead
-		// of ignoring it as the draft spec is unclear. It says the server can ignore it
-		// but the server has no way of signalling to the client it was ignored as the parameters
-		// are set one way.
-		// Thus us ignoring it would make the client think we understood it which would cause issues.
-		// See https://tools.ietf.org/html/draft-tyoshino-hybi-websocket-perframe-deflate-06#section-4.1
-		//
-		// Either way, we're only implementing this for webkit which never sends the max_window_bits
-		// parameter so we don't need to worry about it.
-		err := fmt.Errorf("unsupported x-webkit-deflate-frame parameter: %q", p)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return nil, err
-	}
-
-	s := "x-webkit-deflate-frame"
-	if copts.clientNoContextTakeover {
-		s += "; no_context_takeover"
-	}
-	w.Header().Set("Sec-WebSocket-Extensions", s)
 
 	return copts, nil
 }

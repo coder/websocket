@@ -119,8 +119,6 @@ func (c WebSocket) OnMessage(fn func(m MessageEvent)) (remove func()) {
 			Data: data,
 		}
 		fn(me)
-
-		return
 	})
 }
 
