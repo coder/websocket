@@ -185,7 +185,7 @@ func handshakeRequest(ctx context.Context, urls string, opts *DialOptions, copts
 		req.Header.Set("Sec-WebSocket-Protocol", strings.Join(opts.Subprotocols, ","))
 	}
 	if copts != nil {
-		copts.setHeader(req.Header)
+		req.Header.Set("Sec-WebSocket-Extensions", copts.String())
 	}
 
 	resp, err := opts.HTTPClient.Do(req)
@@ -271,6 +271,10 @@ func verifyServerExtensions(copts *compressionOptions, h http.Header) (*compress
 			continue
 		case "server_no_context_takeover":
 			copts.serverNoContextTakeover = true
+			continue
+		}
+		if strings.HasPrefix(p, "server_max_window_bits=") {
+			// We can't adjust the deflate window, but decoding with a larger window is acceptable.
 			continue
 		}
 

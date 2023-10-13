@@ -62,20 +62,50 @@ func TestAccept(t *testing.T) {
 	t.Run("badCompression", func(t *testing.T) {
 		t.Parallel()
 
-		w := mockHijacker{
-			ResponseWriter: httptest.NewRecorder(),
+		newRequest := func(extensions string) *http.Request {
+			r := httptest.NewRequest("GET", "/", nil)
+			r.Header.Set("Connection", "Upgrade")
+			r.Header.Set("Upgrade", "websocket")
+			r.Header.Set("Sec-WebSocket-Version", "13")
+			r.Header.Set("Sec-WebSocket-Key", "meow123")
+			r.Header.Set("Sec-WebSocket-Extensions", extensions)
+			return r
 		}
-		r := httptest.NewRequest("GET", "/", nil)
-		r.Header.Set("Connection", "Upgrade")
-		r.Header.Set("Upgrade", "websocket")
-		r.Header.Set("Sec-WebSocket-Version", "13")
-		r.Header.Set("Sec-WebSocket-Key", "meow123")
-		r.Header.Set("Sec-WebSocket-Extensions", "permessage-deflate; harharhar")
+		errHijack := errors.New("hijack error")
+		newResponseWriter := func() http.ResponseWriter {
+			return mockHijacker{
+				ResponseWriter: httptest.NewRecorder(),
+				hijack: func() (net.Conn, *bufio.ReadWriter, error) {
+					return nil, nil, errHijack
+				},
+			}
+		}
 
-		_, err := Accept(w, r, &AcceptOptions{
-			CompressionMode: CompressionContextTakeover,
+		t.Run("withoutFallback", func(t *testing.T) {
+			t.Parallel()
+
+			w := newResponseWriter()
+			r := newRequest("permessage-deflate; harharhar")
+			_, err := Accept(w, r, &AcceptOptions{
+				CompressionMode: CompressionNoContextTakeover,
+			})
+			assert.ErrorIs(t, errHijack, err)
+			assert.Equal(t, "extension header", w.Header().Get("Sec-WebSocket-Extensions"), "")
 		})
-		assert.Contains(t, err, `unsupported permessage-deflate parameter`)
+		t.Run("withFallback", func(t *testing.T) {
+			t.Parallel()
+
+			w := newResponseWriter()
+			r := newRequest("permessage-deflate; harharhar, permessage-deflate")
+			_, err := Accept(w, r, &AcceptOptions{
+				CompressionMode: CompressionNoContextTakeover,
+			})
+			assert.ErrorIs(t, errHijack, err)
+			assert.Equal(t, "extension header",
+				w.Header().Get("Sec-WebSocket-Extensions"),
+				CompressionNoContextTakeover.opts().String(),
+			)
+		})
 	})
 
 	t.Run("requireHttpHijacker", func(t *testing.T) {
@@ -344,59 +374,54 @@ func Test_authenticateOrigin(t *testing.T) {
 	}
 }
 
-func Test_acceptCompression(t *testing.T) {
+func Test_selectDeflate(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name                       string
-		mode                       CompressionMode
-		reqSecWebSocketExtensions  string
-		respSecWebSocketExtensions string
-		expCopts                   *compressionOptions
-		error                      bool
+		name     string
+		mode     CompressionMode
+		header   string
+		expCopts *compressionOptions
+		expOK    bool
 	}{
 		{
 			name:     "disabled",
 			mode:     CompressionDisabled,
 			expCopts: nil,
+			expOK:    false,
 		},
 		{
 			name:     "noClientSupport",
 			mode:     CompressionNoContextTakeover,
 			expCopts: nil,
+			expOK:    false,
 		},
 		{
-			name:                       "permessage-deflate",
-			mode:                       CompressionNoContextTakeover,
-			reqSecWebSocketExtensions:  "permessage-deflate; client_max_window_bits",
-			respSecWebSocketExtensions: "permessage-deflate; client_no_context_takeover; server_no_context_takeover",
+			name:   "permessage-deflate",
+			mode:   CompressionNoContextTakeover,
+			header: "permessage-deflate; client_max_window_bits",
 			expCopts: &compressionOptions{
 				clientNoContextTakeover: true,
 				serverNoContextTakeover: true,
 			},
+			expOK: true,
 		},
 		{
-			name:                      "permessage-deflate/error",
-			mode:                      CompressionNoContextTakeover,
-			reqSecWebSocketExtensions: "permessage-deflate; meow",
-			error:                     true,
+			name:   "permessage-deflate/unknown-parameter",
+			mode:   CompressionNoContextTakeover,
+			header: "permessage-deflate; meow",
+			expOK:  false,
 		},
-		// {
-		// 	name:                       "x-webkit-deflate-frame",
-		// 	mode:                       CompressionNoContextTakeover,
-		// 	reqSecWebSocketExtensions:  "x-webkit-deflate-frame; no_context_takeover",
-		// 	respSecWebSocketExtensions: "x-webkit-deflate-frame; no_context_takeover",
-		// 	expCopts: &compressionOptions{
-		// 		clientNoContextTakeover: true,
-		// 		serverNoContextTakeover: true,
-		// 	},
-		// },
-		// {
-		// 	name:                      "x-webkit-deflate/error",
-		// 	mode:                      CompressionNoContextTakeover,
-		// 	reqSecWebSocketExtensions: "x-webkit-deflate-frame; max_window_bits",
-		// 	error:                     true,
-		// },
+		{
+			name:   "permessage-deflate/unknown-parameter",
+			mode:   CompressionNoContextTakeover,
+			header: "permessage-deflate; meow, permessage-deflate; client_max_window_bits",
+			expCopts: &compressionOptions{
+				clientNoContextTakeover: true,
+				serverNoContextTakeover: true,
+			},
+			expOK: true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -404,19 +429,11 @@ func Test_acceptCompression(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			r := httptest.NewRequest(http.MethodGet, "/", nil)
-			r.Header.Set("Sec-WebSocket-Extensions", tc.reqSecWebSocketExtensions)
-
-			w := httptest.NewRecorder()
-			copts, err := acceptCompression(r, w, tc.mode)
-			if tc.error {
-				assert.Error(t, err)
-				return
-			}
-
-			assert.Success(t, err)
+			h := http.Header{}
+			h.Set("Sec-WebSocket-Extensions", tc.header)
+			copts, ok := selectDeflate(websocketExtensions(h), tc.mode)
+			assert.Equal(t, "selected options", tc.expOK, ok)
 			assert.Equal(t, "compression options", tc.expCopts, copts)
-			assert.Equal(t, "Sec-WebSocket-Extensions", tc.respSecWebSocketExtensions, w.Header().Get("Sec-WebSocket-Extensions"))
 		})
 	}
 }

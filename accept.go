@@ -123,9 +123,9 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 		w.Header().Set("Sec-WebSocket-Protocol", subproto)
 	}
 
-	copts, err := acceptCompression(r, w, opts.CompressionMode)
-	if err != nil {
-		return nil, err
+	copts, ok := selectDeflate(websocketExtensions(r.Header), opts.CompressionMode)
+	if ok {
+		w.Header().Set("Sec-WebSocket-Extensions", copts.String())
 	}
 
 	w.WriteHeader(http.StatusSwitchingProtocols)
@@ -238,25 +238,26 @@ func selectSubprotocol(r *http.Request, subprotocols []string) string {
 	return ""
 }
 
-func acceptCompression(r *http.Request, w http.ResponseWriter, mode CompressionMode) (*compressionOptions, error) {
+func selectDeflate(extensions []websocketExtension, mode CompressionMode) (*compressionOptions, bool) {
 	if mode == CompressionDisabled {
-		return nil, nil
+		return nil, false
 	}
-
-	for _, ext := range websocketExtensions(r.Header) {
+	for _, ext := range extensions {
 		switch ext.name {
 		// We used to implement x-webkit-deflate-fram too but Safari has bugs.
 		// See https://github.com/nhooyr/websocket/issues/218
 		case "permessage-deflate":
-			return acceptDeflate(w, ext, mode)
+			copts, ok := acceptDeflate(ext, mode)
+			if ok {
+				return copts, true
+			}
 		}
 	}
-	return nil, nil
+	return nil, false
 }
 
-func acceptDeflate(w http.ResponseWriter, ext websocketExtension, mode CompressionMode) (*compressionOptions, error) {
+func acceptDeflate(ext websocketExtension, mode CompressionMode) (*compressionOptions, bool) {
 	copts := mode.opts()
-
 	for _, p := range ext.params {
 		switch p {
 		case "client_no_context_takeover":
@@ -265,22 +266,18 @@ func acceptDeflate(w http.ResponseWriter, ext websocketExtension, mode Compressi
 		case "server_no_context_takeover":
 			copts.serverNoContextTakeover = true
 			continue
-		}
-
-		if strings.HasPrefix(p, "client_max_window_bits") {
-			// We cannot adjust the read sliding window so cannot make use of this.
-			// By not responding to it, we tell the client we're ignoring it.
+		case "client_max_window_bits",
+			"server_max_window_bits=15":
 			continue
 		}
 
-		err := fmt.Errorf("unsupported permessage-deflate parameter: %q", p)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return nil, err
+		if strings.HasPrefix(p, "client_max_window_bits=") {
+			// We can't adjust the deflate window, but decoding with a larger window is acceptable.
+			continue
+		}
+		return nil, false
 	}
-
-	copts.setHeader(w.Header())
-
-	return copts, nil
+	return copts, true
 }
 
 func headerContainsTokenIgnoreCase(h http.Header, key, token string) bool {
