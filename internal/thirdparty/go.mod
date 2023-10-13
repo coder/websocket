@@ -1,6 +1,6 @@
 module nhooyr.io/websocket/internal/thirdparty
 
-go 1.22
+go 1.19
 
 replace nhooyr.io/websocket => ../..
 
