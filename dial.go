@@ -70,6 +70,21 @@ func (opts *DialOptions) cloneWithDefaults(ctx context.Context) (context.Context
 	if o.HTTPHeader == nil {
 		o.HTTPHeader = http.Header{}
 	}
+	newClient := *o.HTTPClient
+	oldCheckRedirect := o.HTTPClient.CheckRedirect
+	newClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		switch req.URL.Scheme {
+		case "ws":
+			req.URL.Scheme = "http"
+		case "wss":
+			req.URL.Scheme = "https"
+		}
+		if oldCheckRedirect != nil {
+			return oldCheckRedirect(req, via)
+		}
+		return nil
+	}
+	o.HTTPClient = &newClient
 
 	return ctx, cancel, &o
 }

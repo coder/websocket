@@ -304,3 +304,28 @@ type roundTripperFunc func(*http.Request) (*http.Response, error)
 func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 	return f(r)
 }
+
+func TestDialRedirect(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	_, _, err := Dial(ctx, "ws://example.com", &DialOptions{
+		HTTPClient: mockHTTPClient(func(r *http.Request) (*http.Response, error) {
+			resp := &http.Response{
+				Header: http.Header{},
+			}
+			if r.URL.Scheme != "https" {
+				resp.Header.Set("Location", "wss://example.com")
+				resp.StatusCode = http.StatusFound
+				return resp, nil
+			}
+			resp.Header.Set("Connection",  "Upgrade")
+			resp.Header.Set("Upgrade",  "meow")
+			resp.StatusCode = http.StatusSwitchingProtocols
+			return resp, nil
+		}),
+	})
+	assert.Contains(t, err, "failed to WebSocket dial: WebSocket protocol violation: Upgrade header \"meow\" does not contain websocket")
+}
