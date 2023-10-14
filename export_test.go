@@ -23,3 +23,5 @@ func (c *Conn) RecordBytesRead() *int {
 	}))
 	return &bytesRead
 }
+
+var ErrClosed = errClosed

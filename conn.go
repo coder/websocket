@@ -147,6 +147,9 @@ func (c *Conn) close(err error) {
 	if c.isClosed() {
 		return
 	}
+	if err == nil {
+		err = c.rwc.Close()
+	}
 	c.setCloseErrLocked(err)
 	close(c.closed)
 	runtime.SetFinalizer(c, nil)

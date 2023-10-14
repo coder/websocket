@@ -295,6 +295,19 @@ func TestConn(t *testing.T) {
 		err = c1.Close(websocket.StatusNormalClosure, "")
 		assert.Success(t, err)
 	})
+
+	t.Run("CloseNow", func(t *testing.T) {
+		_, c1, c2 := newConnTest(t, nil, nil)
+
+		err1 := c1.CloseNow()
+		err2 := c2.CloseNow()
+		assert.Success(t, err1)
+		assert.Success(t, err2)
+		err1 = c1.CloseNow()
+		err2 = c2.CloseNow()
+		assert.ErrorIs(t, websocket.ErrClosed, err1)
+		assert.ErrorIs(t, websocket.ErrClosed, err2)
+	})
 }
 
 func TestWasm(t *testing.T) {

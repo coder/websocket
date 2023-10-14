@@ -102,6 +102,19 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 	return c.closeHandshake(code, reason)
 }
 
+// CloseNow closes the WebSocket connection without attempting a close handshake.
+// Use When you do not want the overhead of the close handshake.
+func (c *Conn) CloseNow() (err error) {
+	defer errd.Wrap(&err, "failed to close WebSocket")
+
+	if c.isClosed() {
+		return errClosed
+	}
+
+	c.close(nil)
+	return c.closeErr
+}
+
 func (c *Conn) closeHandshake(code StatusCode, reason string) (err error) {
 	defer errd.Wrap(&err, "failed to close WebSocket")
 
@@ -265,7 +278,7 @@ func (c *Conn) setCloseErr(err error) {
 }
 
 func (c *Conn) setCloseErrLocked(err error) {
-	if c.closeErr == nil {
+	if c.closeErr == nil && err != nil {
 		c.closeErr = fmt.Errorf("WebSocket closed: %w", err)
 	}
 }
