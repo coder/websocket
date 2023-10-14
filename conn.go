@@ -63,7 +63,7 @@ type Conn struct {
 	readCloseFrameErr error
 
 	// Write state.
-	msgWriterState *msgWriterState
+	msgWriter      *msgWriter
 	writeFrameMu   *mu
 	writeBuf       []byte
 	writeHeaderBuf [8]byte
@@ -113,14 +113,14 @@ func newConn(cfg connConfig) *Conn {
 
 	c.msgReader = newMsgReader(c)
 
-	c.msgWriterState = newMsgWriterState(c)
+	c.msgWriter = newMsgWriter(c)
 	if c.client {
 		c.writeBuf = extractBufioWriterBuf(c.bw, c.rwc)
 	}
 
 	if c.flate() && c.flateThreshold == 0 {
 		c.flateThreshold = 128
-		if !c.msgWriterState.flateContextTakeover() {
+		if !c.msgWriter.flateContextTakeover() {
 			c.flateThreshold = 512
 		}
 	}
@@ -157,8 +157,7 @@ func (c *Conn) close(err error) {
 	c.rwc.Close()
 
 	go func() {
-		c.msgWriterState.close()
-
+		c.msgWriter.close()
 		c.msgReader.close()
 	}()
 }
