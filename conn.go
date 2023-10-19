@@ -228,7 +228,7 @@ func (c *Conn) ping(ctx context.Context, p string) error {
 
 	select {
 	case <-c.closed:
-		return c.closeErr
+		return errClosed
 	case <-ctx.Done():
 		err := fmt.Errorf("failed to wait for pong: %w", ctx.Err())
 		c.close(err)
@@ -266,7 +266,7 @@ func (m *mu) tryLock() bool {
 func (m *mu) lock(ctx context.Context) error {
 	select {
 	case <-m.c.closed:
-		return m.c.closeErr
+		return errClosed
 	case <-ctx.Done():
 		err := fmt.Errorf("failed to acquire lock: %w", ctx.Err())
 		m.c.close(err)
@@ -279,7 +279,7 @@ func (m *mu) lock(ctx context.Context) error {
 		case <-m.c.closed:
 			// Make sure to release.
 			m.unlock()
-			return m.c.closeErr
+			return errClosed
 		default:
 		}
 		return nil

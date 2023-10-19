@@ -203,7 +203,7 @@ func (c *Conn) readLoop(ctx context.Context) (header, error) {
 func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 	select {
 	case <-c.closed:
-		return header{}, c.closeErr
+		return header{}, errClosed
 	case c.readTimeout <- ctx:
 	}
 
@@ -211,7 +211,7 @@ func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 	if err != nil {
 		select {
 		case <-c.closed:
-			return header{}, c.closeErr
+			return header{}, errClosed
 		case <-ctx.Done():
 			return header{}, ctx.Err()
 		default:
@@ -222,7 +222,7 @@ func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 
 	select {
 	case <-c.closed:
-		return header{}, c.closeErr
+		return header{}, errClosed
 	case c.readTimeout <- context.Background():
 	}
 
@@ -232,7 +232,7 @@ func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
 	select {
 	case <-c.closed:
-		return 0, c.closeErr
+		return 0, errClosed
 	case c.readTimeout <- ctx:
 	}
 
@@ -240,7 +240,7 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
 	if err != nil {
 		select {
 		case <-c.closed:
-			return n, c.closeErr
+			return n, errClosed
 		case <-ctx.Done():
 			return n, ctx.Err()
 		default:
@@ -252,7 +252,7 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
 
 	select {
 	case <-c.closed:
-		return n, c.closeErr
+		return n, errClosed
 	case c.readTimeout <- context.Background():
 	}
 

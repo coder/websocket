@@ -125,7 +125,7 @@ func (c *Conn) closeHandshake(code StatusCode, reason string) (err error) {
 		return writeErr
 	}
 
-	if CloseStatus(closeHandshakeErr) == -1 {
+	if CloseStatus(closeHandshakeErr) == -1 && !errors.Is(errClosed, closeHandshakeErr) {
 		return closeHandshakeErr
 	}
 

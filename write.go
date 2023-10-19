@@ -262,14 +262,14 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 		case <-ctx.Done():
 			return 0, ctx.Err()
 		case <-c.closed:
-			return 0, c.closeErr
+			return 0, errClosed
 		}
 	}
 	defer c.writeFrameMu.unlock()
 
 	select {
 	case <-c.closed:
-		return 0, c.closeErr
+		return 0, errClosed
 	case c.writeTimeout <- ctx:
 	}
 
@@ -277,7 +277,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 		if err != nil {
 			select {
 			case <-c.closed:
-				err = c.closeErr
+				err = errClosed
 			case <-ctx.Done():
 				err = ctx.Err()
 			}
@@ -323,7 +323,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 
 	select {
 	case <-c.closed:
-		return n, c.closeErr
+		return n, errClosed
 	case c.writeTimeout <- context.Background():
 	}
 
