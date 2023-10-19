@@ -17,8 +17,8 @@ TEXT ·maskAsm(SB), NOSPLIT, $0-28
 	SHLQ $32, DI
 	ORQ  DX, DI
 
-	CMPQ  CX, $15
-	JLE   less_than_16
+	CMPQ  CX, $7
+	JLE   less_than_8
 	CMPQ  CX, $63
 	JLE   less_than_64
 	CMPQ  CX, $128
@@ -58,7 +58,7 @@ unaligned_loop:
 	JMP   sse
 
 sse:
-	CMPQ       CX, $0x40
+	CMPQ       CX, $64
 	JL         less_than_64
 	MOVQ       DI, X0
 	PUNPCKLQDQ X0, X0
@@ -76,9 +76,9 @@ sse_loop:
 	MOVOU X2, 1*16(AX)
 	MOVOU X3, 2*16(AX)
 	MOVOU X4, 3*16(AX)
-	ADDQ  $0x40, AX
-	SUBQ  $0x40, CX
-	CMPQ  CX, $0x40
+	ADDQ  $64, AX
+	SUBQ  $64, CX
+	CMPQ  CX, $64
 	JAE   sse_loop
 
 less_than_64:
