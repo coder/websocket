@@ -19,8 +19,6 @@ TEXT ·maskAsm(SB), NOSPLIT, $0-28
 
 	CMPQ  CX, $8
 	JL    less_than_8
-	CMPQ  CX, $64
-	JL    less_than_64
 	CMPQ  CX, $512
 	JLE   sse
 	TESTQ $31, AX

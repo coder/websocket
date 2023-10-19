@@ -8,11 +8,12 @@ import (
 
 	"github.com/gobwas/ws"
 	_ "github.com/gorilla/websocket"
+	_ "github.com/lesismal/nbio/nbhttp/websocket"
 
 	_ "nhooyr.io/websocket"
 )
 
-func basicMask(maskKey [4]byte, pos int, b []byte) int {
+func basicMask(b []byte, maskKey [4]byte, pos int) int {
 	for i := range b {
 		b[i] ^= maskKey[pos&3]
 		pos++
@@ -20,26 +21,30 @@ func basicMask(maskKey [4]byte, pos int, b []byte) int {
 	return pos & 3
 }
 
+//go:linkname maskGo nhooyr.io/websocket.maskGo
+func maskGo(b []byte, key32 uint32) int
+
+//go:linkname maskAsm nhooyr.io/websocket.maskAsm
+func maskAsm(b *byte, len int, key32 uint32) uint32
+
+//go:linkname nbioMaskBytes github.com/lesismal/nbio/nbhttp/websocket.maskXOR
+func nbioMaskBytes(b, key []byte) int
+
 //go:linkname gorillaMaskBytes github.com/gorilla/websocket.maskBytes
 func gorillaMaskBytes(key [4]byte, pos int, b []byte) int
 
-//go:linkname mask nhooyr.io/websocket.mask
-func mask(key32 uint32, b []byte) int
-
-//go:linkname maskGo nhooyr.io/websocket.maskGo
-func maskGo(key32 uint32, b []byte) int
-
 func Benchmark_mask(b *testing.B) {
 	sizes := []int{
-		2,
-		3,
-		4,
 		8,
 		16,
 		32,
 		128,
+		256,
 		512,
+		1024,
+		2048,
 		4096,
+		8192,
 		16384,
 	}
 
@@ -51,7 +56,7 @@ func Benchmark_mask(b *testing.B) {
 			name: "basic",
 			fn: func(b *testing.B, key [4]byte, p []byte) {
 				for i := 0; i < b.N; i++ {
-					basicMask(key, 0, p)
+					basicMask(p, key, 0)
 				}
 			},
 		},
@@ -63,7 +68,7 @@ func Benchmark_mask(b *testing.B) {
 				b.ResetTimer()
 
 				for i := 0; i < b.N; i++ {
-					maskGo(key32, p)
+					maskGo(p, key32)
 				}
 			},
 		},
@@ -74,7 +79,7 @@ func Benchmark_mask(b *testing.B) {
 				b.ResetTimer()
 
 				for i := 0; i < b.N; i++ {
-					mask(key32, p)
+					maskAsm(&p[0], len(p), key32)
 				}
 			},
 		},
@@ -95,16 +100,25 @@ func Benchmark_mask(b *testing.B) {
 				}
 			},
 		},
+		{
+			name: "nbio",
+			fn: func(b *testing.B, key [4]byte, p []byte) {
+				keyb := key[:]
+				for i := 0; i < b.N; i++ {
+					nbioMaskBytes(p, keyb)
+				}
+			},
+		},
 	}
 
 	key := [4]byte{1, 2, 3, 4}
 
-	for _, size := range sizes {
-		p := make([]byte, size)
+	for _, fn := range fns {
+		b.Run(fn.name, func(b *testing.B) {
+			for _, size := range sizes {
+				p := make([]byte, size)
 
-		b.Run(strconv.Itoa(size), func(b *testing.B) {
-			for _, fn := range fns {
-				b.Run(fn.name, func(b *testing.B) {
+				b.Run(strconv.Itoa(size), func(b *testing.B) {
 					b.SetBytes(int64(size))
 
 					fn.fn(b, key, p)

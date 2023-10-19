@@ -4,8 +4,8 @@
 TEXT ·maskAsm(SB), NOSPLIT, $0-28
 	// R0 = b
 	// R1 = len
-	// R2 = uint64(key)<<32 | uint64(key)
 	// R3 = key (uint32)
+	// R2 = uint64(key)<<32 | uint64(key)
 	MOVD  b_ptr+0(FP), R0
 	MOVD  b_len+8(FP), R1
 	MOVWU key+16(FP), R3

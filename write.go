@@ -365,7 +365,7 @@ func (c *Conn) writeFramePayload(p []byte) (n int, err error) {
 			return n, err
 		}
 
-		maskKey = mask(maskKey, c.writeBuf[i:c.bw.Buffered()])
+		maskKey = mask(c.writeBuf[i:c.bw.Buffered()], maskKey)
 
 		p = p[j:]
 		n += j

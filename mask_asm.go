@@ -2,7 +2,7 @@
 
 package websocket
 
-func mask(key uint32, b []byte) uint32 {
+func mask(b []byte, key uint32) uint32 {
 	if len(b) > 0 {
 		return maskAsm(&b[0], len(b), key)
 	}
