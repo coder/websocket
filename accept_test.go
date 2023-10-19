@@ -9,11 +9,11 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"nhooyr.io/websocket/internal/test/xrand"
 	"strings"
 	"testing"
 
 	"nhooyr.io/websocket/internal/test/assert"
+	"nhooyr.io/websocket/internal/test/xrand"
 )
 
 func TestAccept(t *testing.T) {
@@ -68,7 +68,7 @@ func TestAccept(t *testing.T) {
 			r.Header.Set("Connection", "Upgrade")
 			r.Header.Set("Upgrade", "websocket")
 			r.Header.Set("Sec-WebSocket-Version", "13")
-			r.Header.Set("Sec-WebSocket-Key", "meow123")
+			r.Header.Set("Sec-WebSocket-Key", xrand.Base64(16))
 			r.Header.Set("Sec-WebSocket-Extensions", extensions)
 			return r
 		}

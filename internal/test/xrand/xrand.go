@@ -47,6 +47,7 @@ func Int(max int) int {
 	return int(x.Int64())
 }
 
+// Base64 returns a randomly generated base64 string of length n.
 func Base64(n int) string {
 	return base64.StdEncoding.EncodeToString(Bytes(n))
 }
