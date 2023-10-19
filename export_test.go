@@ -25,3 +25,10 @@ func (c *Conn) RecordBytesRead() *int {
 }
 
 var ErrClosed = errClosed
+
+var ExportedDial = dial
+var SecWebSocketAccept = secWebSocketAccept
+var SecWebSocketKey = secWebSocketKey
+var VerifyServerResponse = verifyServerResponse
+
+var CompressionModeOpts = CompressionMode.opts

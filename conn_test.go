@@ -526,3 +526,29 @@ func echoServer(w http.ResponseWriter, r *http.Request, opts *websocket.AcceptOp
 	err = wstest.EchoLoop(r.Context(), c)
 	return assertCloseStatus(websocket.StatusNormalClosure, err)
 }
+
+func assertEcho(tb testing.TB, ctx context.Context, c *websocket.Conn) {
+	exp := xrand.String(xrand.Int(131072))
+
+	werr := xsync.Go(func() error {
+		return wsjson.Write(ctx, c, exp)
+	})
+
+	var act interface{}
+	err := wsjson.Read(ctx, c, &act)
+	assert.Success(tb, err)
+	assert.Equal(tb, "read msg", exp, act)
+
+	select {
+	case err := <-werr:
+		assert.Success(tb, err)
+	case <-ctx.Done():
+		tb.Fatal(ctx.Err())
+	}
+}
+
+func assertClose(tb testing.TB, c *websocket.Conn) {
+	tb.Helper()
+	err := c.Close(websocket.StatusNormalClosure, "")
+	assert.Success(tb, err)
+}
