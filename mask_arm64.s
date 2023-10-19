@@ -1,6 +1,6 @@
 #include "textflag.h"
 
-// func maskAsm(b *byte,len, int, key uint32)
+// func maskAsm(b *byte, len int, key uint32)
 TEXT ·maskAsm(SB), NOSPLIT, $0-28
 	// R0 = b
 	// R1 = len
@@ -14,6 +14,8 @@ TEXT ·maskAsm(SB), NOSPLIT, $0-28
 	VDUP  R2, V0.D2
 	CMP   $64, R1
 	BLT   less_than_64
+
+// TODO: allign memory like amd64
 
 loop_64:
 	VLD1   (R0), [V1.B16, V2.B16, V3.B16, V4.B16]

@@ -10,18 +10,18 @@ TEXT ·maskAsm(SB), NOSPLIT, $0-28
 	MOVQ len+8(FP), CX
 	MOVL key+16(FP), SI
 
-	// calculate the DI
-	// DI = SI<<32 | SI
+	// Calculate the DI aka the uint64 key.
+	// DI = uint64(SI) | uint64(SI)<<32
 	MOVL SI, DI
 	MOVQ DI, DX
 	SHLQ $32, DI
 	ORQ  DX, DI
 
-	CMPQ  CX, $7
-	JLE   less_than_8
-	CMPQ  CX, $63
-	JLE   less_than_64
-	CMPQ  CX, $128
+	CMPQ  CX, $8
+	JL    less_than_8
+	CMPQ  CX, $64
+	JL    less_than_64
+	CMPQ  CX, $512
 	JLE   sse
 	TESTQ $31, AX
 	JNZ   unaligned
@@ -34,8 +34,8 @@ unaligned_loop_1byte:
 	TESTQ $7, AX
 	JNZ   unaligned_loop_1byte
 
-	// calculate DI again since SI was modified
-	// DI = SI<<32 | SI
+	// Calculate DI again since SI was modified.
+	// DI = uint64(SI) | uint64(SI)<<32
 	MOVL SI, DI
 	MOVQ DI, DX
 	SHLQ $32, DI
@@ -45,11 +45,12 @@ unaligned_loop_1byte:
 	JZ    sse
 
 unaligned:
-	TESTQ $7, AX               // AND $7 & len, if not zero jump to loop_1b.
+	// $7 & len, if not zero jump to loop_1b.
+	TESTQ $7, AX
 	JNZ   unaligned_loop_1byte
 
 unaligned_loop:
-	// we don't need to check the CX since we know it's above 128
+	// We don't need to check the CX since we know it's above 512.
 	XORQ  DI, (AX)
 	ADDQ  $8, AX
 	SUBQ  $8, CX
