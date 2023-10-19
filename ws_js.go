@@ -151,7 +151,7 @@ func (c *Conn) read(ctx context.Context) (MessageType, []byte, error) {
 		return 0, nil, ctx.Err()
 	case <-c.readSignal:
 	case <-c.closed:
-		return 0, nil, c.closeErr
+		return 0, nil, errClosed
 	}
 
 	c.readBufMu.Lock()
@@ -205,7 +205,7 @@ func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 
 func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) error {
 	if c.isClosed() {
-		return c.closeErr
+		return errClosed
 	}
 	switch typ {
 	case MessageBinary:
@@ -229,18 +229,27 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 	return nil
 }
 
+// CloseNow closes the WebSocket connection without attempting a close handshake.
+// Use When you do not want the overhead of the close handshake.
+//
+// note: No different from Close(StatusGoingAway, "") in WASM as there is no way to close
+// a WebSocket without the close handshake.
+func (c *Conn) CloseNow() error {
+	return c.Close(StatusGoingAway, "")
+}
+
 func (c *Conn) exportedClose(code StatusCode, reason string) error {
 	c.closingMu.Lock()
 	defer c.closingMu.Unlock()
+
+	if c.isClosed() {
+		return errClosed
+	}
 
 	ce := fmt.Errorf("sent close: %w", CloseError{
 		Code:   code,
 		Reason: reason,
 	})
-
-	if c.isClosed() {
-		return fmt.Errorf("tried to close with %q but connection already closed: %w", ce, c.closeErr)
-	}
 
 	c.setCloseErr(ce)
 	err := c.ws.Close(int(code), reason)
@@ -312,7 +321,7 @@ func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Resp
 			StatusCode: http.StatusSwitchingProtocols,
 		}, nil
 	case <-c.closed:
-		return nil, nil, c.closeErr
+		return nil, nil, errClosed
 	}
 }
 
