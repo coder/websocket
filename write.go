@@ -280,6 +280,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 				err = errClosed
 			case <-ctx.Done():
 				err = ctx.Err()
+			default:
 			}
 			c.close(err)
 			err = fmt.Errorf("failed to write frame: %w", err)
