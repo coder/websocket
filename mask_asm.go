@@ -9,7 +9,5 @@ func mask(key uint32, b []byte) uint32 {
 	return key
 }
 
-var useAVX2 = false
-
 //go:noescape
 func maskAsm(b *byte, len int, key uint32) uint32

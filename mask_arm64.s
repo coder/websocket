@@ -15,7 +15,6 @@ TEXT ·maskAsm(SB), NOSPLIT, $0-28
 	CMP   $64, R1
 	BLT   less_than_64
 
-	// todo: optimize unaligned case
 loop_64:
 	VLD1   (R0), [V1.B16, V2.B16, V3.B16, V4.B16]
 	VEOR   V1.B16, V0.B16, V1.B16
