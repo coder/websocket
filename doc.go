@@ -13,7 +13,7 @@
 //
 // The examples are the best way to understand how to correctly use the library.
 //
-// The wsjson and wspb subpackages contain helpers for JSON and protobuf messages.
+// The wsjson subpackage contain helpers for JSON and protobuf messages.
 //
 // More documentation at https://nhooyr.io/websocket.
 //

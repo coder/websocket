@@ -74,7 +74,7 @@ func (cs *chatServer) subscribeHandler(w http.ResponseWriter, r *http.Request) {
 		cs.logf("%v", err)
 		return
 	}
-	defer c.Close(websocket.StatusInternalError, "")
+	defer c.CloseNow()
 
 	err = cs.subscribe(r.Context(), c)
 	if errors.Is(err, context.Canceled) {

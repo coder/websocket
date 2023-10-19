@@ -5,15 +5,9 @@
 
 websocket is a minimal and idiomatic WebSocket library for Go.
 
-> **note**: I haven't been responsive for questions/reports on the issue tracker but I do
-> read through and there are no outstanding bugs. There are certainly some nice to haves
-> that I should merge in/figure out but nothing critical. I haven't given up on adding new
-> features and cleaning up the code further, just been busy. Should anything critical
-> arise, I will fix it.
-
 ## Install
 
-```bash
+```sh
 go get nhooyr.io/websocket
 ```
 
@@ -23,18 +17,23 @@ go get nhooyr.io/websocket
 - First class [context.Context](https://blog.golang.org/context) support
 - Fully passes the WebSocket [autobahn-testsuite](https://github.com/crossbario/autobahn-testsuite)
 - [Zero dependencies](https://pkg.go.dev/nhooyr.io/websocket?tab=imports)
-- JSON and protobuf helpers in the [wsjson](https://pkg.go.dev/nhooyr.io/websocket/wsjson) and [wspb](https://pkg.go.dev/nhooyr.io/websocket/wspb) subpackages
+- JSON helpers in the [wsjson](https://pkg.go.dev/nhooyr.io/websocket/wsjson) subpackage
 - Zero alloc reads and writes
 - Concurrent writes
 - [Close handshake](https://pkg.go.dev/nhooyr.io/websocket#Conn.Close)
 - [net.Conn](https://pkg.go.dev/nhooyr.io/websocket#NetConn) wrapper
 - [Ping pong](https://pkg.go.dev/nhooyr.io/websocket#Conn.Ping) API
 - [RFC 7692](https://tools.ietf.org/html/rfc7692) permessage-deflate compression
+- [CloseRead](https://pkg.go.dev/nhooyr.io/websocket#Conn.CloseRead) helper for write only connections
 - Compile to [Wasm](https://pkg.go.dev/nhooyr.io/websocket#hdr-Wasm)
 
 ## Roadmap
 
+- [ ] Ping pong heartbeat helper [#267](https://github.com/nhooyr/websocket/issues/267)
+- [ ] Graceful shutdown helper [#209](https://github.com/nhooyr/websocket/issues/209)
+- [ ] Assembly for WebSocket masking [#16](https://github.com/nhooyr/websocket/issues/16)
 - [ ] HTTP/2 [#4](https://github.com/nhooyr/websocket/issues/4)
+- [ ] The holy grail [#402](https://github.com/nhooyr/websocket/issues/402)
 
 ## Examples
 
@@ -51,7 +50,7 @@ http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// ...
 	}
-	defer c.Close(websocket.StatusInternalError, "the sky is falling")
+	defer c.CloseNow()
 
 	ctx, cancel := context.WithTimeout(r.Context(), time.Second*10)
 	defer cancel()
@@ -78,7 +77,7 @@ c, _, err := websocket.Dial(ctx, "ws://localhost:8080", nil)
 if err != nil {
 	// ...
 }
-defer c.Close(websocket.StatusInternalError, "the sky is falling")
+defer c.CloseNow()
 
 err = wsjson.Write(ctx, c, "hi")
 if err != nil {
@@ -110,12 +109,14 @@ Advantages of nhooyr.io/websocket:
   - Gorilla writes directly to a net.Conn and so duplicates features of net/http.Client.
 - Concurrent writes
 - Close handshake ([gorilla/websocket#448](https://github.com/gorilla/websocket/issues/448))
+- [CloseRead](https://pkg.go.dev/nhooyr.io/websocket#Conn.CloseRead) helper for write only connections
 - Idiomatic [ping pong](https://pkg.go.dev/nhooyr.io/websocket#Conn.Ping) API
   - Gorilla requires registering a pong callback before sending a Ping
 - Can target Wasm ([gorilla/websocket#432](https://github.com/gorilla/websocket/issues/432))
-- Transparent message buffer reuse with [wsjson](https://pkg.go.dev/nhooyr.io/websocket/wsjson) and [wspb](https://pkg.go.dev/nhooyr.io/websocket/wspb) subpackages
+- Transparent message buffer reuse with [wsjson](https://pkg.go.dev/nhooyr.io/websocket/wsjson) subpackage
 - [1.75x](https://github.com/nhooyr/websocket/releases/tag/v1.7.4) faster WebSocket masking implementation in pure Go
   - Gorilla's implementation is slower and uses [unsafe](https://golang.org/pkg/unsafe/).
+    Soon we'll have assembly and be 4.5x faster [#326](https://github.com/nhooyr/websocket/pull/326)
 - Full [permessage-deflate](https://tools.ietf.org/html/rfc7692) compression extension support
   - Gorilla only supports no context takeover mode
 - [CloseRead](https://pkg.go.dev/nhooyr.io/websocket#Conn.CloseRead) helper ([gorilla/websocket#492](https://github.com/gorilla/websocket/issues/492))

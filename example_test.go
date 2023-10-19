@@ -20,7 +20,7 @@ func ExampleAccept() {
 			log.Println(err)
 			return
 		}
-		defer c.Close(websocket.StatusInternalError, "the sky is falling")
+		defer c.CloseNow()
 
 		ctx, cancel := context.WithTimeout(r.Context(), time.Second*10)
 		defer cancel()
@@ -50,7 +50,7 @@ func ExampleDial() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer c.Close(websocket.StatusInternalError, "the sky is falling")
+	defer c.CloseNow()
 
 	err = wsjson.Write(ctx, c, "hi")
 	if err != nil {
@@ -71,7 +71,7 @@ func ExampleCloseStatus() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer c.Close(websocket.StatusInternalError, "the sky is falling")
+	defer c.CloseNow()
 
 	_, _, err = c.Reader(ctx)
 	if websocket.CloseStatus(err) != websocket.StatusNormalClosure {
@@ -88,7 +88,7 @@ func Example_writeOnly() {
 			log.Println(err)
 			return
 		}
-		defer c.Close(websocket.StatusInternalError, "the sky is falling")
+		defer c.CloseNow()
 
 		ctx, cancel := context.WithTimeout(r.Context(), time.Minute*10)
 		defer cancel()
@@ -145,7 +145,7 @@ func ExampleConn_Ping() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer c.Close(websocket.StatusInternalError, "the sky is falling")
+	defer c.CloseNow()
 
 	// Required to read the Pongs from the server.
 	ctx = c.CloseRead(ctx)
@@ -162,10 +162,10 @@ func ExampleConn_Ping() {
 
 // This example demonstrates full stack chat with an automated test.
 func Example_fullStackChat() {
-	// https://github.com/nhooyr/websocket/tree/master/examples/chat
+	// https://github.com/nhooyr/websocket/tree/master/internal/examples/chat
 }
 
 // This example demonstrates a echo server.
 func Example_echo() {
-	// https://github.com/nhooyr/websocket/tree/master/examples/echo
+	// https://github.com/nhooyr/websocket/tree/master/internal/examples/echo
 }
