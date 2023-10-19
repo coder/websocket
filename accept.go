@@ -244,7 +244,7 @@ func selectDeflate(extensions []websocketExtension, mode CompressionMode) (*comp
 	}
 	for _, ext := range extensions {
 		switch ext.name {
-		// We used to implement x-webkit-deflate-fram too but Safari has bugs.
+		// We used to implement x-webkit-deflate-frame too for Safari but Safari has bugs...
 		// See https://github.com/nhooyr/websocket/issues/218
 		case "permessage-deflate":
 			copts, ok := acceptDeflate(ext, mode)
