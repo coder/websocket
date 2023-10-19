@@ -3,6 +3,8 @@ set -eu
 cd -- "$(dirname "$0")/.."
 
 go mod tidy
+(cd ./internal/thirdparty && go mod tidy)
+(cd ./internal/examples && go mod tidy)
 gofmt -w -s .
 go run golang.org/x/tools/cmd/goimports@latest -w "-local=$(go list -m)" .
 
