@@ -62,9 +62,12 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 func (c *Conn) CloseRead(ctx context.Context) context.Context {
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
+		defer c.CloseNow()
 		defer cancel()
-		c.Reader(ctx)
-		c.Close(StatusPolicyViolation, "unexpected data message")
+		_, _, err := c.Reader(ctx)
+		if err == nil {
+			c.Close(StatusPolicyViolation, "unexpected data message")
+		}
 	}()
 	return ctx
 }

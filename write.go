@@ -323,6 +323,9 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 
 	select {
 	case <-c.closed:
+		if opcode == opClose {
+			return n, nil
+		}
 		return n, errClosed
 	case c.writeTimeout <- context.Background():
 	}
