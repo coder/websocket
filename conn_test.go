@@ -236,6 +236,18 @@ func TestConn(t *testing.T) {
 		assert.Equal(t, "read msg", s, string(b))
 	})
 
+	t.Run("netConn/pastDeadline", func(t *testing.T) {
+		tt, c1, c2 := newConnTest(t, nil, nil)
+
+		n1 := websocket.NetConn(tt.ctx, c1, websocket.MessageBinary)
+		n2 := websocket.NetConn(tt.ctx, c2, websocket.MessageBinary)
+
+		n1.SetDeadline(time.Now().Add(-time.Minute))
+		n2.SetDeadline(time.Now().Add(-time.Minute))
+
+		// No panic we're good.
+	})
+
 	t.Run("wsjson", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
 

@@ -210,7 +210,11 @@ func (nc *netConn) SetWriteDeadline(t time.Time) error {
 	if t.IsZero() {
 		nc.writeTimer.Stop()
 	} else {
-		nc.writeTimer.Reset(time.Until(t))
+		dur := time.Until(t)
+		if dur <= 0 {
+			dur = 1
+		}
+		nc.writeTimer.Reset(dur)
 	}
 	return nil
 }
@@ -220,7 +224,11 @@ func (nc *netConn) SetReadDeadline(t time.Time) error {
 	if t.IsZero() {
 		nc.readTimer.Stop()
 	} else {
-		nc.readTimer.Reset(time.Until(t))
+		dur := time.Until(t)
+		if dur <= 0 {
+			dur = 1
+		}
+		nc.readTimer.Reset(dur)
 	}
 	return nil
 }
