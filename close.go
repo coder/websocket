@@ -182,6 +182,13 @@ func (c *Conn) waitCloseHandshake() error {
 		return c.readCloseFrameErr
 	}
 
+	for i := int64(0); i < c.msgReader.payloadLength; i++ {
+		_, err := c.br.ReadByte()
+		if err != nil {
+			return err
+		}
+	}
+
 	for {
 		h, err := c.readLoop(ctx)
 		if err != nil {

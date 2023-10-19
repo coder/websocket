@@ -308,6 +308,27 @@ func TestConn(t *testing.T) {
 		assert.ErrorIs(t, websocket.ErrClosed, err1)
 		assert.ErrorIs(t, websocket.ErrClosed, err2)
 	})
+
+	t.Run("MidReadClose", func(t *testing.T) {
+		tt, c1, c2 := newConnTest(t, nil, nil)
+
+		tt.goEchoLoop(c2)
+
+		c1.SetReadLimit(131072)
+
+		for i := 0; i < 5; i++ {
+			err := wstest.Echo(tt.ctx, c1, 131072)
+			assert.Success(t, err)
+		}
+
+		err := wsjson.Write(tt.ctx, c1, "four")
+		assert.Success(t, err)
+		_, _, err = c1.Reader(tt.ctx)
+		assert.Success(t, err)
+
+		err = c1.Close(websocket.StatusNormalClosure, "")
+		assert.Success(t, err)
+	})
 }
 
 func TestWasm(t *testing.T) {
