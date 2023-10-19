@@ -45,8 +45,6 @@ const (
 type Conn struct {
 	noCopy
 
-	wg sync.WaitGroup
-
 	subprotocol    string
 	rwc            io.ReadWriteCloser
 	client         bool
@@ -72,6 +70,7 @@ type Conn struct {
 	writeHeaderBuf [8]byte
 	writeHeader    header
 
+	wg         sync.WaitGroup
 	closed     chan struct{}
 	closeMu    sync.Mutex
 	closeErr   error
@@ -132,7 +131,11 @@ func newConn(cfg connConfig) *Conn {
 		c.close(errors.New("connection garbage collected"))
 	})
 
-	c.wgGo(c.timeoutLoop)
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		c.timeoutLoop()
+	}()
 
 	return c
 }
@@ -163,10 +166,12 @@ func (c *Conn) close(err error) {
 	// closeErr.
 	c.rwc.Close()
 
-	c.wgGo(func() {
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
 		c.msgWriter.close()
 		c.msgReader.close()
-	})
+	}()
 }
 
 func (c *Conn) timeoutLoop() {
@@ -183,9 +188,11 @@ func (c *Conn) timeoutLoop() {
 
 		case <-readCtx.Done():
 			c.setCloseErr(fmt.Errorf("read timed out: %w", readCtx.Err()))
-			c.wgGo(func() {
+			c.wg.Add(1)
+			go func() {
+				defer c.wg.Done()
 				c.writeError(StatusPolicyViolation, errors.New("read timed out"))
-			})
+			}()
 		case <-writeCtx.Done():
 			c.close(fmt.Errorf("write timed out: %w", writeCtx.Err()))
 			return
@@ -302,15 +309,3 @@ func (m *mu) unlock() {
 type noCopy struct{}
 
 func (*noCopy) Lock() {}
-
-func (c *Conn) wgGo(fn func()) {
-	c.wg.Add(1)
-	go func() {
-		defer c.wg.Done()
-		fn()
-	}()
-}
-
-func (c *Conn) wgWait() {
-	c.wg.Wait()
-}

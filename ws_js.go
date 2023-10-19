@@ -47,6 +47,7 @@ type Conn struct {
 	// read limit for a message in bytes.
 	msgReadLimit xsync.Int64
 
+	wg            sync.WaitGroup
 	closingMu     sync.Mutex
 	isReadClosed  xsync.Int64
 	closeOnce     sync.Once
@@ -223,6 +224,7 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) error {
 // or the connection is closed.
 // It thus performs the full WebSocket close handshake.
 func (c *Conn) Close(code StatusCode, reason string) error {
+	defer c.wg.Wait()
 	err := c.exportedClose(code, reason)
 	if err != nil {
 		return fmt.Errorf("failed to close WebSocket: %w", err)
@@ -236,6 +238,7 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 // note: No different from Close(StatusGoingAway, "") in WASM as there is no way to close
 // a WebSocket without the close handshake.
 func (c *Conn) CloseNow() error {
+	defer c.wg.Wait()
 	return c.Close(StatusGoingAway, "")
 }
 
@@ -388,10 +391,15 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 	c.isReadClosed.Store(1)
 
 	ctx, cancel := context.WithCancel(ctx)
+	c.wg.Add(1)
 	go func() {
+		defer c.CloseNow()
+		defer c.wg.Done()
 		defer cancel()
-		c.read(ctx)
-		c.Close(StatusPolicyViolation, "unexpected data message")
+		_, _, err := c.read(ctx)
+		if err != nil {
+			c.Close(StatusPolicyViolation, "unexpected data message")
+		}
 	}()
 	return ctx
 }
