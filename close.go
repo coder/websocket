@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"nhooyr.io/websocket/internal/errd"
@@ -107,7 +108,7 @@ func (c *Conn) CloseNow() (err error) {
 	defer errd.Wrap(&err, "failed to close WebSocket")
 
 	if c.isClosed() {
-		return errClosed
+		return net.ErrClosed
 	}
 
 	c.close(nil)
@@ -124,7 +125,7 @@ func (c *Conn) closeHandshake(code StatusCode, reason string) (err error) {
 		return writeErr
 	}
 
-	if CloseStatus(closeHandshakeErr) == -1 && !errors.Is(errClosed, closeHandshakeErr) {
+	if CloseStatus(closeHandshakeErr) == -1 && !errors.Is(net.ErrClosed, closeHandshakeErr) {
 		return closeHandshakeErr
 	}
 
@@ -137,7 +138,7 @@ func (c *Conn) writeClose(code StatusCode, reason string) error {
 	c.wroteClose = true
 	c.closeMu.Unlock()
 	if wroteClose {
-		return errClosed
+		return net.ErrClosed
 	}
 
 	ce := CloseError{

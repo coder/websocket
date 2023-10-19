@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"reflect"
 	"runtime"
@@ -151,7 +152,7 @@ func (c *Conn) read(ctx context.Context) (MessageType, []byte, error) {
 		return 0, nil, ctx.Err()
 	case <-c.readSignal:
 	case <-c.closed:
-		return 0, nil, errClosed
+		return 0, nil, net.ErrClosed
 	}
 
 	c.readBufMu.Lock()
@@ -205,7 +206,7 @@ func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 
 func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) error {
 	if c.isClosed() {
-		return errClosed
+		return net.ErrClosed
 	}
 	switch typ {
 	case MessageBinary:
@@ -243,7 +244,7 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 	defer c.closingMu.Unlock()
 
 	if c.isClosed() {
-		return errClosed
+		return net.ErrClosed
 	}
 
 	ce := fmt.Errorf("sent close: %w", CloseError{
@@ -321,7 +322,7 @@ func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Resp
 			StatusCode: http.StatusSwitchingProtocols,
 		}, nil
 	case <-c.closed:
-		return nil, nil, errClosed
+		return nil, nil, net.ErrClosed
 	}
 }
 

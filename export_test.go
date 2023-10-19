@@ -3,7 +3,11 @@
 
 package websocket
 
-import "nhooyr.io/websocket/internal/util"
+import (
+	"net"
+
+	"nhooyr.io/websocket/internal/util"
+)
 
 func (c *Conn) RecordBytesWritten() *int {
 	var bytesWritten int
@@ -24,7 +28,7 @@ func (c *Conn) RecordBytesRead() *int {
 	return &bytesRead
 }
 
-var ErrClosed = errClosed
+var ErrClosed = net.ErrClosed
 
 var ExportedDial = dial
 var SecWebSocketAccept = secWebSocketAccept

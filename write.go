@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"time"
 
 	"compress/flate"
@@ -262,14 +263,14 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 		case <-ctx.Done():
 			return 0, ctx.Err()
 		case <-c.closed:
-			return 0, errClosed
+			return 0, net.ErrClosed
 		}
 	}
 	defer c.writeFrameMu.unlock()
 
 	select {
 	case <-c.closed:
-		return 0, errClosed
+		return 0, net.ErrClosed
 	case c.writeTimeout <- ctx:
 	}
 
@@ -277,7 +278,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 		if err != nil {
 			select {
 			case <-c.closed:
-				err = errClosed
+				err = net.ErrClosed
 			case <-ctx.Done():
 				err = ctx.Err()
 			default:
@@ -327,7 +328,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 		if opcode == opClose {
 			return n, nil
 		}
-		return n, errClosed
+		return n, net.ErrClosed
 	case c.writeTimeout <- context.Background():
 	}
 
