@@ -140,4 +140,15 @@ to nhooyr.io/websocket.
 [gobwas/ws](https://github.com/gobwas/ws) has an extremely flexible API that allows it to be used
 in an event driven style for performance. See the author's [blog post](https://medium.freecodecamp.org/million-websockets-and-go-cc58418460bb).
 
-However when writing idiomatic Go, nhooyr.io/websocket will be faster and easier to use.
+However it is quite bloated. See https://pkg.go.dev/github.com/gobwas/ws
+
+When writing idiomatic Go, nhooyr.io/websocket will be faster and easier to use.
+
+#### lesismal/nbio
+
+[lesismal/nbio](https://github.com/lesismal/nbio) is similar to gobwas/ws in that the API is
+event driven for performance reasons.
+
+However it is quite bloated. See https://pkg.go.dev/github.com/lesismal/nbio
+
+When writing idiomatic Go, nhooyr.io/websocket will be faster and easier to use.
