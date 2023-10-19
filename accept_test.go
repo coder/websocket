@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"nhooyr.io/websocket/internal/test/assert"
+	"nhooyr.io/websocket/internal/test/xrand"
 )
 
 func TestAccept(t *testing.T) {
@@ -36,7 +37,7 @@ func TestAccept(t *testing.T) {
 		r.Header.Set("Connection", "Upgrade")
 		r.Header.Set("Upgrade", "websocket")
 		r.Header.Set("Sec-WebSocket-Version", "13")
-		r.Header.Set("Sec-WebSocket-Key", "meow123")
+		r.Header.Set("Sec-WebSocket-Key", xrand.Base64(16))
 		r.Header.Set("Origin", "harhar.com")
 
 		_, err := Accept(w, r, nil)
@@ -52,7 +53,7 @@ func TestAccept(t *testing.T) {
 		r.Header.Set("Connection", "Upgrade")
 		r.Header.Set("Upgrade", "websocket")
 		r.Header.Set("Sec-WebSocket-Version", "13")
-		r.Header.Set("Sec-WebSocket-Key", "meow123")
+		r.Header.Set("Sec-WebSocket-Key", xrand.Base64(16))
 		r.Header.Set("Origin", "https://harhar.com")
 
 		_, err := Accept(w, r, nil)
@@ -67,7 +68,7 @@ func TestAccept(t *testing.T) {
 			r.Header.Set("Connection", "Upgrade")
 			r.Header.Set("Upgrade", "websocket")
 			r.Header.Set("Sec-WebSocket-Version", "13")
-			r.Header.Set("Sec-WebSocket-Key", "meow123")
+			r.Header.Set("Sec-WebSocket-Key", xrand.Base64(16))
 			r.Header.Set("Sec-WebSocket-Extensions", extensions)
 			return r
 		}
@@ -116,7 +117,7 @@ func TestAccept(t *testing.T) {
 		r.Header.Set("Connection", "Upgrade")
 		r.Header.Set("Upgrade", "websocket")
 		r.Header.Set("Sec-WebSocket-Version", "13")
-		r.Header.Set("Sec-WebSocket-Key", "meow123")
+		r.Header.Set("Sec-WebSocket-Key", xrand.Base64(16))
 
 		_, err := Accept(w, r, nil)
 		assert.Contains(t, err, `http.ResponseWriter does not implement http.Hijacker`)
@@ -136,7 +137,7 @@ func TestAccept(t *testing.T) {
 		r.Header.Set("Connection", "Upgrade")
 		r.Header.Set("Upgrade", "websocket")
 		r.Header.Set("Sec-WebSocket-Version", "13")
-		r.Header.Set("Sec-WebSocket-Key", "meow123")
+		r.Header.Set("Sec-WebSocket-Key", xrand.Base64(16))
 
 		_, err := Accept(w, r, nil)
 		assert.Contains(t, err, `failed to hijack connection`)
@@ -183,7 +184,15 @@ func Test_verifyClientHandshake(t *testing.T) {
 			},
 		},
 		{
-			name: "badWebSocketKey",
+			name: "missingWebSocketKey",
+			h: map[string]string{
+				"Connection":            "Upgrade",
+				"Upgrade":               "websocket",
+				"Sec-WebSocket-Version": "13",
+			},
+		},
+		{
+			name: "emptyWebSocketKey",
 			h: map[string]string{
 				"Connection":            "Upgrade",
 				"Upgrade":               "websocket",
@@ -192,12 +201,42 @@ func Test_verifyClientHandshake(t *testing.T) {
 			},
 		},
 		{
+			name: "shortWebSocketKey",
+			h: map[string]string{
+				"Connection":            "Upgrade",
+				"Upgrade":               "websocket",
+				"Sec-WebSocket-Version": "13",
+				"Sec-WebSocket-Key":     xrand.Base64(15),
+			},
+		},
+		{
+			name: "invalidWebSocketKey",
+			h: map[string]string{
+				"Connection":            "Upgrade",
+				"Upgrade":               "websocket",
+				"Sec-WebSocket-Version": "13",
+				"Sec-WebSocket-Key":     "notbase64",
+			},
+		},
+		{
+			name: "extraWebSocketKey",
+			h: map[string]string{
+				"Connection":            "Upgrade",
+				"Upgrade":               "websocket",
+				"Sec-WebSocket-Version": "13",
+				// Kinda cheeky, but http headers are case-insensitive.
+				// If 2 sec keys are present, this is a failure condition.
+				"Sec-WebSocket-Key": xrand.Base64(16),
+				"sec-webSocket-key": xrand.Base64(16),
+			},
+		},
+		{
 			name: "badHTTPVersion",
 			h: map[string]string{
 				"Connection":            "Upgrade",
 				"Upgrade":               "websocket",
 				"Sec-WebSocket-Version": "13",
-				"Sec-WebSocket-Key":     "meow123",
+				"Sec-WebSocket-Key":     xrand.Base64(16),
 			},
 			http1: true,
 		},
@@ -207,7 +246,17 @@ func Test_verifyClientHandshake(t *testing.T) {
 				"Connection":            "keep-alive, Upgrade",
 				"Upgrade":               "websocket",
 				"Sec-WebSocket-Version": "13",
-				"Sec-WebSocket-Key":     "meow123",
+				"Sec-WebSocket-Key":     xrand.Base64(16),
+			},
+			success: true,
+		},
+		{
+			name: "successSecKeyExtraSpace",
+			h: map[string]string{
+				"Connection":            "keep-alive, Upgrade",
+				"Upgrade":               "websocket",
+				"Sec-WebSocket-Version": "13",
+				"Sec-WebSocket-Key":     "   " + xrand.Base64(16) + "  ",
 			},
 			success: true,
 		},
@@ -227,7 +276,7 @@ func Test_verifyClientHandshake(t *testing.T) {
 			}
 
 			for k, v := range tc.h {
-				r.Header.Set(k, v)
+				r.Header.Add(k, v)
 			}
 
 			_, err := verifyClientRequest(httptest.NewRecorder(), r)

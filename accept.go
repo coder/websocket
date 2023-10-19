@@ -185,8 +185,19 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) (errCode int, _
 		return http.StatusBadRequest, fmt.Errorf("unsupported WebSocket protocol version (only 13 is supported): %q", r.Header.Get("Sec-WebSocket-Version"))
 	}
 
-	if r.Header.Get("Sec-WebSocket-Key") == "" {
+	websocketSecKeys := r.Header.Values("Sec-WebSocket-Key")
+	if len(websocketSecKeys) == 0 {
 		return http.StatusBadRequest, errors.New("WebSocket protocol violation: missing Sec-WebSocket-Key")
+	}
+
+	if len(websocketSecKeys) > 1 {
+		return http.StatusBadRequest, errors.New("WebSocket protocol violation: multiple Sec-WebSocket-Key headers")
+	}
+
+	// The RFC states to remove any leading or trailing whitespace.
+	websocketSecKey := strings.TrimSpace(websocketSecKeys[0])
+	if v, err := base64.StdEncoding.DecodeString(websocketSecKey); err != nil || len(v) != 16 {
+		return http.StatusBadRequest, fmt.Errorf("WebSocket protocol violation: invalid Sec-WebSocket-Key %q, must be a 16 byte base64 encoded string", websocketSecKey)
 	}
 
 	return 0, nil
