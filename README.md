@@ -121,7 +121,7 @@ Advantages of nhooyr.io/websocket:
 - Transparent message buffer reuse with [wsjson](https://pkg.go.dev/nhooyr.io/websocket/wsjson) subpackage
 - [1.75x](https://github.com/nhooyr/websocket/releases/tag/v1.7.4) faster WebSocket masking implementation in pure Go
   - Gorilla's implementation is slower and uses [unsafe](https://golang.org/pkg/unsafe/).
-    Soon we'll have assembly and be 4.5x faster [#326](https://github.com/nhooyr/websocket/pull/326)
+    Soon we'll have assembly and be 3x faster [#326](https://github.com/nhooyr/websocket/pull/326)
 - Full [permessage-deflate](https://tools.ietf.org/html/rfc7692) compression extension support
   - Gorilla only supports no context takeover mode
 - [CloseRead](https://pkg.go.dev/nhooyr.io/websocket#Conn.CloseRead) helper for write only connections ([gorilla/websocket#492](https://github.com/gorilla/websocket/issues/492))
