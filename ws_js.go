@@ -231,7 +231,7 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 }
 
 // CloseNow closes the WebSocket connection without attempting a close handshake.
-// Use When you do not want the overhead of the close handshake.
+// Use when you do not want the overhead of the close handshake.
 //
 // note: No different from Close(StatusGoingAway, "") in WASM as there is no way to close
 // a WebSocket without the close handshake.

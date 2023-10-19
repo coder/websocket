@@ -53,8 +53,10 @@ type Conn struct {
 	br             *bufio.Reader
 	bw             *bufio.Writer
 
-	readTimeout  chan context.Context
-	writeTimeout chan context.Context
+	timeoutLoopCancel context.CancelFunc
+	timeoutLoopDone   chan struct{}
+	readTimeout       chan context.Context
+	writeTimeout      chan context.Context
 
 	// Read state.
 	readMu            *mu
@@ -102,8 +104,9 @@ func newConn(cfg connConfig) *Conn {
 		br: cfg.br,
 		bw: cfg.bw,
 
-		readTimeout:  make(chan context.Context),
-		writeTimeout: make(chan context.Context),
+		timeoutLoopDone: make(chan struct{}),
+		readTimeout:     make(chan context.Context),
+		writeTimeout:    make(chan context.Context),
 
 		closed:      make(chan struct{}),
 		activePings: make(map[string]chan<- struct{}),
@@ -130,7 +133,9 @@ func newConn(cfg connConfig) *Conn {
 		c.close(errors.New("connection garbage collected"))
 	})
 
-	go c.timeoutLoop()
+	var ctx context.Context
+	ctx, c.timeoutLoopCancel = context.WithCancel(context.Background())
+	go c.timeoutLoop(ctx)
 
 	return c
 }
@@ -152,6 +157,10 @@ func (c *Conn) close(err error) {
 		err = c.rwc.Close()
 	}
 	c.setCloseErrLocked(err)
+
+	c.timeoutLoopCancel()
+	<-c.timeoutLoopDone
+
 	close(c.closed)
 	runtime.SetFinalizer(c, nil)
 
@@ -160,18 +169,23 @@ func (c *Conn) close(err error) {
 	// closeErr.
 	c.rwc.Close()
 
-	go func() {
-		c.msgWriter.close()
-		c.msgReader.close()
-	}()
+	c.closeMu.Unlock()
+	defer c.closeMu.Lock()
+
+	c.msgWriter.close()
+	c.msgReader.close()
 }
 
-func (c *Conn) timeoutLoop() {
+func (c *Conn) timeoutLoop(ctx context.Context) {
+	defer close(c.timeoutLoopDone)
+
 	readCtx := context.Background()
 	writeCtx := context.Background()
 
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case <-c.closed:
 			return
 

@@ -399,10 +399,8 @@ func newConnTest(t testing.TB, dialOpts *websocket.DialOptions, acceptOpts *webs
 		c1, c2 = c2, c1
 	}
 	t.Cleanup(func() {
-		// We don't actually care whether this succeeds so we just run it in a separate goroutine to avoid
-		// blocking the test shutting down.
-		go c2.Close(websocket.StatusInternalError, "")
-		go c1.Close(websocket.StatusInternalError, "")
+		c2.CloseNow()
+		c1.CloseNow()
 	})
 
 	return tt, c1, c2
@@ -596,16 +594,19 @@ func TestConcurrentClosePing(t *testing.T) {
 			defer c2.CloseNow()
 			c1.CloseRead(context.Background())
 			c2.CloseRead(context.Background())
-			go func() {
+			errc := xsync.Go(func() error {
 				for range time.Tick(time.Millisecond) {
-					if err := c1.Ping(context.Background()); err != nil {
-						return
+					err := c1.Ping(context.Background())
+					if err != nil {
+						return err
 					}
 				}
-			}()
+				panic("unreachable")
+			})
 
 			time.Sleep(10 * time.Millisecond)
 			assert.Success(t, c1.Close(websocket.StatusNormalClosure, ""))
+			<-errc
 		}()
 	}
 }

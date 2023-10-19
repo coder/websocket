@@ -164,11 +164,12 @@ func Test_verifyHostOverride(t *testing.T) {
 				}, nil
 			}
 
-			_, _, err := websocket.Dial(ctx, "ws://example.com", &websocket.DialOptions{
+			c, _, err := websocket.Dial(ctx, "ws://example.com", &websocket.DialOptions{
 				HTTPClient: mockHTTPClient(rt),
 				Host:       tc.host,
 			})
 			assert.Success(t, err)
+			c.CloseNow()
 		})
 	}
 
