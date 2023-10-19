@@ -23,19 +23,6 @@ const (
 	// This is the default. Do not enable compression without benchmarking for your particular use case first.
 	CompressionDisabled CompressionMode = iota
 
-	// CompressionNoContextTakeover compresses each message greater than 512 bytes. Each message is compressed with
-	// a new 1.2 MB flate.Writer pulled from a sync.Pool. Each message is read with a 40 KB flate.Reader pulled from
-	// a sync.Pool.
-	//
-	// This means less efficient compression as the sliding window from previous messages will not be used but the
-	// memory overhead will be lower as there will be no fixed cost for the flate.Writer nor the 32 KB sliding window.
-	// Especially if the connections are long lived and seldom written to.
-	//
-	// Thus, it uses less memory than CompressionContextTakeover but compresses less efficiently.
-	//
-	// If the peer does not support CompressionNoContextTakeover then we will fall back to CompressionDisabled.
-	CompressionNoContextTakeover
-
 	// CompressionContextTakeover compresses each message greater than 128 bytes reusing the 32 KB sliding window from
 	// previous messages. i.e compression context across messages is preserved.
 	//
@@ -48,6 +35,19 @@ const (
 	//
 	// If the peer does not support CompressionContextTakeover then we will fall back to CompressionNoContextTakeover.
 	CompressionContextTakeover
+
+	// CompressionNoContextTakeover compresses each message greater than 512 bytes. Each message is compressed with
+	// a new 1.2 MB flate.Writer pulled from a sync.Pool. Each message is read with a 40 KB flate.Reader pulled from
+	// a sync.Pool.
+	//
+	// This means less efficient compression as the sliding window from previous messages will not be used but the
+	// memory overhead will be lower as there will be no fixed cost for the flate.Writer nor the 32 KB sliding window.
+	// Especially if the connections are long lived and seldom written to.
+	//
+	// Thus, it uses less memory than CompressionContextTakeover but compresses less efficiently.
+	//
+	// If the peer does not support CompressionNoContextTakeover then we will fall back to CompressionDisabled.
+	CompressionNoContextTakeover
 )
 
 func (m CompressionMode) opts() *compressionOptions {
