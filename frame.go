@@ -173,7 +173,7 @@ func writeFrameHeader(h header, w *bufio.Writer, buf []byte) (err error) {
 	return nil
 }
 
-// mask applies the WebSocket masking algorithm to p
+// maskGo applies the WebSocket masking algorithm to p
 // with the given key.
 // See https://tools.ietf.org/html/rfc6455#section-5.3
 //

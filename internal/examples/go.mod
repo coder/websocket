@@ -8,3 +8,5 @@ require (
 	golang.org/x/time v0.3.0
 	nhooyr.io/websocket v0.0.0-00010101000000-000000000000
 )
+
+require golang.org/x/sys v0.13.0 // indirect
