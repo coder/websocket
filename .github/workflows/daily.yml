@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-go@v4
         with:
           go-version-file: ./go.mod
-      - run: AUTOBAHN=1 ./ci/test.sh -bench=.
+      - run: AUTOBAHN=1 ./ci/test.sh
       - uses: actions/upload-artifact@v3
         with:
           name: coverage.html
@@ -47,7 +47,7 @@ jobs:
       - uses: actions/setup-go@v4
         with:
           go-version-file: ./go.mod
-      - run: AUTOBAHN=1 ./ci/test.sh -bench=.
+      - run: AUTOBAHN=1 ./ci/test.sh
       - uses: actions/upload-artifact@v3
         with:
           name: coverage.html
