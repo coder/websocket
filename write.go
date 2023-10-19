@@ -38,7 +38,7 @@ func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 //
 // See the Writer method if you want to stream a message.
 //
-// If compression is disabled or the threshold is not met, then it
+// If compression is disabled or the compression threshold is not met, then it
 // will write the message in a single frame.
 func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	_, err := c.write(ctx, typ, p)

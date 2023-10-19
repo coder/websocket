@@ -9,43 +9,45 @@ import (
 	"sync"
 )
 
-// CompressionMode represents the modes available to the deflate extension.
+// CompressionMode represents the modes available to the permessage-deflate extension.
 // See https://tools.ietf.org/html/rfc7692
 //
-// Works in all browsers except Safari which does not implement the deflate extension.
+// Works in all modern browsers except Safari which does not implement the permessage-deflate extension.
+//
+// Compression is only used if the peer supports the mode selected.
 type CompressionMode int
 
 const (
-	// CompressionDisabled disables the deflate extension.
+	// CompressionDisabled disables the negotiation of the permessage-deflate extension.
 	//
-	// Use this if you are using a predominantly binary protocol with very
-	// little duplication in between messages or CPU and memory are more
-	// important than bandwidth.
-	//
-	// This is the default.
+	// This is the default. Do not enable compression without benchmarking for your particular use case first.
 	CompressionDisabled CompressionMode = iota
 
-	// CompressionContextTakeover uses a 32 kB sliding window and flate.Writer per connection.
-	// It reuses the sliding window from previous messages.
-	// As most WebSocket protocols are repetitive, this can be very efficient.
-	// It carries an overhead of 32 kB + 1.2 MB for every connection compared to CompressionNoContextTakeover.
+	// CompressionNoContextTakeover compresses each message greater than 512 bytes. Each message is compressed with
+	// a new 1.2 MB flate.Writer pulled from a sync.Pool. Each message is read with a 40 KB flate.Reader pulled from
+	// a sync.Pool.
 	//
-	// Sometime in the future it will carry 65 kB overhead instead once https://github.com/golang/go/issues/36919
-	// is fixed.
+	// This means less efficient compression as the sliding window from previous messages will not be used but the
+	// memory overhead will be lower as there will be no fixed cost for the flate.Writer nor the 32 KB sliding window.
+	// Especially if the connections are long lived and seldom written to.
 	//
-	// If the peer negotiates NoContextTakeover on the client or server side, it will be
-	// used instead as this is required by the RFC.
-	CompressionContextTakeover
-
-	// CompressionNoContextTakeover grabs a new flate.Reader and flate.Writer as needed
-	// for every message. This applies to both server and client side.
+	// Thus, it uses less memory than CompressionContextTakeover but compresses less efficiently.
 	//
-	// This means less efficient compression as the sliding window from previous messages
-	// will not be used but the memory overhead will be lower if the connections
-	// are long lived and seldom used.
-	//
-	// The message will only be compressed if greater than 512 bytes.
+	// If the peer does not support CompressionNoContextTakeover then we will fall back to CompressionDisabled.
 	CompressionNoContextTakeover
+
+	// CompressionContextTakeover compresses each message greater than 128 bytes reusing the 32 KB sliding window from
+	// previous messages. i.e compression context across messages is preserved.
+	//
+	// As most WebSocket protocols are text based and repetitive, this compression mode can be very efficient.
+	//
+	// The memory overhead is a fixed 32 KB sliding window, a fixed 1.2 MB flate.Writer and a sync.Pool of 40 KB flate.Reader's
+	// that are used when reading and then returned.
+	//
+	// Thus, it uses more memory than CompressionNoContextTakeover but compresses more efficiently.
+	//
+	// If the peer does not support CompressionContextTakeover then we will fall back to CompressionNoContextTakeover.
+	CompressionContextTakeover
 )
 
 func (m CompressionMode) opts() *compressionOptions {
