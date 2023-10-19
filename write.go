@@ -109,7 +109,7 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) (int, error
 
 	if !c.flate() {
 		defer c.msgWriter.mu.unlock()
-		return c.writeFrame(true, ctx, true, false, c.msgWriter.opcode, p)
+		return c.writeFrame(ctx, true, false, c.msgWriter.opcode, p)
 	}
 
 	n, err := mw.Write(p)
@@ -146,20 +146,19 @@ func (mw *msgWriter) putFlateWriter() {
 
 // Write writes the given bytes to the WebSocket connection.
 func (mw *msgWriter) Write(p []byte) (_ int, err error) {
-	if mw.closed {
-		return 0, errors.New("cannot use closed writer")
-	}
-
 	err = mw.writeMu.lock(mw.ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to write: %w", err)
 	}
 	defer mw.writeMu.unlock()
 
+	if mw.closed {
+		return 0, errors.New("cannot use closed writer")
+	}
+
 	defer func() {
 		if err != nil {
 			err = fmt.Errorf("failed to write: %w", err)
-			mw.writeMu.unlock()
 			mw.c.close(err)
 		}
 	}()
@@ -180,7 +179,7 @@ func (mw *msgWriter) Write(p []byte) (_ int, err error) {
 }
 
 func (mw *msgWriter) write(p []byte) (int, error) {
-	n, err := mw.c.writeFrame(true, mw.ctx, false, mw.flate, mw.opcode, p)
+	n, err := mw.c.writeFrame(mw.ctx, false, mw.flate, mw.opcode, p)
 	if err != nil {
 		return n, fmt.Errorf("failed to write data frame: %w", err)
 	}
@@ -210,7 +209,7 @@ func (mw *msgWriter) Close() (err error) {
 		}
 	}
 
-	_, err = mw.c.writeFrame(true, mw.ctx, true, mw.flate, mw.opcode, nil)
+	_, err = mw.c.writeFrame(mw.ctx, true, mw.flate, mw.opcode, nil)
 	if err != nil {
 		return fmt.Errorf("failed to write fin frame: %w", err)
 	}
@@ -236,7 +235,7 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
 	defer cancel()
 
-	_, err := c.writeFrame(false, ctx, true, false, opcode, p)
+	_, err := c.writeFrame(ctx, true, false, opcode, p)
 	if err != nil {
 		return fmt.Errorf("failed to write control frame %v: %w", opcode, err)
 	}
@@ -244,7 +243,7 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 }
 
 // frame handles all writes to the connection.
-func (c *Conn) writeFrame(msgWriter bool, ctx context.Context, fin bool, flate bool, opcode opcode, p []byte) (_ int, err error) {
+func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opcode, p []byte) (_ int, err error) {
 	err = c.writeFrameMu.lock(ctx)
 	if err != nil {
 		return 0, err
@@ -283,10 +282,6 @@ func (c *Conn) writeFrame(msgWriter bool, ctx context.Context, fin bool, flate b
 			case <-ctx.Done():
 				err = ctx.Err()
 			default:
-			}
-			c.writeFrameMu.unlock()
-			if msgWriter {
-				c.msgWriter.writeMu.unlock()
 			}
 			c.close(err)
 			err = fmt.Errorf("failed to write frame: %w", err)

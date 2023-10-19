@@ -45,6 +45,8 @@ const (
 type Conn struct {
 	noCopy
 
+	wg sync.WaitGroup
+
 	subprotocol    string
 	rwc            io.ReadWriteCloser
 	client         bool
@@ -53,10 +55,8 @@ type Conn struct {
 	br             *bufio.Reader
 	bw             *bufio.Writer
 
-	timeoutLoopCancel context.CancelFunc
-	timeoutLoopDone   chan struct{}
-	readTimeout       chan context.Context
-	writeTimeout      chan context.Context
+	readTimeout  chan context.Context
+	writeTimeout chan context.Context
 
 	// Read state.
 	readMu            *mu
@@ -104,9 +104,8 @@ func newConn(cfg connConfig) *Conn {
 		br: cfg.br,
 		bw: cfg.bw,
 
-		timeoutLoopDone: make(chan struct{}),
-		readTimeout:     make(chan context.Context),
-		writeTimeout:    make(chan context.Context),
+		readTimeout:  make(chan context.Context),
+		writeTimeout: make(chan context.Context),
 
 		closed:      make(chan struct{}),
 		activePings: make(map[string]chan<- struct{}),
@@ -133,9 +132,7 @@ func newConn(cfg connConfig) *Conn {
 		c.close(errors.New("connection garbage collected"))
 	})
 
-	var ctx context.Context
-	ctx, c.timeoutLoopCancel = context.WithCancel(context.Background())
-	go c.timeoutLoop(ctx)
+	c.wgGo(c.timeoutLoop)
 
 	return c
 }
@@ -158,9 +155,6 @@ func (c *Conn) close(err error) {
 	}
 	c.setCloseErrLocked(err)
 
-	c.timeoutLoopCancel()
-	<-c.timeoutLoopDone
-
 	close(c.closed)
 	runtime.SetFinalizer(c, nil)
 
@@ -169,23 +163,18 @@ func (c *Conn) close(err error) {
 	// closeErr.
 	c.rwc.Close()
 
-	c.closeMu.Unlock()
-	defer c.closeMu.Lock()
-
-	c.msgWriter.close()
-	c.msgReader.close()
+	c.wgGo(func() {
+		c.msgWriter.close()
+		c.msgReader.close()
+	})
 }
 
-func (c *Conn) timeoutLoop(ctx context.Context) {
-	defer close(c.timeoutLoopDone)
-
+func (c *Conn) timeoutLoop() {
 	readCtx := context.Background()
 	writeCtx := context.Background()
 
 	for {
 		select {
-		case <-ctx.Done():
-			return
 		case <-c.closed:
 			return
 
@@ -194,7 +183,9 @@ func (c *Conn) timeoutLoop(ctx context.Context) {
 
 		case <-readCtx.Done():
 			c.setCloseErr(fmt.Errorf("read timed out: %w", readCtx.Err()))
-			go c.writeError(StatusPolicyViolation, errors.New("timed out"))
+			c.wgGo(func() {
+				c.writeError(StatusPolicyViolation, errors.New("read timed out"))
+			})
 		case <-writeCtx.Done():
 			c.close(fmt.Errorf("write timed out: %w", writeCtx.Err()))
 			return
@@ -311,3 +302,15 @@ func (m *mu) unlock() {
 type noCopy struct{}
 
 func (*noCopy) Lock() {}
+
+func (c *Conn) wgGo(fn func()) {
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		fn()
+	}()
+}
+
+func (c *Conn) wgWait() {
+	c.wg.Wait()
+}

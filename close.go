@@ -99,12 +99,14 @@ func CloseStatus(err error) StatusCode {
 // Close will unblock all goroutines interacting with the connection once
 // complete.
 func (c *Conn) Close(code StatusCode, reason string) error {
+	defer c.wgWait()
 	return c.closeHandshake(code, reason)
 }
 
 // CloseNow closes the WebSocket connection without attempting a close handshake.
-// Use When you do not want the overhead of the close handshake.
+// Use when you do not want the overhead of the close handshake.
 func (c *Conn) CloseNow() (err error) {
+	defer c.wgWait()
 	defer errd.Wrap(&err, "failed to close WebSocket")
 
 	if c.isClosed() {

@@ -62,8 +62,11 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 // frames are responded to. This means c.Ping and c.Close will still work as expected.
 func (c *Conn) CloseRead(ctx context.Context) context.Context {
 	ctx, cancel := context.WithCancel(ctx)
+
+	c.wg.Add(1)
 	go func() {
 		defer c.CloseNow()
+		defer c.wg.Done()
 		defer cancel()
 		_, _, err := c.Reader(ctx)
 		if err == nil {
@@ -219,7 +222,6 @@ func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 		case <-ctx.Done():
 			return header{}, ctx.Err()
 		default:
-			c.readMu.unlock()
 			c.close(err)
 			return header{}, err
 		}
@@ -250,7 +252,6 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
 			return n, ctx.Err()
 		default:
 			err = fmt.Errorf("failed to read frame payload: %w", err)
-			c.readMu.unlock()
 			c.close(err)
 			return n, err
 		}
@@ -321,7 +322,6 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 	err = fmt.Errorf("received close frame: %w", ce)
 	c.setCloseErr(err)
 	c.writeClose(ce.Code, ce.Reason)
-	c.readMu.unlock()
 	c.close(err)
 	return err
 }
@@ -337,7 +337,6 @@ func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err erro
 
 	if !c.msgReader.fin {
 		err = errors.New("previous message not read to completion")
-		c.readMu.unlock()
 		c.close(fmt.Errorf("failed to get reader: %w", err))
 		return 0, nil, err
 	}
@@ -413,7 +412,6 @@ func (mr *msgReader) Read(p []byte) (n int, err error) {
 	}
 	if err != nil {
 		err = fmt.Errorf("failed to read: %w", err)
-		mr.c.readMu.unlock()
 		mr.c.close(err)
 	}
 	return n, err
