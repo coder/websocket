@@ -29,9 +29,15 @@ go get nhooyr.io/websocket
 
 ## Roadmap
 
+See GitHub issues for minor issues but the major future enhancements are:
+
+- [ ] Perfect examples [#217](https://github.com/nhooyr/websocket/issues/217)
+- [ ] wstest.Pipe for in memory testing [#340](https://github.com/nhooyr/websocket/issues/340)
 - [ ] Ping pong heartbeat helper [#267](https://github.com/nhooyr/websocket/issues/267)
-- [ ] Graceful shutdown helper [#209](https://github.com/nhooyr/websocket/issues/209)
+- [ ] Ping pong instrumentation callbacks [#246](https://github.com/nhooyr/websocket/issues/246)
+- [ ] Graceful shutdown helpers [#209](https://github.com/nhooyr/websocket/issues/209)
 - [ ] Assembly for WebSocket masking [#16](https://github.com/nhooyr/websocket/issues/16)
+      - WIP at [#326](https://github.com/nhooyr/websocket/pull/326), about 3x faster
 - [ ] HTTP/2 [#4](https://github.com/nhooyr/websocket/issues/4)
 - [ ] The holy grail [#402](https://github.com/nhooyr/websocket/issues/402)
 
