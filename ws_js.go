@@ -55,6 +55,7 @@ type Conn struct {
 	closeWasClean bool
 
 	releaseOnClose   func()
+	releaseOnError   func()
 	releaseOnMessage func()
 
 	readSignal chan struct{}
@@ -92,7 +93,13 @@ func (c *Conn) init() {
 		c.close(err, e.WasClean)
 
 		c.releaseOnClose()
+		c.releaseOnError()
 		c.releaseOnMessage()
+	})
+
+	c.releaseOnError = c.ws.OnError(func(v js.Value) {
+		c.setCloseErr(errors.New(v.Get("message").String()))
+		c.closeWithInternal()
 	})
 
 	c.releaseOnMessage = c.ws.OnMessage(func(e wsjs.MessageEvent) {
