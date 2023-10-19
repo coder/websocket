@@ -26,6 +26,9 @@ func gorillaMaskBytes(key [4]byte, pos int, b []byte) int
 //go:linkname mask nhooyr.io/websocket.mask
 func mask(key32 uint32, b []byte) int
 
+//go:linkname maskGo nhooyr.io/websocket.maskGo
+func maskGo(key32 uint32, b []byte) int
+
 func Benchmark_mask(b *testing.B) {
 	sizes := []int{
 		2,
@@ -54,7 +57,18 @@ func Benchmark_mask(b *testing.B) {
 		},
 
 		{
-			name: "nhooyr",
+			name: "nhooyr-go",
+			fn: func(b *testing.B, key [4]byte, p []byte) {
+				key32 := binary.LittleEndian.Uint32(key[:])
+				b.ResetTimer()
+
+				for i := 0; i < b.N; i++ {
+					maskGo(key32, p)
+				}
+			},
+		},
+		{
+			name: "wdvxdr1123-asm",
 			fn: func(b *testing.B, key [4]byte, p []byte) {
 				key32 := binary.LittleEndian.Uint32(key[:])
 				b.ResetTimer()
@@ -64,6 +78,7 @@ func Benchmark_mask(b *testing.B) {
 				}
 			},
 		},
+
 		{
 			name: "gorilla",
 			fn: func(b *testing.B, key [4]byte, p []byte) {
