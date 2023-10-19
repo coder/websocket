@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"nhooyr.io/websocket/internal/errd"
@@ -150,9 +149,6 @@ func (c *Conn) writeClose(code StatusCode, reason string) error {
 	var marshalErr error
 	if ce.Code != StatusNoStatusRcvd {
 		p, marshalErr = ce.bytes()
-		if marshalErr != nil {
-			log.Printf("websocket: %v", marshalErr)
-		}
 	}
 
 	writeErr := c.writeControl(context.Background(), opClose, p)
