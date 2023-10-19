@@ -535,6 +535,7 @@ func assertEcho(tb testing.TB, ctx context.Context, c *websocket.Conn) {
 	})
 
 	var act interface{}
+	c.SetReadLimit(1 << 30)
 	err := wsjson.Read(ctx, c, &act)
 	assert.Success(tb, err)
 	assert.Equal(tb, "read msg", exp, act)
