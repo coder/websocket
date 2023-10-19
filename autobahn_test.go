@@ -6,6 +6,7 @@ package websocket_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -20,6 +21,7 @@ import (
 	"nhooyr.io/websocket/internal/errd"
 	"nhooyr.io/websocket/internal/test/assert"
 	"nhooyr.io/websocket/internal/test/wstest"
+	"nhooyr.io/websocket/internal/util"
 )
 
 var excludedAutobahnCases = []string{
@@ -37,8 +39,7 @@ var autobahnCases = []string{"*"}
 // Used to run individual test cases. autobahnCases runs only those cases matched
 // and not excluded by excludedAutobahnCases. Adding cases here means excludedAutobahnCases
 // is niled.
-// TODO:
-// var forceAutobahnCases = []string{}
+var onlyAutobahnCases = []string{}
 
 func TestAutobahn(t *testing.T) {
 	t.Parallel()
@@ -54,10 +55,15 @@ func TestAutobahn(t *testing.T) {
 		)
 	}
 
+	if len(onlyAutobahnCases) > 0 {
+		excludedAutobahnCases = []string{}
+		autobahnCases = onlyAutobahnCases
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
 	defer cancel()
 
-	wstestURL, closeFn, err := wstestServer(ctx)
+	wstestURL, closeFn, err := wstestServer(t, ctx)
 	assert.Success(t, err)
 	defer func() {
 		assert.Success(t, closeFn())
@@ -90,7 +96,7 @@ func TestAutobahn(t *testing.T) {
 	assert.Success(t, err)
 	c.Close(websocket.StatusNormalClosure, "")
 
-	checkWSTestIndex(t, "./ci/out/wstestClientReports/index.json")
+	checkWSTestIndex(t, "./ci/out/autobahn-report/index.json")
 }
 
 func waitWS(ctx context.Context, url string) error {
@@ -109,9 +115,7 @@ func waitWS(ctx context.Context, url string) error {
 	return ctx.Err()
 }
 
-// TODO: Let docker pick the port and use docker port to find it.
-// Does mean we can't use -i but that's fine.
-func wstestServer(ctx context.Context) (url string, closeFn func() error, err error) {
+func wstestServer(tb testing.TB, ctx context.Context) (url string, closeFn func() error, err error) {
 	defer errd.Wrap(&err, "failed to start autobahn wstest server")
 
 	serverAddr, err := unusedListenAddr()
@@ -124,7 +128,7 @@ func wstestServer(ctx context.Context) (url string, closeFn func() error, err er
 	}
 
 	url = "ws://" + serverAddr
-	const outDir = "ci/out/wstestClientReports"
+	const outDir = "ci/out/autobahn-report"
 
 	specFile, err := tempJSONFile(map[string]interface{}{
 		"url":           url,
@@ -144,9 +148,15 @@ func wstestServer(ctx context.Context) (url string, closeFn func() error, err er
 	}()
 
 	dockerPull := exec.CommandContext(ctx, "docker", "pull", "crossbario/autobahn-testsuite")
-	// TODO: log to *testing.T
-	dockerPull.Stdout = os.Stdout
-	dockerPull.Stderr = os.Stderr
+	dockerPull.Stdout = util.WriterFunc(func(p []byte) (int, error) {
+		tb.Log(string(p))
+		return len(p), nil
+	})
+	dockerPull.Stderr = util.WriterFunc(func(p []byte) (int, error) {
+		tb.Log(string(p))
+		return len(p), nil
+	})
+	tb.Log(dockerPull)
 	err = dockerPull.Run()
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to pull docker image: %w", err)
@@ -169,23 +179,32 @@ func wstestServer(ctx context.Context) (url string, closeFn func() error, err er
 		// See https://github.com/crossbario/autobahn-testsuite/blob/058db3a36b7c3a1edf68c282307c6b899ca4857f/autobahntestsuite/autobahntestsuite/wstest.py#L124
 		"--webport=0",
 	)
-	fmt.Println(strings.Join(args, " "))
 	wstest := exec.CommandContext(ctx, "docker", args...)
-	// TODO: log to *testing.T
-	wstest.Stdout = os.Stdout
-	wstest.Stderr = os.Stderr
+	wstest.Stdout = util.WriterFunc(func(p []byte) (int, error) {
+		tb.Log(string(p))
+		return len(p), nil
+	})
+	wstest.Stderr = util.WriterFunc(func(p []byte) (int, error) {
+		tb.Log(string(p))
+		return len(p), nil
+	})
+	tb.Log(wstest)
 	err = wstest.Start()
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to start wstest: %w", err)
 	}
 
-	// TODO: kill
 	return url, func() error {
 		err = wstest.Process.Kill()
 		if err != nil {
 			return fmt.Errorf("failed to kill wstest: %w", err)
 		}
-		return nil
+		err = wstest.Wait()
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && ee.ExitCode() == -1 {
+			return nil
+		}
+		return err
 	}, nil
 }
 
