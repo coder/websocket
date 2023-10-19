@@ -115,7 +115,6 @@ Advantages of nhooyr.io/websocket:
   - Gorilla writes directly to a net.Conn and so duplicates features of net/http.Client.
 - Concurrent writes
 - Close handshake ([gorilla/websocket#448](https://github.com/gorilla/websocket/issues/448))
-- [CloseRead](https://pkg.go.dev/nhooyr.io/websocket#Conn.CloseRead) helper for write only connections
 - Idiomatic [ping pong](https://pkg.go.dev/nhooyr.io/websocket#Conn.Ping) API
   - Gorilla requires registering a pong callback before sending a Ping
 - Can target Wasm ([gorilla/websocket#432](https://github.com/gorilla/websocket/issues/432))
@@ -125,7 +124,7 @@ Advantages of nhooyr.io/websocket:
     Soon we'll have assembly and be 4.5x faster [#326](https://github.com/nhooyr/websocket/pull/326)
 - Full [permessage-deflate](https://tools.ietf.org/html/rfc7692) compression extension support
   - Gorilla only supports no context takeover mode
-- [CloseRead](https://pkg.go.dev/nhooyr.io/websocket#Conn.CloseRead) helper ([gorilla/websocket#492](https://github.com/gorilla/websocket/issues/492))
+- [CloseRead](https://pkg.go.dev/nhooyr.io/websocket#Conn.CloseRead) helper for write only connections ([gorilla/websocket#492](https://github.com/gorilla/websocket/issues/492))
 
 #### golang.org/x/net/websocket
 
