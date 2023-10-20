@@ -28,7 +28,7 @@ func (s echoServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.logf("%v", err)
 		return
 	}
-	defer c.Close(websocket.StatusInternalError, "the sky is falling")
+	defer c.CloseNow()
 
 	if c.Subprotocol() != "echo" {
 		c.Close(websocket.StatusPolicyViolation, "client must speak the echo subprotocol")

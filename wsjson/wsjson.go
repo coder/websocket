@@ -9,6 +9,7 @@ import (
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/internal/bpool"
 	"nhooyr.io/websocket/internal/errd"
+	"nhooyr.io/websocket/internal/util"
 )
 
 // Read reads a JSON message from c into v.
@@ -51,17 +52,17 @@ func Write(ctx context.Context, c *websocket.Conn, v interface{}) error {
 func write(ctx context.Context, c *websocket.Conn, v interface{}) (err error) {
 	defer errd.Wrap(&err, "failed to write JSON message")
 
-	w, err := c.Writer(ctx, websocket.MessageText)
-	if err != nil {
-		return err
-	}
-
 	// json.Marshal cannot reuse buffers between calls as it has to return
 	// a copy of the byte slice but Encoder does as it directly writes to w.
-	err = json.NewEncoder(w).Encode(v)
+	err = json.NewEncoder(util.WriterFunc(func(p []byte) (int, error) {
+		err := c.Write(ctx, websocket.MessageText, p)
+		if err != nil {
+			return 0, err
+		}
+		return len(p), nil
+	})).Encode(v)
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
-
-	return w.Close()
+	return nil
 }

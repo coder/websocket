@@ -1,0 +1,47 @@
+name: ci
+on: [push, pull_request]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: ./go.mod
+      - run: ./ci/fmt.sh
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: go version
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: ./go.mod
+      - run: ./ci/lint.sh
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: ./go.mod
+      - run: ./ci/test.sh
+      - uses: actions/upload-artifact@v3
+        with:
+          name: coverage.html
+          path: ./ci/out/coverage.html
+
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: ./go.mod
+      - run: ./ci/bench.sh

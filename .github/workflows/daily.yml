@@ -1,0 +1,54 @@
+name: daily
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '42 0 * * *' # daily at 00:42
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: ./go.mod
+      - run: AUTOBAHN=1 ./ci/bench.sh
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: ./go.mod
+      - run: AUTOBAHN=1 ./ci/test.sh
+      - uses: actions/upload-artifact@v3
+        with:
+          name: coverage.html
+          path: ./ci/out/coverage.html
+  bench-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: ./go.mod
+      - run: AUTOBAHN=1 ./ci/bench.sh
+  test-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: ./go.mod
+      - run: AUTOBAHN=1 ./ci/test.sh
+      - uses: actions/upload-artifact@v3
+        with:
+          name: coverage.html
+          path: ./ci/out/coverage.html

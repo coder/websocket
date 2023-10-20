@@ -54,7 +54,7 @@ body {
   margin: 0 0 0 10px;
 }
 
-#publish-form input[type="text"] {
+#publish-form input[type='text'] {
   flex-grow: 1;
 
   -moz-appearance: none;
@@ -64,7 +64,7 @@ body {
   border: 1px solid #ccc;
 }
 
-#publish-form input[type="submit"] {
+#publish-form input[type='submit'] {
   color: white;
   background-color: black;
   border-radius: 5px;
@@ -72,10 +72,10 @@ body {
   border: none;
 }
 
-#publish-form input[type="submit"]:hover {
+#publish-form input[type='submit']:hover {
   background-color: red;
 }
 
-#publish-form input[type="submit"]:active {
+#publish-form input[type='submit']:active {
   background-color: red;
 }

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/internal/test/assert"
 	"nhooyr.io/websocket/internal/test/xrand"
 	"nhooyr.io/websocket/internal/xsync"
 )
@@ -21,7 +20,7 @@ func EchoLoop(ctx context.Context, c *websocket.Conn) error {
 
 	c.SetReadLimit(1 << 30)
 
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
 	defer cancel()
 
 	b := make([]byte, 32<<10)
@@ -76,7 +75,7 @@ func Echo(ctx context.Context, c *websocket.Conn, max int) error {
 	}
 
 	if !bytes.Equal(msg, act) {
-		return fmt.Errorf("unexpected msg read: %v", assert.Diff(msg, act))
+		return fmt.Errorf("unexpected msg read: %#v", act)
 	}
 
 	return nil
