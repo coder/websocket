@@ -117,10 +117,10 @@ less_than_4:
 
 less_than_2:
 	TESTQ $1, CX
-	JZ    done
+	JZ    end
 	XORB  SI, (AX)
 	ROLL  $24, SI
 
-done:
+end:
 	MOVL SI, ret+24(FP)
 	RET
