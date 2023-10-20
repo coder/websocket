@@ -2,6 +2,7 @@ package thirdparty
 
 import (
 	"encoding/binary"
+	"runtime"
 	"strconv"
 	"testing"
 	_ "unsafe"
@@ -34,6 +35,10 @@ func nbioMaskBytes(b, key []byte) int
 func gorillaMaskBytes(key [4]byte, pos int, b []byte) int
 
 func Benchmark_mask(b *testing.B) {
+	b.Run(runtime.GOARCH, benchmark_mask)
+}
+
+func benchmark_mask(b *testing.B) {
 	sizes := []int{
 		8,
 		16,

@@ -6,4 +6,7 @@ go test --run=^$ --bench=. --benchmem --memprofile ci/out/prof.mem --cpuprofile 
 (
   cd ./internal/thirdparty
   go test --run=^$ --bench=. --benchmem --memprofile ../../ci/out/prof-thirdparty.mem --cpuprofile ../../ci/out/prof-thirdparty.cpu -o ../../ci/out/thirdparty.test "$@" .
+
+  GOARCH=arm64 go test -c -o ../../ci/out/thirdparty-arm64.test .
+  qemu-aarch64 ../../ci/out/thirdparty-arm64.test --test.run=^$ --test.bench=Benchmark_mask --test.benchmem --test.memprofile ../../ci/out/prof-thirdparty-arm64.mem --test.cpuprofile ../../ci/out/prof-thirdparty-arm64.cpu .
 )
