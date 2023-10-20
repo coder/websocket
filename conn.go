@@ -43,7 +43,7 @@ const (
 // This applies to context expirations as well unfortunately.
 // See https://github.com/nhooyr/websocket/issues/242#issuecomment-633182220
 type Conn struct {
-	noCopy
+	noCopy noCopy
 
 	subprotocol    string
 	rwc            io.ReadWriteCloser

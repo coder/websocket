@@ -41,7 +41,7 @@ const (
 
 // Conn provides a wrapper around the browser WebSocket API.
 type Conn struct {
-	noCopy
+	noCopy noCopy
 	ws wsjs.WebSocket
 
 	// read limit for a message in bytes.
