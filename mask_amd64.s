@@ -19,10 +19,15 @@ TEXT ·maskAsm(SB), NOSPLIT, $0-28
 
 	CMPQ  CX, $8
 	JL    less_than_8
-	CMPQ  CX, $512
+	CMPQ  CX, $128
 	JLE   sse
 	TESTQ $31, AX
 	JNZ   unaligned
+
+aligned:
+	CMPB ·useAVX2(SB), $1
+	JE   avx2
+	JMP  sse
 
 unaligned_loop_1byte:
 	XORB  SI, (AX)
@@ -40,7 +45,7 @@ unaligned_loop_1byte:
 	ORQ  DX, DI
 
 	TESTQ $31, AX
-	JZ    sse
+	JZ    aligned
 
 unaligned:
 	// $7 & len, if not zero jump to loop_1b.
@@ -54,8 +59,27 @@ unaligned_loop:
 	SUBQ  $8, CX
 	TESTQ $31, AX
 	JNZ   unaligned_loop
-	JMP   sse
+	JMP   aligned
 
+avx2:
+	CMPQ         CX, $128
+	JL           sse
+	VMOVQ        DI, X0
+	VPBROADCASTQ X0, Y0
+
+// TODO: shouldn't these be aligned movs now?
+// TODO: should be 256?
+avx2_loop:
+	VMOVDQU (AX), Y1
+	VPXOR   Y0, Y1, Y2
+	VMOVDQU Y2, (AX)
+	ADDQ    $128, AX
+	SUBQ    $128, CX
+	CMPQ    CX, $128
+	// Loop if CX >= 128.
+	JAE     avx2_loop
+
+// TODO: should be 128?
 sse:
 	CMPQ       CX, $64
 	JL         less_than_64
@@ -63,8 +87,8 @@ sse:
 	PUNPCKLQDQ X0, X0
 
 sse_loop:
-	MOVOU 0*16(AX), X1
-	MOVOU 1*16(AX), X2
+	MOVOU (AX), X1
+	MOVOU 16(AX), X2
 	MOVOU 2*16(AX), X3
 	MOVOU 3*16(AX), X4
 	PXOR  X0, X1
