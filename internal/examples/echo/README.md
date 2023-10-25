@@ -5,7 +5,7 @@ This directory contains a echo server example using nhooyr.io/websocket.
 ```bash
 $ cd examples/echo
 $ go run . localhost:0
-listening on http://127.0.0.1:51055
+listening on ws://127.0.0.1:51055
 ```
 
 You can use a WebSocket client like https://github.com/hashrocket/ws to connect. All messages
