@@ -42,7 +42,7 @@ const (
 // Conn provides a wrapper around the browser WebSocket API.
 type Conn struct {
 	noCopy noCopy
-	ws wsjs.WebSocket
+	ws     wsjs.WebSocket
 
 	// read limit for a message in bytes.
 	msgReadLimit xsync.Int64
@@ -138,7 +138,8 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to read: %w", err)
 	}
-	if int64(len(p)) > c.msgReadLimit.Load() {
+	readLimit := c.msgReadLimit.Load()
+	if readLimit >= 0 && int64(len(p)) > readLimit {
 		err := fmt.Errorf("read limited at %v bytes", c.msgReadLimit.Load())
 		c.Close(StatusMessageTooBig, err.Error())
 		return 0, nil, err
