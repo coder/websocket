@@ -5,7 +5,7 @@ This directory contains a full stack example of a simple chat webapp using nhooy
 ```bash
 $ cd examples/chat
 $ go run . localhost:0
-listening on http://127.0.0.1:51055
+listening on ws://127.0.0.1:51055
 ```
 
 Visit the printed URL to submit and view broadcasted messages in a browser.
