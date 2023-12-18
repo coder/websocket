@@ -113,6 +113,8 @@ func (c *Conn) CloseNow() (err error) {
 	}
 
 	c.close(nil)
+	c.closeMu.Lock()
+	defer c.closeMu.Unlock()
 	return c.closeErr
 }
 
