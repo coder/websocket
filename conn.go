@@ -79,6 +79,8 @@ type Conn struct {
 	pingCounter   int32
 	activePingsMu sync.Mutex
 	activePings   map[string]chan<- struct{}
+
+	pingCallback func()
 }
 
 type connConfig struct {
@@ -249,6 +251,13 @@ func (c *Conn) ping(ctx context.Context, p string) error {
 	case <-pong:
 		return nil
 	}
+}
+
+// SetPingCallback sets a callback that is called when a ping is received.
+// The callback is called synchronously from the Reader goroutine and must
+// not block.
+func (c *Conn) SetPingCallback(cb func()) {
+	c.pingCallback = cb
 }
 
 type mu struct {

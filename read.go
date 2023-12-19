@@ -294,6 +294,9 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 
 	switch h.opcode {
 	case opPing:
+		if c.pingCallback != nil {
+			c.pingCallback()
+		}
 		return c.writeControl(ctx, opPong, b)
 	case opPong:
 		c.activePingsMu.Lock()
