@@ -15,8 +15,6 @@ TEXT ·maskAsm(SB), NOSPLIT, $0-28
 	CMP   $64, R1
 	BLT   less_than_64
 
-// TODO: align memory like amd64
-
 loop_64:
 	VLD1   (R0), [V1.B16, V2.B16, V3.B16, V4.B16]
 	VEOR   V1.B16, V0.B16, V1.B16
@@ -29,6 +27,7 @@ loop_64:
 	BGE    loop_64
 
 less_than_64:
+	CBZ    R1, end
 	TBZ    $5, R1, less_than_32
 	VLD1   (R0), [V1.B16, V2.B16]
 	VEOR   V1.B16, V0.B16, V1.B16
