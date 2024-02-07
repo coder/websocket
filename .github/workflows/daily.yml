@@ -50,5 +50,5 @@ jobs:
       - run: AUTOBAHN=1 ./ci/test.sh
       - uses: actions/upload-artifact@v3
         with:
-          name: coverage.html
+          name: coverage-dev.html
           path: ./ci/out/coverage.html
