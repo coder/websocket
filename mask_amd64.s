@@ -10,15 +10,17 @@ TEXT ·maskAsm(SB), NOSPLIT, $0-28
 	MOVQ len+8(FP), CX
 	MOVL key+16(FP), SI
 
-	// Calculate the DI aka the uint64 key.
-	// DI = uint64(SI) | uint64(SI)<<32
+	// calculate the DI
+	// DI = SI<<32 | SI
 	MOVL SI, DI
 	MOVQ DI, DX
 	SHLQ $32, DI
 	ORQ  DX, DI
 
-	CMPQ  CX, $8
-	JL    less_than_8
+	CMPQ  CX, $15
+	JLE   less_than_16
+	CMPQ  CX, $63
+	JLE   less_than_64
 	CMPQ  CX, $128
 	JLE   sse
 	TESTQ $31, AX
@@ -37,8 +39,8 @@ unaligned_loop_1byte:
 	TESTQ $7, AX
 	JNZ   unaligned_loop_1byte
 
-	// Calculate DI again since SI was modified.
-	// DI = uint64(SI) | uint64(SI)<<32
+	// calculate DI again since SI was modified
+	// DI = SI<<32 | SI
 	MOVL SI, DI
 	MOVQ DI, DX
 	SHLQ $32, DI
@@ -48,12 +50,11 @@ unaligned_loop_1byte:
 	JZ    aligned
 
 unaligned:
-	// $7 & len, if not zero jump to loop_1b.
-	TESTQ $7, AX
+	TESTQ $7, AX               // AND $7 & len, if not zero jump to loop_1b.
 	JNZ   unaligned_loop_1byte
 
 unaligned_loop:
-	// We don't need to check the CX since we know it's above 512.
+	// we don't need to check the CX since we know it's above 128
 	XORQ  DI, (AX)
 	ADDQ  $8, AX
 	SUBQ  $8, CX
@@ -62,33 +63,34 @@ unaligned_loop:
 	JMP   aligned
 
 avx2:
-	CMPQ         CX, $128
+	CMPQ         CX, $0x80
 	JL           sse
 	VMOVQ        DI, X0
 	VPBROADCASTQ X0, Y0
 
-// TODO: shouldn't these be aligned movs now?
-// TODO: should be 256?
 avx2_loop:
-	VMOVDQU (AX), Y1
-	VPXOR   Y0, Y1, Y2
-	VMOVDQU Y2, (AX)
-	ADDQ    $128, AX
-	SUBQ    $128, CX
-	CMPQ    CX, $128
-	// Loop if CX >= 128.
-	JAE     avx2_loop
+	VPXOR   (AX), Y0, Y1
+	VPXOR   32(AX), Y0, Y2
+	VPXOR   64(AX), Y0, Y3
+	VPXOR   96(AX), Y0, Y4
+	VMOVDQU Y1, (AX)
+	VMOVDQU Y2, 32(AX)
+	VMOVDQU Y3, 64(AX)
+	VMOVDQU Y4, 96(AX)
+	ADDQ    $0x80, AX
+	SUBQ    $0x80, CX
+	CMPQ    CX, $0x80
+	JAE     avx2_loop      // loop if CX >= 0x80
 
-// TODO: should be 128?
 sse:
-	CMPQ       CX, $64
+	CMPQ       CX, $0x40
 	JL         less_than_64
 	MOVQ       DI, X0
 	PUNPCKLQDQ X0, X0
 
 sse_loop:
-	MOVOU (AX), X1
-	MOVOU 16(AX), X2
+	MOVOU 0*16(AX), X1
+	MOVOU 1*16(AX), X2
 	MOVOU 2*16(AX), X3
 	MOVOU 3*16(AX), X4
 	PXOR  X0, X1
@@ -99,9 +101,9 @@ sse_loop:
 	MOVOU X2, 1*16(AX)
 	MOVOU X3, 2*16(AX)
 	MOVOU X4, 3*16(AX)
-	ADDQ  $64, AX
-	SUBQ  $64, CX
-	CMPQ  CX, $64
+	ADDQ  $0x40, AX
+	SUBQ  $0x40, CX
+	CMPQ  CX, $0x40
 	JAE   sse_loop
 
 less_than_64:
@@ -141,10 +143,10 @@ less_than_4:
 
 less_than_2:
 	TESTQ $1, CX
-	JZ    end
+	JZ    done
 	XORB  SI, (AX)
 	ROLL  $24, SI
 
-end:
+done:
 	MOVL SI, ret+24(FP)
 	RET
