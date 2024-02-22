@@ -18,3 +18,7 @@ npx prettier@3.0.3 \
   $(git ls-files "*.yml" "*.md" "*.js" "*.css" "*.html")
 
 go run golang.org/x/tools/cmd/stringer@latest -type=opcode,MessageType,StatusCode -output=stringer.go
+
+if [ "${CI-}" ]; then
+  git diff --exit-code
+fi

@@ -289,7 +289,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 	}
 
 	if h.masked {
-		mask(h.maskKey, b)
+		mask(b, h.maskKey)
 	}
 
 	switch h.opcode {
@@ -453,7 +453,7 @@ func (mr *msgReader) read(p []byte) (int, error) {
 		mr.payloadLength -= int64(n)
 
 		if !mr.c.client {
-			mr.maskKey = mask(mr.maskKey, p)
+			mr.maskKey = mask(p, mr.maskKey)
 		}
 
 		return n, nil
