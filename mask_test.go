@@ -40,34 +40,34 @@ func TestMask(t *testing.T) {
 func testMask(t *testing.T, name string, fn func(b []byte, key uint32) uint32) {
 	t.Run(name, func(t *testing.T) {
 		t.Parallel()
-	for i := 0; i < 9999; i++ {
-		keyb := make([]byte, 4)
-		_, err := rand.Read(keyb)
-		assert.Success(t, err)
-		key := binary.LittleEndian.Uint32(keyb)
+		for i := 0; i < 9999; i++ {
+			keyb := make([]byte, 4)
+			_, err := rand.Read(keyb)
+			assert.Success(t, err)
+			key := binary.LittleEndian.Uint32(keyb)
 
-		n, err := rand.Int(rand.Reader, big.NewInt(1<<16))
-		assert.Success(t, err)
+			n, err := rand.Int(rand.Reader, big.NewInt(1<<16))
+			assert.Success(t, err)
 
-		b := make([]byte, 1+n.Int64())
-		_, err = rand.Read(b)
-		assert.Success(t, err)
+			b := make([]byte, 1+n.Int64())
+			_, err = rand.Read(b)
+			assert.Success(t, err)
 
-		b2 := make([]byte, len(b))
-		copy(b2, b)
-		b3 := make([]byte, len(b))
-		copy(b3, b)
+			b2 := make([]byte, len(b))
+			copy(b2, b)
+			b3 := make([]byte, len(b))
+			copy(b3, b)
 
-		key2 := basicMask(b2, key)
-		key3 := fn(b3, key)
+			key2 := basicMask(b2, key)
+			key3 := fn(b3, key)
 
-		if key2 != key3 {
-			t.Errorf("expected key %X but got %X", key2, key3)
+			if key2 != key3 {
+				t.Errorf("expected key %X but got %X", key2, key3)
+			}
+			if !bytes.Equal(b2, b3) {
+				t.Error("bad bytes")
+				return
+			}
 		}
-		if !bytes.Equal(b2, b3) {
-			t.Error("bad bytes")
-			return
-		}
-	}
 	})
 }

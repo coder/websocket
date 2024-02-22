@@ -2,7 +2,7 @@
 
 package websocket
 
-import "golang.org/x/sys/cpu"
+import "nhooyr.io/websocket/internal/xcpu"
 
 func mask(b []byte, key uint32) uint32 {
 	if len(b) > 0 {
@@ -12,7 +12,7 @@ func mask(b []byte, key uint32) uint32 {
 }
 
 //lint:ignore U1000 mask_*.s
-var useAVX2 = cpu.X86.HasAVX2
+var useAVX2 = xcpu.X86.HasAVX2
 
 // @nhooyr: I am not confident that the amd64 or the arm64 implementations of this
 // function are perfect. There are almost certainly missing optimizations or
