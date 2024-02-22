@@ -120,7 +120,7 @@ Advantages of nhooyr.io/websocket:
   - Gorilla requires registering a pong callback before sending a Ping
 - Can target Wasm ([gorilla/websocket#432](https://github.com/gorilla/websocket/issues/432))
 - Transparent message buffer reuse with [wsjson](https://pkg.go.dev/nhooyr.io/websocket/wsjson) subpackage
-- [4x](https://github.com/nhooyr/websocket/pull/326) faster WebSocket masking implementation in assembly for amd64 and arm64 and [2x](https://github.com/nhooyr/websocket/releases/tag/v1.7.4) faster implementation in pure Go
+- [3-4x](https://github.com/nhooyr/websocket/pull/326) faster WebSocket masking implementation in assembly for amd64 and arm64 and [2x](https://github.com/nhooyr/websocket/releases/tag/v1.7.4) faster implementation in pure Go
   - Gorilla's implementation is slower and uses [unsafe](https://golang.org/pkg/unsafe/).
 - Full [permessage-deflate](https://tools.ietf.org/html/rfc7692) compression extension support
   - Gorilla only supports no context takeover mode

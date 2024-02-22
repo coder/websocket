@@ -26,11 +26,6 @@ TEXT ·maskAsm(SB), NOSPLIT, $0-28
 	TESTQ $31, AX
 	JNZ   unaligned
 
-aligned:
-	CMPB ·useAVX2(SB), $1
-	JE   avx2
-	JMP  sse
-
 unaligned_loop_1byte:
 	XORB  SI, (AX)
 	INCQ  AX
@@ -47,7 +42,7 @@ unaligned_loop_1byte:
 	ORQ  DX, DI
 
 	TESTQ $31, AX
-	JZ    aligned
+	JZ    sse
 
 unaligned:
 	TESTQ $7, AX               // AND $7 & len, if not zero jump to loop_1b.
@@ -60,27 +55,7 @@ unaligned_loop:
 	SUBQ  $8, CX
 	TESTQ $31, AX
 	JNZ   unaligned_loop
-	JMP   aligned
-
-avx2:
-	CMPQ         CX, $0x80
-	JL           sse
-	VMOVQ        DI, X0
-	VPBROADCASTQ X0, Y0
-
-avx2_loop:
-	VPXOR   (AX), Y0, Y1
-	VPXOR   32(AX), Y0, Y2
-	VPXOR   64(AX), Y0, Y3
-	VPXOR   96(AX), Y0, Y4
-	VMOVDQU Y1, (AX)
-	VMOVDQU Y2, 32(AX)
-	VMOVDQU Y3, 64(AX)
-	VMOVDQU Y4, 96(AX)
-	ADDQ    $0x80, AX
-	SUBQ    $0x80, CX
-	CMPQ    CX, $0x80
-	JAE     avx2_loop      // loop if CX >= 0x80
+	JMP   sse
 
 sse:
 	CMPQ       CX, $0x40
