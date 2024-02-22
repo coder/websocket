@@ -11,6 +11,19 @@ cd -- "$(dirname "$0")/.."
   go test "$@" ./...
 )
 
+(
+  GOARCH=arm64 go test -c -o ./ci/out/websocket-arm64.test "$@" .
+  if [ "$#" -eq 0 ]; then
+    if [ "${CI-}" ]; then
+      sudo apt-get update
+      sudo apt-get install -y qemu-user-static
+	  ln -s /usr/bin/qemu-aarch64-static /usr/local/bin/qemu-aarch64
+    fi
+    qemu-aarch64 ./ci/out/websocket-arm64.test -test.run=TestMask
+  fi
+)
+
+
 go install github.com/agnivade/wasmbrowsertest@latest
 go test --race --bench=. --timeout=1h --covermode=atomic --coverprofile=ci/out/coverage.prof --coverpkg=./... "$@" ./...
 sed -i.bak '/stringer\.go/d' ci/out/coverage.prof
