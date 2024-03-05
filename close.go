@@ -93,8 +93,7 @@ func CloseStatus(err error) StatusCode {
 // The connection can only be closed once. Additional calls to Close
 // are no-ops.
 //
-// The maximum length of reason must be 125 bytes. Avoid
-// sending a dynamic reason.
+// The maximum length of reason must be 125 bytes. Avoid sending a dynamic reason.
 //
 // Close will unblock all goroutines interacting with the connection once
 // complete.
