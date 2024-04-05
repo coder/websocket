@@ -225,7 +225,6 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) error {
 // or the connection is closed.
 // It thus performs the full WebSocket close handshake.
 func (c *Conn) Close(code StatusCode, reason string) error {
-	defer c.wg.Wait()
 	err := c.exportedClose(code, reason)
 	if err != nil {
 		return fmt.Errorf("failed to close WebSocket: %w", err)
@@ -239,7 +238,6 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 // note: No different from Close(StatusGoingAway, "") in WASM as there is no way to close
 // a WebSocket without the close handshake.
 func (c *Conn) CloseNow() error {
-	defer c.wg.Wait()
 	return c.Close(StatusGoingAway, "")
 }
 

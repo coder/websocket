@@ -345,6 +345,9 @@ func TestConn(t *testing.T) {
 
 func TestWasm(t *testing.T) {
 	t.Parallel()
+	if os.Getenv("CI") == "" {
+		t.Skip()
+	}
 
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		err := echoServer(w, r, &websocket.AcceptOptions{
