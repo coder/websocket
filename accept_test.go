@@ -6,7 +6,6 @@ package websocket
 import (
 	"bufio"
 	"errors"
-	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -149,8 +148,7 @@ func TestAccept(t *testing.T) {
 
 		server, _ := net.Pipe()
 
-		pr, pw := io.Pipe()
-		rw := bufio.NewReadWriter(bufio.NewReader(pr), bufio.NewWriter(pw))
+		rw := bufio.NewReadWriter(bufio.NewReader(server), bufio.NewWriter(server))
 		newResponseWriter := func() http.ResponseWriter {
 			return mockHijacker{
 				ResponseWriter: httptest.NewRecorder(),
