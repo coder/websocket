@@ -64,9 +64,10 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 // This function is idempotent.
 func (c *Conn) CloseRead(ctx context.Context) context.Context {
 	c.closeReadMu.Lock()
-	if c.closeReadCtx != nil {
+	ctx2 := c.closeReadCtx
+	if ctx2 != nil {
 		c.closeReadMu.Unlock()
-		return c.closeReadCtx
+		return ctx2
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	c.closeReadCtx = ctx
