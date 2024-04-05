@@ -94,7 +94,7 @@ func NetConn(ctx context.Context, c *Conn, msgType MessageType) net.Conn {
 }
 
 type netConn struct {
-    // These must be first to be aligned on 32 bit platforms.
+	// These must be first to be aligned on 32 bit platforms.
 	// https://github.com/nhooyr/websocket/pull/438
 	readExpired  int64
 	writeExpired int64
