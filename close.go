@@ -239,11 +239,11 @@ func (c *Conn) waitGoroutines() error {
 	}
 
 	c.closeReadMu.Lock()
-	ctx := c.closeReadCtx
+	closeRead := c.closeReadCtx != nil
 	c.closeReadMu.Unlock()
-	if ctx != nil {
+	if closeRead {
 		select {
-		case <-ctx.Done():
+		case <-c.closeReadDone:
 		case <-t.C:
 			return errors.New("failed to wait for close read goroutine to exit")
 		}

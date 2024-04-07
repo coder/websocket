@@ -71,9 +71,11 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	c.closeReadCtx = ctx
+	c.closeReadDone = make(chan struct{})
 	c.closeReadMu.Unlock()
 
 	go func() {
+		defer close(c.closeReadDone)
 		defer cancel()
 		defer c.close()
 		_, _, err := c.Reader(ctx)

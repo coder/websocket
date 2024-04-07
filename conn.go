@@ -57,10 +57,10 @@ type Conn struct {
 	timeoutLoopDone chan struct{}
 
 	// Read state.
-	readMu            *mu
-	readHeaderBuf     [8]byte
-	readControlBuf    [maxControlPayload]byte
-	msgReader         *msgReader
+	readMu         *mu
+	readHeaderBuf  [8]byte
+	readControlBuf [maxControlPayload]byte
+	msgReader      *msgReader
 
 	// Write state.
 	msgWriter      *msgWriter
@@ -69,8 +69,9 @@ type Conn struct {
 	writeHeaderBuf [8]byte
 	writeHeader    header
 
-	closeReadMu  sync.Mutex
-	closeReadCtx context.Context
+	closeReadMu   sync.Mutex
+	closeReadCtx  context.Context
+	closeReadDone chan struct{}
 
 	closed  chan struct{}
 	closeMu sync.Mutex
