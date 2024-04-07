@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
       - run: AUTOBAHN=1 ./ci/bench.sh
@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
       - run: AUTOBAHN=1 ./ci/test.sh
@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: dev
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
       - run: AUTOBAHN=1 ./ci/bench.sh
@@ -44,7 +44,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: dev
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
       - run: AUTOBAHN=1 ./ci/test.sh
