@@ -60,14 +60,24 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 // Call CloseRead when you do not expect to read any more messages.
 // Since it actively reads from the connection, it will ensure that ping, pong and close
 // frames are responded to. This means c.Ping and c.Close will still work as expected.
+//
+// This function is idempotent.
 func (c *Conn) CloseRead(ctx context.Context) context.Context {
+	c.closeReadMu.Lock()
+	ctx2 := c.closeReadCtx
+	if ctx2 != nil {
+		c.closeReadMu.Unlock()
+		return ctx2
+	}
 	ctx, cancel := context.WithCancel(ctx)
+	c.closeReadCtx = ctx
+	c.closeReadDone = make(chan struct{})
+	c.closeReadMu.Unlock()
 
-	c.wg.Add(1)
 	go func() {
-		defer c.CloseNow()
-		defer c.wg.Done()
+		defer close(c.closeReadDone)
 		defer cancel()
+		defer c.close()
 		_, _, err := c.Reader(ctx)
 		if err == nil {
 			c.Close(StatusPolicyViolation, "unexpected data message")
@@ -222,7 +232,6 @@ func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 		case <-ctx.Done():
 			return header{}, ctx.Err()
 		default:
-			c.close(err)
 			return header{}, err
 		}
 	}
@@ -251,9 +260,7 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
 		case <-ctx.Done():
 			return n, ctx.Err()
 		default:
-			err = fmt.Errorf("failed to read frame payload: %w", err)
-			c.close(err)
-			return n, err
+			return n, fmt.Errorf("failed to read frame payload: %w", err)
 		}
 	}
 
@@ -289,7 +296,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 	}
 
 	if h.masked {
-		mask(h.maskKey, b)
+		mask(b, h.maskKey)
 	}
 
 	switch h.opcode {
@@ -308,9 +315,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 		return nil
 	}
 
-	defer func() {
-		c.readCloseFrameErr = err
-	}()
+	// opClose
 
 	ce, err := parseClosePayload(b)
 	if err != nil {
@@ -320,9 +325,9 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 	}
 
 	err = fmt.Errorf("received close frame: %w", ce)
-	c.setCloseErr(err)
 	c.writeClose(ce.Code, ce.Reason)
-	c.close(err)
+	c.readMu.unlock()
+	c.close()
 	return err
 }
 
@@ -336,9 +341,7 @@ func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err erro
 	defer c.readMu.unlock()
 
 	if !c.msgReader.fin {
-		err = errors.New("previous message not read to completion")
-		c.close(fmt.Errorf("failed to get reader: %w", err))
-		return 0, nil, err
+		return 0, nil, errors.New("previous message not read to completion")
 	}
 
 	h, err := c.readLoop(ctx)
@@ -411,10 +414,9 @@ func (mr *msgReader) Read(p []byte) (n int, err error) {
 		return n, io.EOF
 	}
 	if err != nil {
-		err = fmt.Errorf("failed to read: %w", err)
-		mr.c.close(err)
+		return n, fmt.Errorf("failed to read: %w", err)
 	}
-	return n, err
+	return n, nil
 }
 
 func (mr *msgReader) read(p []byte) (int, error) {
@@ -453,7 +455,7 @@ func (mr *msgReader) read(p []byte) (int, error) {
 		mr.payloadLength -= int64(n)
 
 		if !mr.c.client {
-			mr.maskKey = mask(mr.maskKey, p)
+			mr.maskKey = mask(p, mr.maskKey)
 		}
 
 		return n, nil

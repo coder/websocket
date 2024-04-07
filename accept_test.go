@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"nhooyr.io/websocket/internal/test/assert"
@@ -141,6 +142,42 @@ func TestAccept(t *testing.T) {
 
 		_, err := Accept(w, r, nil)
 		assert.Contains(t, err, `failed to hijack connection`)
+	})
+	t.Run("closeRace", func(t *testing.T) {
+		t.Parallel()
+
+		server, _ := net.Pipe()
+
+		rw := bufio.NewReadWriter(bufio.NewReader(server), bufio.NewWriter(server))
+		newResponseWriter := func() http.ResponseWriter {
+			return mockHijacker{
+				ResponseWriter: httptest.NewRecorder(),
+				hijack: func() (net.Conn, *bufio.ReadWriter, error) {
+					return server, rw, nil
+				},
+			}
+		}
+		w := newResponseWriter()
+
+		r := httptest.NewRequest("GET", "/", nil)
+		r.Header.Set("Connection", "Upgrade")
+		r.Header.Set("Upgrade", "websocket")
+		r.Header.Set("Sec-WebSocket-Version", "13")
+		r.Header.Set("Sec-WebSocket-Key", xrand.Base64(16))
+
+		c, err := Accept(w, r, nil)
+		wg := &sync.WaitGroup{}
+		wg.Add(2)
+		go func() {
+			c.Close(StatusInternalError, "the sky is falling")
+			wg.Done()
+		}()
+		go func() {
+			c.CloseNow()
+			wg.Done()
+		}()
+		wg.Wait()
+		assert.Success(t, err)
 	})
 }
 

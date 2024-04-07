@@ -97,7 +97,7 @@ func Test_mask(t *testing.T) {
 	key := []byte{0xa, 0xb, 0xc, 0xff}
 	key32 := binary.LittleEndian.Uint32(key)
 	p := []byte{0xa, 0xb, 0xc, 0xf2, 0xc}
-	gotKey32 := mask(key32, p)
+	gotKey32 := mask(p, key32)
 
 	expP := []byte{0, 0, 0, 0x0d, 0x6}
 	assert.Equal(t, "p", expP, p)

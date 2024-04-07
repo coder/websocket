@@ -31,7 +31,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("listening on http://%v", l.Addr())
+	log.Printf("listening on ws://%v", l.Addr())
 
 	cs := newChatServer()
 	s := &http.Server{

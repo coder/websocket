@@ -345,6 +345,9 @@ func TestConn(t *testing.T) {
 
 func TestWasm(t *testing.T) {
 	t.Parallel()
+	if os.Getenv("CI") == "" {
+		t.SkipNow()
+	}
 
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		err := echoServer(w, r, &websocket.AcceptOptions{
@@ -360,7 +363,7 @@ func TestWasm(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "go", "test", "-exec=wasmbrowsertest", ".")
+	cmd := exec.CommandContext(ctx, "go", "test", "-exec=wasmbrowsertest", ".", "-v")
 	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm", fmt.Sprintf("WS_ECHO_SERVER_URL=%v", s.URL))
 
 	b, err := cmd.CombinedOutput()

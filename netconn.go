@@ -94,22 +94,25 @@ func NetConn(ctx context.Context, c *Conn, msgType MessageType) net.Conn {
 }
 
 type netConn struct {
+	// These must be first to be aligned on 32 bit platforms.
+	// https://github.com/nhooyr/websocket/pull/438
+	readExpired  int64
+	writeExpired int64
+
 	c       *Conn
 	msgType MessageType
 
-	writeTimer   *time.Timer
-	writeMu      *mu
-	writeExpired int64
-	writeCtx     context.Context
-	writeCancel  context.CancelFunc
+	writeTimer  *time.Timer
+	writeMu     *mu
+	writeCtx    context.Context
+	writeCancel context.CancelFunc
 
-	readTimer   *time.Timer
-	readMu      *mu
-	readExpired int64
-	readCtx     context.Context
-	readCancel  context.CancelFunc
-	readEOFed   bool
-	reader      io.Reader
+	readTimer  *time.Timer
+	readMu     *mu
+	readCtx    context.Context
+	readCancel context.CancelFunc
+	readEOFed  bool
+	reader     io.Reader
 }
 
 var _ net.Conn = &netConn{}
