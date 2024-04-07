@@ -26,7 +26,6 @@ go get nhooyr.io/websocket
 - [RFC 7692](https://tools.ietf.org/html/rfc7692) permessage-deflate compression
 - [CloseRead](https://pkg.go.dev/nhooyr.io/websocket#Conn.CloseRead) helper for write only connections
 - Compile to [Wasm](https://pkg.go.dev/nhooyr.io/websocket#hdr-Wasm)
-- WebSocket masking implemented in assembly for amd64 and arm64 [#326](https://github.com/nhooyr/websocket/issues/326)
 
 ## Roadmap
 
@@ -37,6 +36,8 @@ See GitHub issues for minor issues but the major future enhancements are:
 - [ ] Ping pong heartbeat helper [#267](https://github.com/nhooyr/websocket/issues/267)
 - [ ] Ping pong instrumentation callbacks [#246](https://github.com/nhooyr/websocket/issues/246)
 - [ ] Graceful shutdown helpers [#209](https://github.com/nhooyr/websocket/issues/209)
+- [ ] Assembly for WebSocket masking [#16](https://github.com/nhooyr/websocket/issues/16)
+  - WIP at [#326](https://github.com/nhooyr/websocket/pull/326), about 3x faster
 - [ ] HTTP/2 [#4](https://github.com/nhooyr/websocket/issues/4)
 - [ ] The holy grail [#402](https://github.com/nhooyr/websocket/issues/402)
 
@@ -120,8 +121,9 @@ Advantages of nhooyr.io/websocket:
   - Gorilla requires registering a pong callback before sending a Ping
 - Can target Wasm ([gorilla/websocket#432](https://github.com/gorilla/websocket/issues/432))
 - Transparent message buffer reuse with [wsjson](https://pkg.go.dev/nhooyr.io/websocket/wsjson) subpackage
-- [3.5x](https://github.com/nhooyr/websocket/pull/326#issuecomment-1959470758) faster WebSocket masking implementation in assembly for amd64 and arm64 and [2x](https://github.com/nhooyr/websocket/releases/tag/v1.7.4) faster implementation in pure Go
+- [1.75x](https://github.com/nhooyr/websocket/releases/tag/v1.7.4) faster WebSocket masking implementation in pure Go
   - Gorilla's implementation is slower and uses [unsafe](https://golang.org/pkg/unsafe/).
+    Soon we'll have assembly and be 3x faster [#326](https://github.com/nhooyr/websocket/pull/326)
 - Full [permessage-deflate](https://tools.ietf.org/html/rfc7692) compression extension support
   - Gorilla only supports no context takeover mode
 - [CloseRead](https://pkg.go.dev/nhooyr.io/websocket#Conn.CloseRead) helper for write only connections ([gorilla/websocket#492](https://github.com/gorilla/websocket/issues/492))
