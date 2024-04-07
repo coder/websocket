@@ -61,7 +61,6 @@ type Conn struct {
 	readHeaderBuf     [8]byte
 	readControlBuf    [maxControlPayload]byte
 	msgReader         *msgReader
-	readCloseFrameErr error
 
 	// Write state.
 	msgWriter      *msgWriter

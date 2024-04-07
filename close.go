@@ -206,10 +206,6 @@ func (c *Conn) waitCloseHandshake() error {
 	}
 	defer c.readMu.unlock()
 
-	if c.readCloseFrameErr != nil {
-		return c.readCloseFrameErr
-	}
-
 	for i := int64(0); i < c.msgReader.payloadLength; i++ {
 		_, err := c.br.ReadByte()
 		if err != nil {

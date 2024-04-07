@@ -313,9 +313,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 		return nil
 	}
 
-	defer func() {
-		c.readCloseFrameErr = err
-	}()
+	// opClose
 
 	ce, err := parseClosePayload(b)
 	if err != nil {
@@ -326,6 +324,8 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 
 	err = fmt.Errorf("received close frame: %w", ce)
 	c.writeClose(ce.Code, ce.Reason)
+	c.readMu.unlock()
+	c.close()
 	return err
 }
 
