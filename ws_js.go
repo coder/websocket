@@ -47,9 +47,10 @@ type Conn struct {
 	// read limit for a message in bytes.
 	msgReadLimit xsync.Int64
 
-	wg            sync.WaitGroup
+	closeReadMu  sync.Mutex
+	closeReadCtx context.Context
+
 	closingMu     sync.Mutex
-	isReadClosed  xsync.Int64
 	closeOnce     sync.Once
 	closed        chan struct{}
 	closeErrOnce  sync.Once
@@ -130,7 +131,10 @@ func (c *Conn) closeWithInternal() {
 // Read attempts to read a message from the connection.
 // The maximum time spent waiting is bounded by the context.
 func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
-	if c.isReadClosed.Load() == 1 {
+	c.closeReadMu.Lock()
+	closedRead := c.closeReadCtx != nil
+	c.closeReadMu.Unlock()
+	if closedRead {
 		return 0, nil, errors.New("WebSocket connection read closed")
 	}
 
@@ -225,7 +229,6 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) error {
 // or the connection is closed.
 // It thus performs the full WebSocket close handshake.
 func (c *Conn) Close(code StatusCode, reason string) error {
-	defer c.wg.Wait()
 	err := c.exportedClose(code, reason)
 	if err != nil {
 		return fmt.Errorf("failed to close WebSocket: %w", err)
@@ -239,7 +242,6 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 // note: No different from Close(StatusGoingAway, "") in WASM as there is no way to close
 // a WebSocket without the close handshake.
 func (c *Conn) CloseNow() error {
-	defer c.wg.Wait()
 	return c.Close(StatusGoingAway, "")
 }
 
@@ -389,14 +391,19 @@ func (w *writer) Close() error {
 
 // CloseRead implements *Conn.CloseRead for wasm.
 func (c *Conn) CloseRead(ctx context.Context) context.Context {
-	c.isReadClosed.Store(1)
-
+	c.closeReadMu.Lock()
+	ctx2 := c.closeReadCtx
+	if ctx2 != nil {
+		c.closeReadMu.Unlock()
+		return ctx2
+	}
 	ctx, cancel := context.WithCancel(ctx)
-	c.wg.Add(1)
+	c.closeReadCtx = ctx
+	c.closeReadMu.Unlock()
+
 	go func() {
-		defer c.CloseNow()
-		defer c.wg.Done()
 		defer cancel()
+		defer c.CloseNow()
 		_, _, err := c.read(ctx)
 		if err != nil {
 			c.Close(StatusPolicyViolation, "unexpected data message")

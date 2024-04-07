@@ -16,8 +16,6 @@ import (
 // to be in little endian.
 //
 // See https://github.com/golang/go/issues/31586
-//
-//lint:ignore U1000 mask.go
 func maskGo(b []byte, key uint32) uint32 {
 	if len(b) >= 8 {
 		key64 := uint64(key)<<32 | uint64(key)
