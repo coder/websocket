@@ -77,7 +77,7 @@ type Conn struct {
 	closeMu sync.Mutex
 	closing bool
 
-	pingCounter   int32
+	pingCounter   atomic.Int32
 	activePingsMu sync.Mutex
 	activePings   map[string]chan<- struct{}
 }
@@ -200,7 +200,7 @@ func (c *Conn) flate() bool {
 //
 // TCP Keepalives should suffice for most use cases.
 func (c *Conn) Ping(ctx context.Context) error {
-	p := atomic.AddInt32(&c.pingCounter, 1)
+	p := c.pingCounter.Add(1)
 
 	err := c.ping(ctx, strconv.Itoa(int(p)))
 	if err != nil {
