@@ -11,11 +11,11 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"nhooyr.io/websocket/internal/errd"
 	"nhooyr.io/websocket/internal/util"
-	"nhooyr.io/websocket/internal/xsync"
 )
 
 // Reader reads from the connection until there is a WebSocket
@@ -465,7 +465,7 @@ func (mr *msgReader) read(p []byte) (int, error) {
 type limitReader struct {
 	c     *Conn
 	r     io.Reader
-	limit xsync.Int64
+	limit atomic.Int64
 	n     int64
 }
 
