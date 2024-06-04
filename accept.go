@@ -14,7 +14,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
-	"path/filepath"
+	"path"
 	"strings"
 
 	"nhooyr.io/websocket/internal/errd"
@@ -41,8 +41,8 @@ type AcceptOptions struct {
 	// One would set this field to []string{"example.com"} to authorize example.com to connect.
 	//
 	// Each pattern is matched case insensitively against the request origin host
-	// with filepath.Match.
-	// See https://golang.org/pkg/path/filepath/#Match
+	// with path.Match.
+	// See https://golang.org/pkg/path/#Match
 	//
 	// Please ensure you understand the ramifications of enabling this.
 	// If used incorrectly your WebSocket server will be open to CSRF attacks.
@@ -96,7 +96,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	if !opts.InsecureSkipVerify {
 		err = authenticateOrigin(r, opts.OriginPatterns)
 		if err != nil {
-			if errors.Is(err, filepath.ErrBadPattern) {
+			if errors.Is(err, path.ErrBadPattern) {
 				log.Printf("websocket: %v", err)
 				err = errors.New(http.StatusText(http.StatusForbidden))
 			}
@@ -221,7 +221,7 @@ func authenticateOrigin(r *http.Request, originHosts []string) error {
 	for _, hostPattern := range originHosts {
 		matched, err := match(hostPattern, u.Host)
 		if err != nil {
-			return fmt.Errorf("failed to parse filepath pattern %q: %w", hostPattern, err)
+			return fmt.Errorf("failed to parse path pattern %q: %w", hostPattern, err)
 		}
 		if matched {
 			return nil
@@ -234,7 +234,7 @@ func authenticateOrigin(r *http.Request, originHosts []string) error {
 }
 
 func match(pattern, s string) (bool, error) {
-	return filepath.Match(strings.ToLower(pattern), strings.ToLower(s))
+	return path.Match(strings.ToLower(pattern), strings.ToLower(s))
 }
 
 func selectSubprotocol(r *http.Request, subprotocols []string) string {
