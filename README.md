@@ -11,6 +11,11 @@ websocket is a minimal and idiomatic WebSocket library for Go.
 go get github.com/coder/websocket
 ```
 
+> [!NOTE]
+> Coder now maintains this project as explained in [this blog post](https://coder.com/blog/websocket).
+> We're grateful to [nhooyr](https://github.com/nhooyr) for authoring and maintaining this project from
+> 2019 to 2024.
+
 ## Highlights
 
 - Minimal and idiomatic API
