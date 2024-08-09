@@ -15,7 +15,7 @@
 //
 // The wsjson subpackage contain helpers for JSON and protobuf messages.
 //
-// More documentation at https://nhooyr.io/websocket.
+// More documentation at https://github.com/coder/websocket.
 //
 // # Wasm
 //
@@ -31,4 +31,4 @@
 //   - Conn.CloseNow is Close(StatusGoingAway, "")
 //   - HTTPClient, HTTPHeader and CompressionMode in DialOptions are no-op
 //   - *http.Response from Dial is &http.Response{} with a 101 status code on success
-package websocket // import "nhooyr.io/websocket"
+package websocket // import "github.com/coder/websocket"

@@ -8,7 +8,7 @@ import (
 	"math/bits"
 	"testing"
 
-	"nhooyr.io/websocket/internal/test/assert"
+	"github.com/coder/websocket/internal/test/assert"
 )
 
 func basicMask(b []byte, key uint32) uint32 {
