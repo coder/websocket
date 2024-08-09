@@ -16,8 +16,8 @@ import (
 
 	"compress/flate"
 
-	"nhooyr.io/websocket/internal/errd"
-	"nhooyr.io/websocket/internal/util"
+	"github.com/coder/websocket/internal/errd"
+	"github.com/coder/websocket/internal/util"
 )
 
 // Writer returns a writer bounded by the context that will write

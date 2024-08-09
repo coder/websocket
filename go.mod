@@ -1,3 +1,3 @@
-module nhooyr.io/websocket
+module github.com/coder/websocket
 
 go 1.19

@@ -11,7 +11,7 @@ import (
 	_ "github.com/gorilla/websocket"
 	_ "github.com/lesismal/nbio/nbhttp/websocket"
 
-	_ "nhooyr.io/websocket"
+	_ "github.com/coder/websocket"
 )
 
 func basicMask(b []byte, maskKey [4]byte, pos int) int {
@@ -22,10 +22,10 @@ func basicMask(b []byte, maskKey [4]byte, pos int) int {
 	return pos & 3
 }
 
-//go:linkname maskGo nhooyr.io/websocket.maskGo
+//go:linkname maskGo github.com/coder/websocket.maskGo
 func maskGo(b []byte, key32 uint32) int
 
-//go:linkname maskAsm nhooyr.io/websocket.maskAsm
+//go:linkname maskAsm github.com/coder/websocket.maskAsm
 func maskAsm(b *byte, len int, key32 uint32) uint32
 
 //go:linkname nbioMaskBytes github.com/lesismal/nbio/nbhttp/websocket.maskXOR

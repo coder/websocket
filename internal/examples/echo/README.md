@@ -1,6 +1,6 @@
 # Echo Example
 
-This directory contains a echo server example using nhooyr.io/websocket.
+This directory contains a echo server example using github.com/coder/websocket.
 
 ```bash
 $ cd examples/echo
