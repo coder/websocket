@@ -1,7 +1,7 @@
 # websocket
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/coder/websocket.svg)](https://pkg.go.dev/github.com/coder/websocket)
-[![Go Coverage](https://img.shields.io/badge/coverage-91%25-success)](https://github.com/coder/websocket/coverage.html)
+[![Go Coverage](https://coder.github.io/websocket/coverage.svg)](https://coder.github.io/websocket/coverage.html)
 
 websocket is a minimal and idiomatic WebSocket library for Go.
 
