@@ -16,27 +16,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ./go.mod
+      - run: |
+          ./ci/test.sh
+          echo "PERCENT=$(go tool cover -func ./ci/out/coverage.prof | tail -n1 | awk '{print $3}' | tr -d '%')" >> "$GITHUB_OUTPUT"
+          {
+            echo "HTML<<EOF"
+            cat ./ci/out/coverage.html
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
   deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    needs: coverage
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: ./go.mod
-      - name: Generate coverage and badge
+      - name: Write coverage.html and coverage.svg
+        env:
+          PERCENT: ${{ steps.coverage.outputs.PERCENT }}
+          HTML: ${{ steps.coverage.outputs.HTML }}
         run: |
-          ./ci/test.sh
           mkdir -p ./ci/out/static
-          cp ./ci/out/coverage.html ./ci/out/static/coverage.html
-          percent=$(go tool cover -func ./ci/out/coverage.prof | tail -n1 | awk '{print $3}' | tr -d '%')
-          wget -O ./ci/out/static/coverage.svg "https://img.shields.io/badge/coverage-${percent}%25-success"
+          wget -O ./ci/out/static/coverage.svg "https://img.shields.io/badge/coverage-${PERCENT}%25-success"
+          echo "$HTML" > ./ci/out/static/coverage.html
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
