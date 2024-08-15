@@ -364,12 +364,24 @@ func TestWasm(t *testing.T) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "go", "test", "-exec=wasmbrowsertest", ".", "-v")
-	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm", fmt.Sprintf("WS_ECHO_SERVER_URL=%v", s.URL))
+	cmd.Env = append(cleanEnv(os.Environ()), "GOOS=js", "GOARCH=wasm", fmt.Sprintf("WS_ECHO_SERVER_URL=%v", s.URL))
 
 	b, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("wasm test binary failed: %v:\n%s", err, b)
 	}
+}
+
+func cleanEnv(env []string) (out []string) {
+	for _, e := range env {
+		// Filter out GITHUB envs and anything with token in it,
+		// especially GITHUB_TOKEN in CI as it breaks TestWasm.
+		if strings.HasPrefix(e, "GITHUB") || strings.Contains(e, "TOKEN") {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 func assertCloseStatus(exp websocket.StatusCode, err error) error {
