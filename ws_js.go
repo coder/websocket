@@ -12,11 +12,11 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall/js"
 
 	"github.com/coder/websocket/internal/bpool"
 	"github.com/coder/websocket/internal/wsjs"
-	"github.com/coder/websocket/internal/xsync"
 )
 
 // opcode represents a WebSocket opcode.
@@ -45,7 +45,7 @@ type Conn struct {
 	ws     wsjs.WebSocket
 
 	// read limit for a message in bytes.
-	msgReadLimit xsync.Int64
+	msgReadLimit atomic.Int64
 
 	closeReadMu  sync.Mutex
 	closeReadCtx context.Context
