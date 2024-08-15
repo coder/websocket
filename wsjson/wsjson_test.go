@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"testing"
 
-	"nhooyr.io/websocket/internal/test/xrand"
+	"github.com/coder/websocket/internal/test/xrand"
 )
 
 func BenchmarkJSON(b *testing.B) {

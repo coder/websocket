@@ -1,4 +1,4 @@
-package websocket // import "nhooyr.io/websocket"
+package websocket // import "github.com/coder/websocket"
 
 import (
 	"bytes"
@@ -15,8 +15,8 @@ import (
 	"sync/atomic"
 	"syscall/js"
 
-	"nhooyr.io/websocket/internal/bpool"
-	"nhooyr.io/websocket/internal/wsjs"
+	"github.com/coder/websocket/internal/bpool"
+	"github.com/coder/websocket/internal/wsjs"
 )
 
 // opcode represents a WebSocket opcode.

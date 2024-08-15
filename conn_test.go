@@ -16,13 +16,13 @@ import (
 	"testing"
 	"time"
 
-	"nhooyr.io/websocket"
-	"nhooyr.io/websocket/internal/errd"
-	"nhooyr.io/websocket/internal/test/assert"
-	"nhooyr.io/websocket/internal/test/wstest"
-	"nhooyr.io/websocket/internal/test/xrand"
-	"nhooyr.io/websocket/internal/xsync"
-	"nhooyr.io/websocket/wsjson"
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/internal/errd"
+	"github.com/coder/websocket/internal/test/assert"
+	"github.com/coder/websocket/internal/test/wstest"
+	"github.com/coder/websocket/internal/test/xrand"
+	"github.com/coder/websocket/internal/xsync"
+	"github.com/coder/websocket/wsjson"
 )
 
 func TestConn(t *testing.T) {
@@ -364,12 +364,24 @@ func TestWasm(t *testing.T) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "go", "test", "-exec=wasmbrowsertest", ".", "-v")
-	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm", fmt.Sprintf("WS_ECHO_SERVER_URL=%v", s.URL))
+	cmd.Env = append(cleanEnv(os.Environ()), "GOOS=js", "GOARCH=wasm", fmt.Sprintf("WS_ECHO_SERVER_URL=%v", s.URL))
 
 	b, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("wasm test binary failed: %v:\n%s", err, b)
 	}
+}
+
+func cleanEnv(env []string) (out []string) {
+	for _, e := range env {
+		// Filter out GITHUB envs and anything with token in it,
+		// especially GITHUB_TOKEN in CI as it breaks TestWasm.
+		if strings.HasPrefix(e, "GITHUB") || strings.Contains(e, "TOKEN") {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 func assertCloseStatus(exp websocket.StatusCode, err error) error {

@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"nhooyr.io/websocket"
+	"github.com/coder/websocket"
 )
 
 // chatServer enables broadcasting to a set of subscribers.

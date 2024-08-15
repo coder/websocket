@@ -13,8 +13,8 @@ import (
 	"sync"
 	"testing"
 
-	"nhooyr.io/websocket/internal/test/assert"
-	"nhooyr.io/websocket/internal/test/xrand"
+	"github.com/coder/websocket/internal/test/assert"
+	"github.com/coder/websocket/internal/test/xrand"
 )
 
 func TestAccept(t *testing.T) {

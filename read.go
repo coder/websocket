@@ -14,8 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"nhooyr.io/websocket/internal/errd"
-	"nhooyr.io/websocket/internal/util"
+	"github.com/coder/websocket/internal/errd"
+	"github.com/coder/websocket/internal/util"
 )
 
 // Reader reads from the connection until there is a WebSocket

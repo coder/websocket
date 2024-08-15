@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"nhooyr.io/websocket/internal/test/assert"
+	"github.com/coder/websocket/internal/test/assert"
 )
 
 func TestCloseError(t *testing.T) {
