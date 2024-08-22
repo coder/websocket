@@ -143,6 +143,33 @@ func TestAccept(t *testing.T) {
 		_, err := Accept(w, r, nil)
 		assert.Contains(t, err, `failed to hijack connection`)
 	})
+
+	t.Run("wrapperHijackerIsUnwrapped", func(t *testing.T) {
+		t.Parallel()
+
+		rr := httptest.NewRecorder()
+		w := mockUnwrapper{
+			ResponseWriter: rr,
+			unwrap: func() http.ResponseWriter {
+				return mockHijacker{
+					ResponseWriter: rr,
+					hijack: func() (conn net.Conn, writer *bufio.ReadWriter, err error) {
+						return nil, nil, errors.New("haha")
+					},
+				}
+			},
+		}
+
+		r := httptest.NewRequest("GET", "/", nil)
+		r.Header.Set("Connection", "Upgrade")
+		r.Header.Set("Upgrade", "websocket")
+		r.Header.Set("Sec-WebSocket-Version", "13")
+		r.Header.Set("Sec-WebSocket-Key", xrand.Base64(16))
+
+		_, err := Accept(w, r, nil)
+		assert.Contains(t, err, "failed to hijack connection")
+	})
+
 	t.Run("closeRace", func(t *testing.T) {
 		t.Parallel()
 
@@ -533,4 +560,15 @@ var _ http.Hijacker = mockHijacker{}
 
 func (mj mockHijacker) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return mj.hijack()
+}
+
+type mockUnwrapper struct {
+	http.ResponseWriter
+	unwrap func() http.ResponseWriter
+}
+
+var _ rwUnwrapper = mockUnwrapper{}
+
+func (mu mockUnwrapper) Unwrap() http.ResponseWriter {
+	return mu.unwrap()
 }

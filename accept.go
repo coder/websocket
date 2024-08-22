@@ -105,7 +105,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 		}
 	}
 
-	hj, ok := w.(http.Hijacker)
+	hj, ok := hijacker(w)
 	if !ok {
 		err = errors.New("http.ResponseWriter does not implement http.Hijacker")
 		http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
