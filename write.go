@@ -20,9 +20,6 @@ import (
 	"github.com/coder/websocket/internal/util"
 )
 
-// ErrAlreadyClosed is returned when a close frame has already been sent and another is attempted.
-var ErrAlreadyClosed = errors.New("close frame already sent")
-
 // Writer returns a writer bounded by the context that will write
 // a WebSocket message of type dataType to the connection.
 //
@@ -252,6 +249,15 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 	}
 	defer c.writeFrameMu.unlock()
 
+	if c.closeSent {
+		select {
+		case <-c.closed:
+			return 0, net.ErrClosed
+		default:
+		}
+		return 0, errors.New("close sent")
+	}
+
 	select {
 	case <-c.closed:
 		return 0, net.ErrClosed
@@ -270,10 +276,6 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 			err = fmt.Errorf("failed to write frame: %w", err)
 		}
 	}()
-
-	if opcode == opClose && c.closeSent {
-		return 0, ErrAlreadyClosed
-	}
 
 	c.writeHeader.fin = fin
 	c.writeHeader.opcode = opcode
