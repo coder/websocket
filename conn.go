@@ -73,10 +73,10 @@ type Conn struct {
 	closeReadCtx  context.Context
 	closeReadDone chan struct{}
 
-	closed       chan struct{}
-	closeMu      sync.Mutex
-	closing      bool
-	closeWritten bool
+	closed    chan struct{}
+	closeMu   sync.Mutex
+	closing   bool
+	closeSent bool
 
 	pingCounter   atomic.Int64
 	activePingsMu sync.Mutex

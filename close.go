@@ -169,12 +169,6 @@ func (c *Conn) closeHandshake(code StatusCode, reason string) error {
 }
 
 func (c *Conn) writeClose(code StatusCode, reason string) error {
-	c.closeMu.Lock()
-	defer c.closeMu.Unlock()
-	if c.closeWritten {
-		return nil
-	}
-
 	ce := CloseError{
 		Code:   code,
 		Reason: reason,
@@ -199,7 +193,6 @@ func (c *Conn) writeClose(code StatusCode, reason string) error {
 	if err != nil && !errors.Is(err, net.ErrClosed) {
 		return err
 	}
-	c.closeWritten = true
 	return nil
 }
 
