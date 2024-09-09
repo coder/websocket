@@ -1,6 +1,9 @@
 version: 2
 updates:
   - package-ecosystem: "go"
-    directory: "/"
+    directories:
+      - "/"
+      - "/internal/examples"
+      - "/internal/thirdparty"
     schedule:
       interval: "weekly"
