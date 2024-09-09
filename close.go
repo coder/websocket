@@ -214,7 +214,7 @@ func (c *Conn) waitCloseHandshake() error {
 	}
 
 	for {
-		h, err := c.readLoop(ctx)
+		h, err := c.readLoop(ctx, true)
 		if err != nil {
 			return err
 		}
