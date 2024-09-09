@@ -1,9 +1,9 @@
 version: 2
 updates:
-  - package-ecosystem: "gomod"
+  - package-ecosystem: 'gomod'
     directories:
-      - "/"
-      - "/internal/examples"
-      - "/internal/thirdparty"
+      - '/'
+      - '/internal/examples'
+      - '/internal/thirdparty'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
