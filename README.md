@@ -63,7 +63,9 @@ http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
 	}
 	defer c.CloseNow()
 
-	ctx, cancel := context.WithTimeout(r.Context(), time.Second*10)
+	// Set the context as needed. Use of r.Context() is not recommended
+	// to avoid surprising behavior (see http.Hijacker).
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	var v interface{}

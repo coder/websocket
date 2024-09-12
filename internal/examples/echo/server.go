@@ -37,7 +37,7 @@ func (s echoServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	l := rate.NewLimiter(rate.Every(time.Millisecond*100), 10)
 	for {
-		err = echo(r.Context(), c, l)
+		err = echo(c, l)
 		if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
 			return
 		}
@@ -51,8 +51,8 @@ func (s echoServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // echo reads from the WebSocket connection and then writes
 // the received message back to it.
 // The entire function has 10s to complete.
-func echo(ctx context.Context, c *websocket.Conn, l *rate.Limiter) error {
-	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
+func echo(c *websocket.Conn, l *rate.Limiter) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	err := l.Wait(ctx)

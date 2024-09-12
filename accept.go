@@ -79,6 +79,9 @@ func (opts *AcceptOptions) cloneWithDefaults() *AcceptOptions {
 // See the InsecureSkipVerify and OriginPatterns options to allow cross origin requests.
 //
 // Accept will write a response to w on all errors.
+//
+// Note that using the http.Request Context after Accept returns may lead to
+// unexpected behavior (see http.Hijacker).
 func Accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn, error) {
 	return accept(w, r, opts)
 }
