@@ -156,6 +156,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 		client:         false,
 		copts:          copts,
 		flateThreshold: opts.CompressionThreshold,
+		remoteAddr:     r.RemoteAddr,
 
 		br: brw.Reader,
 		bw: brw.Writer,
