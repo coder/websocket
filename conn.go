@@ -49,7 +49,7 @@ type Conn struct {
 	client         bool
 	copts          *compressionOptions
 	flateThreshold int
-	remoteAddr     string
+	remoteAddr     net.Addr
 	br             *bufio.Reader
 	bw             *bufio.Writer
 
@@ -89,7 +89,7 @@ type connConfig struct {
 	client         bool
 	copts          *compressionOptions
 	flateThreshold int
-	remoteAddr     string
+	remoteAddr     net.Addr
 
 	br *bufio.Reader
 	bw *bufio.Writer
@@ -196,7 +196,7 @@ func (c *Conn) flate() bool {
 }
 
 // RemoteAddr returns the remote address of websocket connection.
-func (c *Conn) RemoteAddr() string {
+func (c *Conn) RemoteAddr() net.Addr {
 	return c.remoteAddr
 }
 
