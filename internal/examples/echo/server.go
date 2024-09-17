@@ -30,7 +30,7 @@ func (s echoServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer c.CloseNow()
 
-	s.logf("new incoming connection: %s", c.RemoteAddr())
+	s.logf("new incoming connection: %s", c.RemoteAddr().String())
 
 	if c.Subprotocol() != "echo" {
 		c.Close(websocket.StatusPolicyViolation, "client must speak the echo subprotocol")
