@@ -11,12 +11,10 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"net/textproto"
 	"net/url"
 	"path"
-	"strconv"
 	"strings"
 
 	"github.com/coder/websocket/internal/errd"
@@ -152,34 +150,12 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	b, _ := brw.Reader.Peek(brw.Reader.Buffered())
 	brw.Reader.Reset(io.MultiReader(bytes.NewReader(b), netConn))
 
-	ipStr, portStr, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		err = errors.New("*http.Request contains invalid RemoteAddr")
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return nil, err
-	}
-
-	ip := net.ParseIP(ipStr)
-	if ip == nil {
-		err = errors.New("*http.Request contains invalid IP address")
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return nil, err
-	}
-
-	port, err := strconv.Atoi(portStr)
-	if err != nil {
-		err = errors.New("*http.Request contains invalid port number")
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return nil, err
-	}
-
 	return newConn(connConfig{
 		subprotocol:    w.Header().Get("Sec-WebSocket-Protocol"),
 		rwc:            netConn,
 		client:         false,
 		copts:          copts,
 		flateThreshold: opts.CompressionThreshold,
-		remoteAddr:     &net.TCPAddr{IP: ip, Port: port},
 
 		br: brw.Reader,
 		bw: brw.Writer,

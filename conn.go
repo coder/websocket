@@ -49,7 +49,6 @@ type Conn struct {
 	client         bool
 	copts          *compressionOptions
 	flateThreshold int
-	remoteAddr     net.Addr
 	br             *bufio.Reader
 	bw             *bufio.Writer
 
@@ -89,7 +88,6 @@ type connConfig struct {
 	client         bool
 	copts          *compressionOptions
 	flateThreshold int
-	remoteAddr     net.Addr
 
 	br *bufio.Reader
 	bw *bufio.Writer
@@ -102,7 +100,6 @@ func newConn(cfg connConfig) *Conn {
 		client:         cfg.client,
 		copts:          cfg.copts,
 		flateThreshold: cfg.flateThreshold,
-		remoteAddr:     cfg.remoteAddr,
 
 		br: cfg.br,
 		bw: cfg.bw,
@@ -197,7 +194,18 @@ func (c *Conn) flate() bool {
 
 // RemoteAddr returns the remote address of websocket connection.
 func (c *Conn) RemoteAddr() net.Addr {
-	return c.remoteAddr
+	if unc, ok := c.rwc.(net.Conn); ok {
+		return unc.RemoteAddr()
+	}
+	return websocketAddr{}
+}
+
+// LocalAddr returns the local address of websocket connection.
+func (c *Conn) LocalAddr() net.Addr {
+	if unc, ok := c.rwc.(net.Conn); ok {
+		return unc.LocalAddr()
+	}
+	return websocketAddr{}
 }
 
 // Ping sends a ping to the peer and waits for a pong.
