@@ -192,6 +192,22 @@ func (c *Conn) flate() bool {
 	return c.copts != nil
 }
 
+// RemoteAddr returns the remote address of websocket connection.
+func (c *Conn) RemoteAddr() net.Addr {
+	if unc, ok := c.rwc.(net.Conn); ok {
+		return unc.RemoteAddr()
+	}
+	return websocketAddr{}
+}
+
+// LocalAddr returns the local address of websocket connection.
+func (c *Conn) LocalAddr() net.Addr {
+	if unc, ok := c.rwc.(net.Conn); ok {
+		return unc.LocalAddr()
+	}
+	return websocketAddr{}
+}
+
 // Ping sends a ping to the peer and waits for a pong.
 // Use this to measure latency or ensure the peer is responsive.
 // Ping must be called concurrently with Reader as it does
