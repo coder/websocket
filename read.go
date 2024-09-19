@@ -181,6 +181,15 @@ func (c *Conn) readRSV1Illegal(h header) bool {
 }
 
 func (c *Conn) readLoop(ctx context.Context) (header, error) {
+	if c.readCloseErr != nil {
+		select {
+		case <-c.closed:
+			return header{}, net.ErrClosed
+		default:
+		}
+		return header{}, c.readCloseErr
+	}
+
 	for {
 		h, err := c.readFrameHeader(ctx)
 		if err != nil {
@@ -324,8 +333,16 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 		return err
 	}
 
+	if c.readCloseErr == nil {
+		c.readCloseErr = ce
+	}
+
 	err = fmt.Errorf("received close frame: %w", ce)
-	c.writeClose(ce.Code, ce.Reason)
+	if err2 := c.writeClose(ce.Code, ce.Reason); errors.Is(err2, errCloseSent) {
+		// The close handshake has already been initiated, connection
+		// close should be handled elsewhere.
+		return err
+	}
 	c.readMu.unlock()
 	c.close()
 	return err

@@ -241,6 +241,8 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 	return nil
 }
 
+var errCloseSent = errors.New("close sent")
+
 // writeFrame handles all writes to the connection.
 func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opcode, p []byte) (_ int, err error) {
 	err = c.writeFrameMu.lock(ctx)
@@ -248,6 +250,15 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 		return 0, err
 	}
 	defer c.writeFrameMu.unlock()
+
+	if c.closeSent {
+		select {
+		case <-c.closed:
+			return 0, net.ErrClosed
+		default:
+		}
+		return 0, errCloseSent
+	}
 
 	select {
 	case <-c.closed:
@@ -301,6 +312,10 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 		if err != nil {
 			return n, fmt.Errorf("failed to flush: %w", err)
 		}
+	}
+
+	if opcode == opClose {
+		c.closeSent = true
 	}
 
 	select {

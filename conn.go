@@ -61,6 +61,7 @@ type Conn struct {
 	readHeaderBuf  [8]byte
 	readControlBuf [maxControlPayload]byte
 	msgReader      *msgReader
+	readCloseErr   error
 
 	// Write state.
 	msgWriter      *msgWriter
@@ -68,7 +69,9 @@ type Conn struct {
 	writeBuf       []byte
 	writeHeaderBuf [8]byte
 	writeHeader    header
+	closeSent      bool
 
+	// CloseRead state.
 	closeReadMu   sync.Mutex
 	closeReadCtx  context.Context
 	closeReadDone chan struct{}
