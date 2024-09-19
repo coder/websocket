@@ -7,7 +7,7 @@ replace github.com/coder/websocket => ../..
 require (
 	github.com/coder/websocket v0.0.0-00010101000000-000000000000
 	github.com/gin-gonic/gin v1.9.1
-	github.com/gobwas/ws v1.3.0
+	github.com/gobwas/ws v1.4.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/lesismal/nbio v1.3.18
 )
