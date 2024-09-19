@@ -277,12 +277,6 @@ func (c *Conn) Subprotocol() string {
 	return c.ws.Subprotocol()
 }
 
-// DialOptions represents the options available to pass to Dial.
-type DialOptions struct {
-	// Subprotocols lists the subprotocols to negotiate with the server.
-	Subprotocols []string
-}
-
 // Dial creates a new WebSocket connection to the given url with the given options.
 // The passed context bounds the maximum time spent waiting for the connection to open.
 // The returned *http.Response is always nil or a mock. It's only in the signature
