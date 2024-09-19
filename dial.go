@@ -273,7 +273,7 @@ func verifyServerExtensions(copts *compressionOptions, h http.Header) (*compress
 
 	ext := exts[0]
 	if ext.name != "permessage-deflate" || len(exts) > 1 || copts == nil {
-		return nil, fmt.Errorf("WebSocket protcol violation: unsupported extensions from server: %+v", exts[1:])
+		return nil, fmt.Errorf("WebSocket protocol violation: unsupported extensions from server: %+v", exts[1:])
 	}
 
 	_copts := *copts
