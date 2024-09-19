@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"reflect"
 	"runtime"
 	"strings"
@@ -196,7 +195,7 @@ func (c *Conn) Ping(ctx context.Context) error {
 // Write writes a message of the given type to the connection.
 // Always non blocking.
 func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
-	err := c.write(ctx, typ, p)
+	err := c.write(typ, p)
 	if err != nil {
 		// Have to ensure the WebSocket is closed after a write error
 		// to match the Go API. It can only error if the message type
@@ -210,7 +209,7 @@ func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	return nil
 }
 
-func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) error {
+func (c *Conn) write(typ MessageType, p []byte) error {
 	if c.isClosed() {
 		return net.ErrClosed
 	}
@@ -287,7 +286,7 @@ type DialOptions struct {
 // The passed context bounds the maximum time spent waiting for the connection to open.
 // The returned *http.Response is always nil or a mock. It's only in the signature
 // to match the core API.
-func Dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Response, error) {
+func Dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *struct{}, error) {
 	c, resp, err := dial(ctx, url, opts)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to WebSocket dial %q: %w", url, err)
@@ -295,7 +294,7 @@ func Dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Resp
 	return c, resp, nil
 }
 
-func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Response, error) {
+func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *struct{}, error) {
 	if opts == nil {
 		opts = &DialOptions{}
 	}
@@ -324,9 +323,7 @@ func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Resp
 		c.Close(StatusPolicyViolation, "dial timed out")
 		return nil, nil, ctx.Err()
 	case <-opench:
-		return c, &http.Response{
-			StatusCode: http.StatusSwitchingProtocols,
-		}, nil
+		return c, nil, nil
 	case <-c.closed:
 		return nil, nil, net.ErrClosed
 	}
@@ -442,7 +439,7 @@ type AcceptOptions struct {
 }
 
 // Accept is stubbed out for Wasm.
-func Accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn, error) {
+func Accept(w any, r any, opts *AcceptOptions) (*Conn, error) {
 	return nil, errors.New("unimplemented")
 }
 
