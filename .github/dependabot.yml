@@ -2,30 +2,16 @@ version: 2
 updates:
   # Track in case we ever add dependencies.
   - package-ecosystem: 'gomod'
-    directories:
-      - '/'
+    directory: '/'
     schedule:
       interval: 'weekly'
     commit-message:
       prefix: 'chore'
 
-  # Keep examples up-to-date.
+  # Keep example and test/benchmark deps up-to-date.
   - package-ecosystem: 'gomod'
     directories:
       - '/internal/examples'
-    schedule:
-      interval: 'weekly'
-    commit-message:
-      prefix: 'chore'
-    labels: []
-    groups:
-      examples:
-        patterns:
-          - '*'
-
-  # Tests, these are not critical but we should keep them up-to-date.
-  - package-ecosystem: 'gomod'
-    directories:
       - '/internal/thirdparty'
     schedule:
       interval: 'monthly'
@@ -33,6 +19,6 @@ updates:
       prefix: 'chore'
     labels: []
     groups:
-      thirdparty:
+      internal-deps:
         patterns:
           - '*'
