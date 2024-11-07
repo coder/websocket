@@ -52,7 +52,7 @@ func Test_chatServer(t *testing.T) {
 	// 10 clients are started that send 128 different
 	// messages of max 128 bytes concurrently.
 	//
-	// The test verifies that every message is seen by ever client
+	// The test verifies that every message is seen by every client
 	// and no errors occur anywhere.
 	t.Run("concurrency", func(t *testing.T) {
 		t.Parallel()
