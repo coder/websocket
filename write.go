@@ -252,7 +252,8 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 	select {
 	case <-c.closed:
 		return 0, net.ErrClosed
-	case c.writeTimeout <- ctx:
+	default:
+		c.setupWriteTimeout(ctx)
 	}
 
 	defer func() {
@@ -309,7 +310,8 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 			return n, nil
 		}
 		return n, net.ErrClosed
-	case c.writeTimeout <- context.Background():
+	default:
+		c.clearWriteTimeout()
 	}
 
 	return n, nil
