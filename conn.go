@@ -52,9 +52,8 @@ type Conn struct {
 	br             *bufio.Reader
 	bw             *bufio.Writer
 
-	readTimeout     chan context.Context
-	writeTimeout    chan context.Context
-	timeoutLoopDone chan struct{}
+	readTimeoutCloser  atomic.Value
+	writeTimeoutCloser atomic.Value
 
 	// Read state.
 	readMu         *mu
@@ -104,10 +103,6 @@ func newConn(cfg connConfig) *Conn {
 		br: cfg.br,
 		bw: cfg.bw,
 
-		readTimeout:     make(chan context.Context),
-		writeTimeout:    make(chan context.Context),
-		timeoutLoopDone: make(chan struct{}),
-
 		closed:      make(chan struct{}),
 		activePings: make(map[string]chan<- struct{}),
 	}
@@ -132,8 +127,6 @@ func newConn(cfg connConfig) *Conn {
 	runtime.SetFinalizer(c, func(c *Conn) {
 		c.close()
 	})
-
-	go c.timeoutLoop()
 
 	return c
 }
@@ -164,26 +157,42 @@ func (c *Conn) close() error {
 	return err
 }
 
-func (c *Conn) timeoutLoop() {
-	defer close(c.timeoutLoopDone)
+func (c *Conn) setupWriteTimeout(ctx context.Context) {
+	hammerTime := context.AfterFunc(ctx, func() {
+		c.close()
+	})
 
-	readCtx := context.Background()
-	writeCtx := context.Background()
+	if closer := c.writeTimeoutCloser.Swap(hammerTime); closer != nil {
+		if fn, ok := closer.(func() bool); ok {
+			fn()
+		}
+	}
+}
 
-	for {
-		select {
-		case <-c.closed:
-			return
+func (c *Conn) clearWriteTimeout() {
+	if closer := c.writeTimeoutCloser.Load(); closer != nil {
+		if fn, ok := closer.(func() bool); ok {
+			fn()
+		}
+	}
+}
 
-		case writeCtx = <-c.writeTimeout:
-		case readCtx = <-c.readTimeout:
+func (c *Conn) setupReadTimeout(ctx context.Context) {
+	hammerTime := context.AfterFunc(ctx, func() {
+		defer c.close()
+	})
 
-		case <-readCtx.Done():
-			c.close()
-			return
-		case <-writeCtx.Done():
-			c.close()
-			return
+	if closer := c.readTimeoutCloser.Swap(hammerTime); closer != nil {
+		if fn, ok := closer.(func() bool); ok {
+			fn()
+		}
+	}
+}
+
+func (c *Conn) clearReadTimeout() {
+	if closer := c.readTimeoutCloser.Load(); closer != nil {
+		if fn, ok := closer.(func() bool); ok {
+			fn()
 		}
 	}
 }

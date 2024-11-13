@@ -221,7 +221,8 @@ func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 	select {
 	case <-c.closed:
 		return header{}, net.ErrClosed
-	case c.readTimeout <- ctx:
+	default:
+		c.setupReadTimeout(ctx)
 	}
 
 	h, err := readFrameHeader(c.br, c.readHeaderBuf[:])
@@ -239,7 +240,8 @@ func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
 	select {
 	case <-c.closed:
 		return header{}, net.ErrClosed
-	case c.readTimeout <- context.Background():
+	default:
+		c.clearReadTimeout()
 	}
 
 	return h, nil
@@ -249,7 +251,8 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
 	select {
 	case <-c.closed:
 		return 0, net.ErrClosed
-	case c.readTimeout <- ctx:
+	default:
+		c.setupReadTimeout(ctx)
 	}
 
 	n, err := io.ReadFull(c.br, p)
@@ -267,7 +270,8 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
 	select {
 	case <-c.closed:
 		return n, net.ErrClosed
-	case c.readTimeout <- context.Background():
+	default:
+		c.clearReadTimeout()
 	}
 
 	return n, err
