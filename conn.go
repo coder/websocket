@@ -179,7 +179,7 @@ func (c *Conn) clearWriteTimeout() {
 
 func (c *Conn) setupReadTimeout(ctx context.Context) {
 	hammerTime := context.AfterFunc(ctx, func() {
-		defer c.close()
+		c.close()
 	})
 
 	if closer := c.readTimeoutCloser.Swap(hammerTime); closer != nil {
