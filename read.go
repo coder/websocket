@@ -181,15 +181,6 @@ func (c *Conn) readRSV1Illegal(h header) bool {
 }
 
 func (c *Conn) readLoop(ctx context.Context) (header, error) {
-	if c.readCloseErr != nil {
-		select {
-		case <-c.closed:
-			return header{}, net.ErrClosed
-		default:
-		}
-		return header{}, c.readCloseErr
-	}
-
 	for {
 		h, err := c.readFrameHeader(ctx)
 		if err != nil {
@@ -226,57 +217,59 @@ func (c *Conn) readLoop(ctx context.Context) (header, error) {
 	}
 }
 
-func (c *Conn) readFrameHeader(ctx context.Context) (header, error) {
+func (c *Conn) prepareRead(ctx context.Context, err *error) (func(), error) {
 	select {
 	case <-c.closed:
-		return header{}, net.ErrClosed
+		return nil, net.ErrClosed
 	case c.readTimeout <- ctx:
 	}
 
-	h, err := readFrameHeader(c.br, c.readHeaderBuf[:])
-	if err != nil {
-		select {
-		case <-c.closed:
-			return header{}, net.ErrClosed
-		case <-ctx.Done():
-			return header{}, ctx.Err()
-		default:
-			return header{}, err
-		}
+	c.closeStateMu.Lock()
+	closeReceivedErr := c.closeReceivedErr
+	c.closeStateMu.Unlock()
+	if closeReceivedErr != nil {
+		return nil, closeReceivedErr
 	}
 
-	select {
-	case <-c.closed:
-		return header{}, net.ErrClosed
-	case c.readTimeout <- context.Background():
+	return func() {
+		select {
+		case <-c.closed:
+			if *err != nil {
+				*err = net.ErrClosed
+			}
+		case c.writeTimeout <- context.Background():
+		}
+		if *err != nil && ctx.Err() != nil {
+			*err = ctx.Err()
+		}
+	}, nil
+}
+
+func (c *Conn) readFrameHeader(ctx context.Context) (_ header, err error) {
+	readDone, err := c.prepareRead(ctx, &err)
+	if err != nil {
+		return header{}, err
+	}
+	defer readDone()
+
+	h, err := readFrameHeader(c.br, c.readHeaderBuf[:])
+	if err != nil {
+		return header{}, err
 	}
 
 	return h, nil
 }
 
-func (c *Conn) readFramePayload(ctx context.Context, p []byte) (int, error) {
-	select {
-	case <-c.closed:
-		return 0, net.ErrClosed
-	case c.readTimeout <- ctx:
+func (c *Conn) readFramePayload(ctx context.Context, p []byte) (_ int, err error) {
+	readDone, err := c.prepareRead(ctx, &err)
+	if err != nil {
+		return 0, err
 	}
+	defer readDone()
 
 	n, err := io.ReadFull(c.br, p)
 	if err != nil {
-		select {
-		case <-c.closed:
-			return n, net.ErrClosed
-		case <-ctx.Done():
-			return n, ctx.Err()
-		default:
-			return n, fmt.Errorf("failed to read frame payload: %w", err)
-		}
-	}
-
-	select {
-	case <-c.closed:
-		return n, net.ErrClosed
-	case c.readTimeout <- context.Background():
+		return n, fmt.Errorf("failed to read frame payload: %w", err)
 	}
 
 	return n, err
@@ -333,18 +326,20 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 		return err
 	}
 
-	if c.readCloseErr == nil {
-		c.readCloseErr = ce
-	}
-
 	err = fmt.Errorf("received close frame: %w", ce)
-	if err2 := c.writeClose(ce.Code, ce.Reason); errors.Is(err2, errCloseSent) {
-		// The close handshake has already been initiated, connection
-		// close should be handled elsewhere.
-		return err
+	c.closeStateMu.Lock()
+	c.closeReceivedErr = err
+	closeSent := c.closeSentErr != nil
+	c.closeStateMu.Unlock()
+
+	if !closeSent {
+		c.readMu.unlock()
+		_ = c.writeClose(ce.Code, ce.Reason)
 	}
-	c.readMu.unlock()
-	c.close()
+	if !c.casClosing() {
+		c.readMu.unlock()
+		_ = c.close()
+	}
 	return err
 }
 

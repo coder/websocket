@@ -241,8 +241,6 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 	return nil
 }
 
-var errCloseSent = errors.New("close sent")
-
 // writeFrame handles all writes to the connection.
 func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opcode, p []byte) (_ int, err error) {
 	err = c.writeFrameMu.lock(ctx)
@@ -251,13 +249,22 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 	}
 	defer c.writeFrameMu.unlock()
 
-	if c.closeSent {
-		select {
-		case <-c.closed:
-			return 0, net.ErrClosed
-		default:
+	defer func() {
+		if err != nil {
+			if ctx.Err() != nil {
+				err = ctx.Err()
+			} else if c.isClosed() {
+				err = net.ErrClosed
+			}
+			err = fmt.Errorf("failed to write frame: %w", err)
 		}
-		return 0, errCloseSent
+	}()
+
+	c.closeStateMu.Lock()
+	closeSentErr := c.closeSentErr
+	c.closeStateMu.Unlock()
+	if closeSentErr != nil {
+		return 0, net.ErrClosed
 	}
 
 	select {
@@ -265,17 +272,11 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 		return 0, net.ErrClosed
 	case c.writeTimeout <- ctx:
 	}
-
 	defer func() {
-		if err != nil {
-			select {
-			case <-c.closed:
-				err = net.ErrClosed
-			case <-ctx.Done():
-				err = ctx.Err()
-			default:
-			}
-			err = fmt.Errorf("failed to write frame: %w", err)
+		select {
+		case <-c.closed:
+			err = net.ErrClosed
+		case c.writeTimeout <- context.Background():
 		}
 	}()
 
@@ -314,10 +315,6 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 		}
 	}
 
-	if opcode == opClose {
-		c.closeSent = true
-	}
-
 	select {
 	case <-c.closed:
 		if opcode == opClose {
@@ -325,6 +322,18 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 		}
 		return n, net.ErrClosed
 	case c.writeTimeout <- context.Background():
+	}
+
+	if opcode == opClose {
+		c.closeStateMu.Lock()
+		c.closeSentErr = fmt.Errorf("sent close frame: %w", net.ErrClosed)
+		closeReceived := c.closeReceivedErr != nil
+		c.closeStateMu.Unlock()
+
+		if closeReceived && !c.casClosing() {
+			c.writeFrameMu.unlock()
+			_ = c.close()
+		}
 	}
 
 	return n, nil

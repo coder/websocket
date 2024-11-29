@@ -100,7 +100,7 @@ func CloseStatus(err error) StatusCode {
 func (c *Conn) Close(code StatusCode, reason string) (err error) {
 	defer errd.Wrap(&err, "failed to close WebSocket")
 
-	if !c.casClosing() {
+	if c.casClosing() {
 		err = c.waitGoroutines()
 		if err != nil {
 			return err
@@ -133,7 +133,7 @@ func (c *Conn) Close(code StatusCode, reason string) (err error) {
 func (c *Conn) CloseNow() (err error) {
 	defer errd.Wrap(&err, "failed to immediately close WebSocket")
 
-	if !c.casClosing() {
+	if c.casClosing() {
 		err = c.waitGoroutines()
 		if err != nil {
 			return err
@@ -205,10 +205,6 @@ func (c *Conn) waitCloseHandshake() error {
 		return err
 	}
 	defer c.readMu.unlock()
-
-	if c.readCloseErr != nil {
-		return c.readCloseErr
-	}
 
 	for i := int64(0); i < c.msgReader.payloadLength; i++ {
 		_, err := c.br.ReadByte()
@@ -333,13 +329,7 @@ func (ce CloseError) bytesErr() ([]byte, error) {
 }
 
 func (c *Conn) casClosing() bool {
-	c.closeMu.Lock()
-	defer c.closeMu.Unlock()
-	if !c.closing {
-		c.closing = true
-		return true
-	}
-	return false
+	return c.closing.Swap(true)
 }
 
 func (c *Conn) isClosed() bool {
