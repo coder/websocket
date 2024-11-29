@@ -80,7 +80,7 @@ type Conn struct {
 	closeReadDone chan struct{}
 
 	closing atomic.Bool
-	closeMu sync.Mutex
+	closeMu sync.Mutex // Protects following.
 	closed  chan struct{}
 
 	pingCounter   atomic.Int64
