@@ -249,7 +249,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 	defer c.writeFrameMu.unlock()
 
 	defer func() {
-		if errors.Is(err, net.ErrClosed) && opcode == opClose {
+		if c.isClosed() && opcode == opClose {
 			err = nil
 		}
 		if err != nil {
