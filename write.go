@@ -5,6 +5,7 @@ package websocket
 
 import (
 	"bufio"
+	"compress/flate"
 	"context"
 	"crypto/rand"
 	"encoding/binary"
@@ -13,8 +14,6 @@ import (
 	"io"
 	"net"
 	"time"
-
-	"compress/flate"
 
 	"github.com/coder/websocket/internal/errd"
 	"github.com/coder/websocket/internal/util"
@@ -250,6 +249,9 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 	defer c.writeFrameMu.unlock()
 
 	defer func() {
+		if errors.Is(err, net.ErrClosed) && opcode == opClose {
+			err = nil
+		}
 		if err != nil {
 			if ctx.Err() != nil {
 				err = ctx.Err()
@@ -275,7 +277,6 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 	defer func() {
 		select {
 		case <-c.closed:
-			err = net.ErrClosed
 		case c.writeTimeout <- context.Background():
 		}
 	}()
@@ -313,15 +314,6 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 		if err != nil {
 			return n, fmt.Errorf("failed to flush: %w", err)
 		}
-	}
-
-	select {
-	case <-c.closed:
-		if opcode == opClose {
-			return n, nil
-		}
-		return n, net.ErrClosed
-	case c.writeTimeout <- context.Background():
 	}
 
 	if opcode == opClose {

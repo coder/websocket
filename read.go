@@ -224,25 +224,28 @@ func (c *Conn) prepareRead(ctx context.Context, err *error) (func(), error) {
 	case c.readTimeout <- ctx:
 	}
 
-	c.closeStateMu.Lock()
-	closeReceivedErr := c.closeReceivedErr
-	c.closeStateMu.Unlock()
-	if closeReceivedErr != nil {
-		return nil, closeReceivedErr
-	}
-
-	return func() {
+	done := func() {
 		select {
 		case <-c.closed:
 			if *err != nil {
 				*err = net.ErrClosed
 			}
-		case c.writeTimeout <- context.Background():
+		case c.readTimeout <- context.Background():
 		}
 		if *err != nil && ctx.Err() != nil {
 			*err = ctx.Err()
 		}
-	}, nil
+	}
+
+	c.closeStateMu.Lock()
+	closeReceivedErr := c.closeReceivedErr
+	c.closeStateMu.Unlock()
+	if closeReceivedErr != nil {
+		defer done()
+		return nil, closeReceivedErr
+	}
+
+	return done, nil
 }
 
 func (c *Conn) readFrameHeader(ctx context.Context) (_ header, err error) {
