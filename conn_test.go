@@ -461,7 +461,7 @@ func (tt *connTest) goDiscardLoop(c *websocket.Conn) {
 }
 
 func BenchmarkConn(b *testing.B) {
-	var benchCases = []struct {
+	benchCases := []struct {
 		name string
 		mode websocket.CompressionMode
 	}{
@@ -655,6 +655,7 @@ func TestConnClosePropagation(t *testing.T) {
 		})
 	}
 	checkReadErr := func(t *testing.T, err error) {
+		// Check read error (output depends on when read is called in relation to connection closure).
 		var ce websocket.CloseError
 		if errors.As(err, &ce) {
 			assert.Equal(t, "", websocket.StatusNormalClosure, ce.Code)
@@ -668,7 +669,6 @@ func TestConnClosePropagation(t *testing.T) {
 			err := c.Write(context.Background(), websocket.MessageText, want)
 			assert.ErrorIs(t, net.ErrClosed, err)
 
-			// Check read error (output depends on when read is called in relation to connection closure).
 			_, _, err = c.Read(context.Background())
 			checkReadErr(t, err)
 		}
