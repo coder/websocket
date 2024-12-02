@@ -217,6 +217,12 @@ func (c *Conn) readLoop(ctx context.Context) (header, error) {
 	}
 }
 
+// prepareRead sets the readTimeout context and returns a done function
+// to be called after the read is done. It also returns an error if the
+// connection is closed. The reference to the error is used to assign
+// an error depending on if the connection closed or the context timed
+// out during use. Typically the referenced error is a named return
+// variable of the function calling this method.
 func (c *Conn) prepareRead(ctx context.Context, err *error) (func(), error) {
 	select {
 	case <-c.closed:
@@ -335,6 +341,9 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 	closeSent := c.closeSentErr != nil
 	c.closeStateMu.Unlock()
 
+	// Only unlock readMu if this connection is being closed becaue
+	// c.close will try to acquire the readMu lock. We unlock for
+	// writeClose as well because it may also call c.close.
 	if !closeSent {
 		c.readMu.unlock()
 		_ = c.writeClose(ce.Code, ce.Reason)
