@@ -5,6 +5,7 @@ package websocket
 
 import (
 	"bufio"
+	"compress/flate"
 	"context"
 	"crypto/rand"
 	"encoding/binary"
@@ -13,8 +14,6 @@ import (
 	"io"
 	"net"
 	"time"
-
-	"compress/flate"
 
 	"github.com/coder/websocket/internal/errd"
 	"github.com/coder/websocket/internal/util"
@@ -249,22 +248,36 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 	}
 	defer c.writeFrameMu.unlock()
 
+	defer func() {
+		if c.isClosed() && opcode == opClose {
+			err = nil
+		}
+		if err != nil {
+			if ctx.Err() != nil {
+				err = ctx.Err()
+			} else if c.isClosed() {
+				err = net.ErrClosed
+			}
+			err = fmt.Errorf("failed to write frame: %w", err)
+		}
+	}()
+
+	c.closeStateMu.Lock()
+	closeSentErr := c.closeSentErr
+	c.closeStateMu.Unlock()
+	if closeSentErr != nil {
+		return 0, net.ErrClosed
+	}
+
 	select {
 	case <-c.closed:
 		return 0, net.ErrClosed
 	case c.writeTimeout <- ctx:
 	}
-
 	defer func() {
-		if err != nil {
-			select {
-			case <-c.closed:
-				err = net.ErrClosed
-			case <-ctx.Done():
-				err = ctx.Err()
-			default:
-			}
-			err = fmt.Errorf("failed to write frame: %w", err)
+		select {
+		case <-c.closed:
+		case c.writeTimeout <- context.Background():
 		}
 	}()
 
@@ -303,13 +316,16 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 		}
 	}
 
-	select {
-	case <-c.closed:
-		if opcode == opClose {
-			return n, nil
+	if opcode == opClose {
+		c.closeStateMu.Lock()
+		c.closeSentErr = fmt.Errorf("sent close frame: %w", net.ErrClosed)
+		closeReceived := c.closeReceivedErr != nil
+		c.closeStateMu.Unlock()
+
+		if closeReceived && !c.casClosing() {
+			c.writeFrameMu.unlock()
+			_ = c.close()
 		}
-		return n, net.ErrClosed
-	case c.writeTimeout <- context.Background():
 	}
 
 	return n, nil

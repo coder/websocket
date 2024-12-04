@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -460,7 +461,7 @@ func (tt *connTest) goDiscardLoop(c *websocket.Conn) {
 }
 
 func BenchmarkConn(b *testing.B) {
-	var benchCases = []struct {
+	benchCases := []struct {
 		name string
 		mode websocket.CompressionMode
 	}{
@@ -624,4 +625,150 @@ func TestConcurrentClosePing(t *testing.T) {
 			<-errc
 		}()
 	}
+}
+
+func TestConnClosePropagation(t *testing.T) {
+	t.Parallel()
+
+	want := []byte("hello")
+	keepWriting := func(c *websocket.Conn) <-chan error {
+		return xsync.Go(func() error {
+			for {
+				err := c.Write(context.Background(), websocket.MessageText, want)
+				if err != nil {
+					return err
+				}
+			}
+		})
+	}
+	keepReading := func(c *websocket.Conn) <-chan error {
+		return xsync.Go(func() error {
+			for {
+				_, got, err := c.Read(context.Background())
+				if err != nil {
+					return err
+				}
+				if !bytes.Equal(want, got) {
+					return fmt.Errorf("unexpected message: want %q, got %q", want, got)
+				}
+			}
+		})
+	}
+	checkReadErr := func(t *testing.T, err error) {
+		// Check read error (output depends on when read is called in relation to connection closure).
+		var ce websocket.CloseError
+		if errors.As(err, &ce) {
+			assert.Equal(t, "", websocket.StatusNormalClosure, ce.Code)
+		} else {
+			assert.ErrorIs(t, net.ErrClosed, err)
+		}
+	}
+	checkConnErrs := func(t *testing.T, conn ...*websocket.Conn) {
+		for _, c := range conn {
+			// Check write error.
+			err := c.Write(context.Background(), websocket.MessageText, want)
+			assert.ErrorIs(t, net.ErrClosed, err)
+
+			_, _, err = c.Read(context.Background())
+			checkReadErr(t, err)
+		}
+	}
+
+	t.Run("CloseOtherSideDuringWrite", func(t *testing.T) {
+		tt, this, other := newConnTest(t, nil, nil)
+
+		_ = this.CloseRead(tt.ctx)
+		thisWriteErr := keepWriting(this)
+
+		_, got, err := other.Read(tt.ctx)
+		assert.Success(t, err)
+		assert.Equal(t, "msg", want, got)
+
+		err = other.Close(websocket.StatusNormalClosure, "")
+		assert.Success(t, err)
+
+		select {
+		case err := <-thisWriteErr:
+			assert.ErrorIs(t, net.ErrClosed, err)
+		case <-tt.ctx.Done():
+			t.Fatal(tt.ctx.Err())
+		}
+
+		checkConnErrs(t, this, other)
+	})
+	t.Run("CloseThisSideDuringWrite", func(t *testing.T) {
+		tt, this, other := newConnTest(t, nil, nil)
+
+		_ = this.CloseRead(tt.ctx)
+		thisWriteErr := keepWriting(this)
+		otherReadErr := keepReading(other)
+
+		err := this.Close(websocket.StatusNormalClosure, "")
+		assert.Success(t, err)
+
+		select {
+		case err := <-thisWriteErr:
+			assert.ErrorIs(t, net.ErrClosed, err)
+		case <-tt.ctx.Done():
+			t.Fatal(tt.ctx.Err())
+		}
+
+		select {
+		case err := <-otherReadErr:
+			checkReadErr(t, err)
+		case <-tt.ctx.Done():
+			t.Fatal(tt.ctx.Err())
+		}
+
+		checkConnErrs(t, this, other)
+	})
+	t.Run("CloseOtherSideDuringRead", func(t *testing.T) {
+		tt, this, other := newConnTest(t, nil, nil)
+
+		_ = other.CloseRead(tt.ctx)
+		errs := keepReading(this)
+
+		err := other.Write(tt.ctx, websocket.MessageText, want)
+		assert.Success(t, err)
+
+		err = other.Close(websocket.StatusNormalClosure, "")
+		assert.Success(t, err)
+
+		select {
+		case err := <-errs:
+			checkReadErr(t, err)
+		case <-tt.ctx.Done():
+			t.Fatal(tt.ctx.Err())
+		}
+
+		checkConnErrs(t, this, other)
+	})
+	t.Run("CloseThisSideDuringRead", func(t *testing.T) {
+		tt, this, other := newConnTest(t, nil, nil)
+
+		thisReadErr := keepReading(this)
+		otherReadErr := keepReading(other)
+
+		err := other.Write(tt.ctx, websocket.MessageText, want)
+		assert.Success(t, err)
+
+		err = this.Close(websocket.StatusNormalClosure, "")
+		assert.Success(t, err)
+
+		select {
+		case err := <-thisReadErr:
+			checkReadErr(t, err)
+		case <-tt.ctx.Done():
+			t.Fatal(tt.ctx.Err())
+		}
+
+		select {
+		case err := <-otherReadErr:
+			checkReadErr(t, err)
+		case <-tt.ctx.Done():
+			t.Fatal(tt.ctx.Err())
+		}
+
+		checkConnErrs(t, this, other)
+	})
 }

@@ -69,13 +69,19 @@ type Conn struct {
 	writeHeaderBuf [8]byte
 	writeHeader    header
 
+	// Close handshake state.
+	closeStateMu     sync.RWMutex
+	closeReceivedErr error
+	closeSentErr     error
+
+	// CloseRead state.
 	closeReadMu   sync.Mutex
 	closeReadCtx  context.Context
 	closeReadDone chan struct{}
 
+	closing atomic.Bool
+	closeMu sync.Mutex // Protects following.
 	closed  chan struct{}
-	closeMu sync.Mutex
-	closing bool
 
 	pingCounter   atomic.Int64
 	activePingsMu sync.Mutex
