@@ -24,7 +24,7 @@ cd -- "$(dirname "$0")/.."
 )
 
 
-go install github.com/agnivade/wasmbrowsertest@latest
+go install github.com/agnivade/wasmbrowsertest@8be019f6c6dceae821467b4c589eb195c2b761ce
 go test --race --bench=. --timeout=1h --covermode=atomic --coverprofile=ci/out/coverage.prof --coverpkg=./... "$@" ./...
 sed -i.bak '/stringer\.go/d' ci/out/coverage.prof
 sed -i.bak '/nhooyr.io\/websocket\/internal\/test/d' ci/out/coverage.prof
