@@ -9,7 +9,7 @@ import (
 	"github.com/coder/websocket/internal/util"
 )
 
-func (c *Conn) RecordBytesWritten() *int {
+func (c *StdConn) RecordBytesWritten() *int {
 	var bytesWritten int
 	c.bw.Reset(util.WriterFunc(func(p []byte) (int, error) {
 		bytesWritten += len(p)
@@ -18,7 +18,7 @@ func (c *Conn) RecordBytesWritten() *int {
 	return &bytesWritten
 }
 
-func (c *Conn) RecordBytesRead() *int {
+func (c *StdConn) RecordBytesRead() *int {
 	var bytesRead int
 	c.br.Reset(util.ReaderFunc(func(p []byte) (int, error) {
 		n, err := c.rwc.Read(p)
@@ -30,7 +30,7 @@ func (c *Conn) RecordBytesRead() *int {
 
 var ErrClosed = net.ErrClosed
 
-var ExportedDial = dial
+var ExportedDial = dialStd
 var SecWebSocketAccept = secWebSocketAccept
 var SecWebSocketKey = secWebSocketKey
 var VerifyServerResponse = verifyServerResponse

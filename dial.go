@@ -1,6 +1,3 @@
-//go:build !js
-// +build !js
-
 package websocket
 
 import (
@@ -118,11 +115,8 @@ func (opts *DialOptions) cloneWithDefaults(ctx context.Context) (context.Context
 // See docs on the HTTPClient option and https://github.com/golang/go/issues/26937#issuecomment-415855861
 //
 // URLs with http/https schemes will work and are interpreted as ws/wss.
-func Dial(ctx context.Context, u string, opts *DialOptions) (*Conn, *http.Response, error) {
-	return dial(ctx, u, opts, nil)
-}
 
-func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (_ *Conn, _ *http.Response, err error) {
+func dialStd(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (_ *Conn, _ *http.Response, err error) {
 	defer errd.Wrap(&err, "failed to WebSocket dial")
 
 	var cancel context.CancelFunc
@@ -173,7 +167,7 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 		return nil, resp, fmt.Errorf("response body is not a io.ReadWriteCloser: %T", respBody)
 	}
 
-	return newConn(connConfig{
+	return &Conn{newConn(connConfig{
 		subprotocol:    resp.Header.Get("Sec-WebSocket-Protocol"),
 		rwc:            rwc,
 		client:         true,
@@ -183,7 +177,7 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 		onPongReceived: opts.OnPongReceived,
 		br:             getBufioReader(rwc),
 		bw:             getBufioWriter(rwc),
-	}), resp, nil
+	})}, resp, nil
 }
 
 func handshakeRequest(ctx context.Context, urls string, opts *DialOptions, copts *compressionOptions, secWebSocketKey string) (*http.Response, error) {

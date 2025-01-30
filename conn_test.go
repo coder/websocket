@@ -567,8 +567,8 @@ func BenchmarkConn(b *testing.B) {
 
 			bb.goEchoLoop(c2)
 
-			bytesWritten := c1.RecordBytesWritten()
-			bytesRead := c1.RecordBytesRead()
+			bytesWritten := c1.Stream.(*websocket.StdConn).RecordBytesWritten()
+			bytesRead := c1.Stream.(*websocket.StdConn).RecordBytesRead()
 
 			msg := []byte(strings.Repeat("1234", 128))
 			readBuf := make([]byte, len(msg))
