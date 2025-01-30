@@ -97,6 +97,85 @@ func TestConn(t *testing.T) {
 		assert.Contains(t, err, "failed to wait for pong")
 	})
 
+	t.Run("pingReceivedPongReceived", func(t *testing.T) {
+		var pingReceived1, pongReceived1 bool
+		var pingReceived2, pongReceived2 bool
+		tt, c1, c2 := newConnTest(t,
+			&websocket.DialOptions{
+				OnPingReceived: func(ctx context.Context, payload []byte) bool {
+					pingReceived1 = true
+					return true
+				},
+				OnPongReceived: func(ctx context.Context, payload []byte) {
+					pongReceived1 = true
+				},
+			}, &websocket.AcceptOptions{
+				OnPingReceived: func(ctx context.Context, payload []byte) bool {
+					pingReceived2 = true
+					return true
+				},
+				OnPongReceived: func(ctx context.Context, payload []byte) {
+					pongReceived2 = true
+				},
+			},
+		)
+
+		c1.CloseRead(tt.ctx)
+		c2.CloseRead(tt.ctx)
+
+		ctx, cancel := context.WithTimeout(tt.ctx, time.Millisecond*100)
+		defer cancel()
+
+		err := c1.Ping(ctx)
+		assert.Success(t, err)
+
+		c1.CloseNow()
+		c2.CloseNow()
+
+		assert.Equal(t, "only one side receives the ping", false, pingReceived1 && pingReceived2)
+		assert.Equal(t, "only one side receives the pong", false, pongReceived1 && pongReceived2)
+		assert.Equal(t, "ping and pong received", true, (pingReceived1 && pongReceived2) || (pingReceived2 && pongReceived1))
+	})
+
+	t.Run("pingReceivedPongNotReceived", func(t *testing.T) {
+		var pingReceived1, pongReceived1 bool
+		var pingReceived2, pongReceived2 bool
+		tt, c1, c2 := newConnTest(t,
+			&websocket.DialOptions{
+				OnPingReceived: func(ctx context.Context, payload []byte) bool {
+					pingReceived1 = true
+					return false
+				},
+				OnPongReceived: func(ctx context.Context, payload []byte) {
+					pongReceived1 = true
+				},
+			}, &websocket.AcceptOptions{
+				OnPingReceived: func(ctx context.Context, payload []byte) bool {
+					pingReceived2 = true
+					return false
+				},
+				OnPongReceived: func(ctx context.Context, payload []byte) {
+					pongReceived2 = true
+				},
+			},
+		)
+
+		c1.CloseRead(tt.ctx)
+		c2.CloseRead(tt.ctx)
+
+		ctx, cancel := context.WithTimeout(tt.ctx, time.Millisecond*100)
+		defer cancel()
+
+		err := c1.Ping(ctx)
+		assert.Contains(t, err, "failed to wait for pong")
+
+		c1.CloseNow()
+		c2.CloseNow()
+
+		assert.Equal(t, "only one side receives the ping", false, pingReceived1 && pingReceived2)
+		assert.Equal(t, "ping received and pong not received", true, (pingReceived1 && !pongReceived2) || (pingReceived2 && !pongReceived1))
+	})
+
 	t.Run("concurrentWrite", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
 

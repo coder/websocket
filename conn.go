@@ -83,9 +83,11 @@ type Conn struct {
 	closeMu sync.Mutex // Protects following.
 	closed  chan struct{}
 
-	pingCounter   atomic.Int64
-	activePingsMu sync.Mutex
-	activePings   map[string]chan<- struct{}
+	pingCounter    atomic.Int64
+	activePingsMu  sync.Mutex
+	activePings    map[string]chan<- struct{}
+	onPingReceived func(context.Context, []byte) bool
+	onPongReceived func(context.Context, []byte)
 }
 
 type connConfig struct {
@@ -94,6 +96,8 @@ type connConfig struct {
 	client         bool
 	copts          *compressionOptions
 	flateThreshold int
+	onPingReceived func(context.Context, []byte) bool
+	onPongReceived func(context.Context, []byte)
 
 	br *bufio.Reader
 	bw *bufio.Writer
@@ -114,8 +118,10 @@ func newConn(cfg connConfig) *Conn {
 		writeTimeout:    make(chan context.Context),
 		timeoutLoopDone: make(chan struct{}),
 
-		closed:      make(chan struct{}),
-		activePings: make(map[string]chan<- struct{}),
+		closed:         make(chan struct{}),
+		activePings:    make(map[string]chan<- struct{}),
+		onPingReceived: cfg.onPingReceived,
+		onPongReceived: cfg.onPongReceived,
 	}
 
 	c.readMu = newMu(c)

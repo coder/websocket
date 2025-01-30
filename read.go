@@ -312,8 +312,16 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 
 	switch h.opcode {
 	case opPing:
+		if c.onPingReceived != nil {
+			if !c.onPingReceived(ctx, b) {
+				return nil
+			}
+		}
 		return c.writeControl(ctx, opPong, b)
 	case opPong:
+		if c.onPongReceived != nil {
+			c.onPongReceived(ctx, b)
+		}
 		c.activePingsMu.Lock()
 		pong, ok := c.activePings[string(b)]
 		c.activePingsMu.Unlock()
