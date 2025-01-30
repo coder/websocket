@@ -19,28 +19,8 @@ import (
 	"github.com/coder/websocket/internal/wsjs"
 )
 
-// opcode represents a WebSocket opcode.
-type opcode int
-
-// https://tools.ietf.org/html/rfc6455#section-11.8.
-const (
-	opContinuation opcode = iota
-	opText
-	opBinary
-	// 3 - 7 are reserved for further non-control frames.
-	_
-	_
-	_
-	_
-	_
-	opClose
-	opPing
-	opPong
-	// 11-16 are reserved for further control frames.
-)
-
-// Conn provides a wrapper around the browser WebSocket API.
-type Conn struct {
+// BrowserConn provides a wrapper around the browser WebSocket API.
+type BrowserConn struct {
 	noCopy noCopy
 	ws     wsjs.WebSocket
 
@@ -66,7 +46,9 @@ type Conn struct {
 	readBuf    []wsjs.MessageEvent
 }
 
-func (c *Conn) close(err error, wasClean bool) {
+var _ Stream = (*BrowserConn)(nil)
+
+func (c *BrowserConn) close(err error, wasClean bool) {
 	c.closeOnce.Do(func() {
 		runtime.SetFinalizer(c, nil)
 
@@ -79,7 +61,7 @@ func (c *Conn) close(err error, wasClean bool) {
 	})
 }
 
-func (c *Conn) init() {
+func (c *BrowserConn) init() {
 	c.closed = make(chan struct{})
 	c.readSignal = make(chan struct{}, 1)
 
@@ -118,19 +100,19 @@ func (c *Conn) init() {
 		}
 	})
 
-	runtime.SetFinalizer(c, func(c *Conn) {
+	runtime.SetFinalizer(c, func(c *BrowserConn) {
 		c.setCloseErr(errors.New("connection garbage collected"))
 		c.closeWithInternal()
 	})
 }
 
-func (c *Conn) closeWithInternal() {
+func (c *BrowserConn) closeWithInternal() {
 	c.Close(StatusInternalError, "something went wrong")
 }
 
 // Read attempts to read a message from the connection.
 // The maximum time spent waiting is bounded by the context.
-func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
+func (c *BrowserConn) Read(ctx context.Context) (MessageType, []byte, error) {
 	c.closeReadMu.Lock()
 	closedRead := c.closeReadCtx != nil
 	c.closeReadMu.Unlock()
@@ -151,7 +133,7 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 	return typ, p, nil
 }
 
-func (c *Conn) read(ctx context.Context) (MessageType, []byte, error) {
+func (c *BrowserConn) read(ctx context.Context) (MessageType, []byte, error) {
 	select {
 	case <-ctx.Done():
 		c.Close(StatusPolicyViolation, "read timed out")
@@ -189,13 +171,13 @@ func (c *Conn) read(ctx context.Context) (MessageType, []byte, error) {
 }
 
 // Ping is mocked out for Wasm.
-func (c *Conn) Ping(ctx context.Context) error {
+func (c *BrowserConn) Ping(ctx context.Context) error {
 	return nil
 }
 
 // Write writes a message of the given type to the connection.
 // Always non blocking.
-func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
+func (c *BrowserConn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	err := c.write(ctx, typ, p)
 	if err != nil {
 		// Have to ensure the WebSocket is closed after a write error
@@ -210,7 +192,7 @@ func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	return nil
 }
 
-func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) error {
+func (c *BrowserConn) write(ctx context.Context, typ MessageType, p []byte) error {
 	if c.isClosed() {
 		return net.ErrClosed
 	}
@@ -228,7 +210,7 @@ func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) error {
 // It will wait until the peer responds with a close frame
 // or the connection is closed.
 // It thus performs the full WebSocket close handshake.
-func (c *Conn) Close(code StatusCode, reason string) error {
+func (c *BrowserConn) Close(code StatusCode, reason string) error {
 	err := c.exportedClose(code, reason)
 	if err != nil {
 		return fmt.Errorf("failed to close WebSocket: %w", err)
@@ -241,11 +223,11 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 //
 // note: No different from Close(StatusGoingAway, "") in WASM as there is no way to close
 // a WebSocket without the close handshake.
-func (c *Conn) CloseNow() error {
+func (c *BrowserConn) CloseNow() error {
 	return c.Close(StatusGoingAway, "")
 }
 
-func (c *Conn) exportedClose(code StatusCode, reason string) error {
+func (c *BrowserConn) exportedClose(code StatusCode, reason string) error {
 	c.closingMu.Lock()
 	defer c.closingMu.Unlock()
 
@@ -273,14 +255,12 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 
 // Subprotocol returns the negotiated subprotocol.
 // An empty string means the default protocol.
-func (c *Conn) Subprotocol() string {
+func (c *BrowserConn) Subprotocol() string {
 	return c.ws.Subprotocol()
 }
 
-// DialOptions represents the options available to pass to Dial.
-type DialOptions struct {
-	// Subprotocols lists the subprotocols to negotiate with the server.
-	Subprotocols []string
+func (c *BrowserConn) conn() any {
+	return c.ws
 }
 
 // Dial creates a new WebSocket connection to the given url with the given options.
@@ -288,6 +268,9 @@ type DialOptions struct {
 // The returned *http.Response is always nil or a mock. It's only in the signature
 // to match the core API.
 func Dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Response, error) {
+	if opts != nil && opts.HTTPClient != nil {
+		return dialStd(ctx, url, opts, nil)
+	}
 	c, resp, err := dial(ctx, url, opts)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to WebSocket dial %q: %w", url, err)
@@ -308,7 +291,7 @@ func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Resp
 		return nil, nil, err
 	}
 
-	c := &Conn{
+	c := &BrowserConn{
 		ws: ws,
 	}
 	c.init()
@@ -324,7 +307,7 @@ func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Resp
 		c.Close(StatusPolicyViolation, "dial timed out")
 		return nil, nil, ctx.Err()
 	case <-opench:
-		return c, &http.Response{
+		return &Conn{c}, &http.Response{
 			StatusCode: http.StatusSwitchingProtocols,
 		}, nil
 	case <-c.closed:
@@ -334,7 +317,7 @@ func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Resp
 
 // Reader attempts to read a message from the connection.
 // The maximum time spent waiting is bounded by the context.
-func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
+func (c *BrowserConn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 	typ, p, err := c.Read(ctx)
 	if err != nil {
 		return 0, nil, err
@@ -345,7 +328,7 @@ func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 // Writer returns a writer to write a WebSocket data message to the connection.
 // It buffers the entire message in memory and then sends it when the writer
 // is closed.
-func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, error) {
+func (c *BrowserConn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, error) {
 	return &writer{
 		c:   c,
 		ctx: ctx,
@@ -357,7 +340,7 @@ func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 type writer struct {
 	closed bool
 
-	c   *Conn
+	c   *BrowserConn
 	ctx context.Context
 	typ MessageType
 
@@ -390,7 +373,7 @@ func (w *writer) Close() error {
 }
 
 // CloseRead implements *Conn.CloseRead for wasm.
-func (c *Conn) CloseRead(ctx context.Context) context.Context {
+func (c *BrowserConn) CloseRead(ctx context.Context) context.Context {
 	c.closeReadMu.Lock()
 	ctx2 := c.closeReadCtx
 	if ctx2 != nil {
@@ -413,17 +396,17 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 }
 
 // SetReadLimit implements *Conn.SetReadLimit for wasm.
-func (c *Conn) SetReadLimit(n int64) {
+func (c *BrowserConn) SetReadLimit(n int64) {
 	c.msgReadLimit.Store(n)
 }
 
-func (c *Conn) setCloseErr(err error) {
+func (c *BrowserConn) setCloseErr(err error) {
 	c.closeErrOnce.Do(func() {
 		c.closeErr = fmt.Errorf("WebSocket closed: %w", err)
 	})
 }
 
-func (c *Conn) isClosed() bool {
+func (c *BrowserConn) isClosed() bool {
 	select {
 	case <-c.closed:
 		return true
@@ -432,152 +415,27 @@ func (c *Conn) isClosed() bool {
 	}
 }
 
-// AcceptOptions represents Accept's options.
-type AcceptOptions struct {
-	Subprotocols         []string
-	InsecureSkipVerify   bool
-	OriginPatterns       []string
-	CompressionMode      CompressionMode
-	CompressionThreshold int
-}
-
-// Accept is stubbed out for Wasm.
-func Accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn, error) {
-	return nil, errors.New("unimplemented")
-}
-
-// StatusCode represents a WebSocket status code.
-// https://tools.ietf.org/html/rfc6455#section-7.4
-type StatusCode int
-
-// https://www.iana.org/assignments/websocket/websocket.xhtml#close-code-number
-//
-// These are only the status codes defined by the protocol.
-//
-// You can define custom codes in the 3000-4999 range.
-// The 3000-3999 range is reserved for use by libraries, frameworks and applications.
-// The 4000-4999 range is reserved for private use.
-const (
-	StatusNormalClosure   StatusCode = 1000
-	StatusGoingAway       StatusCode = 1001
-	StatusProtocolError   StatusCode = 1002
-	StatusUnsupportedData StatusCode = 1003
-
-	// 1004 is reserved and so unexported.
-	statusReserved StatusCode = 1004
-
-	// StatusNoStatusRcvd cannot be sent in a close message.
-	// It is reserved for when a close message is received without
-	// a status code.
-	StatusNoStatusRcvd StatusCode = 1005
-
-	// StatusAbnormalClosure is exported for use only with Wasm.
-	// In non Wasm Go, the returned error will indicate whether the
-	// connection was closed abnormally.
-	StatusAbnormalClosure StatusCode = 1006
-
-	StatusInvalidFramePayloadData StatusCode = 1007
-	StatusPolicyViolation         StatusCode = 1008
-	StatusMessageTooBig           StatusCode = 1009
-	StatusMandatoryExtension      StatusCode = 1010
-	StatusInternalError           StatusCode = 1011
-	StatusServiceRestart          StatusCode = 1012
-	StatusTryAgainLater           StatusCode = 1013
-	StatusBadGateway              StatusCode = 1014
-
-	// StatusTLSHandshake is only exported for use with Wasm.
-	// In non Wasm Go, the returned error will indicate whether there was
-	// a TLS handshake failure.
-	StatusTLSHandshake StatusCode = 1015
-)
-
-// CloseError is returned when the connection is closed with a status and reason.
-//
-// Use Go 1.13's errors.As to check for this error.
-// Also see the CloseStatus helper.
-type CloseError struct {
-	Code   StatusCode
-	Reason string
-}
-
-func (ce CloseError) Error() string {
-	return fmt.Sprintf("status = %v and reason = %q", ce.Code, ce.Reason)
-}
-
-// CloseStatus is a convenience wrapper around Go 1.13's errors.As to grab
-// the status code from a CloseError.
-//
-// -1 will be returned if the passed error is nil or not a CloseError.
-func CloseStatus(err error) StatusCode {
-	var ce CloseError
-	if errors.As(err, &ce) {
-		return ce.Code
-	}
-	return -1
-}
-
-// CompressionMode represents the modes available to the deflate extension.
-// See https://tools.ietf.org/html/rfc7692
-// Works in all browsers except Safari which does not implement the deflate extension.
-type CompressionMode int
-
-const (
-	// CompressionNoContextTakeover grabs a new flate.Reader and flate.Writer as needed
-	// for every message. This applies to both server and client side.
-	//
-	// This means less efficient compression as the sliding window from previous messages
-	// will not be used but the memory overhead will be lower if the connections
-	// are long lived and seldom used.
-	//
-	// The message will only be compressed if greater than 512 bytes.
-	CompressionNoContextTakeover CompressionMode = iota
-
-	// CompressionContextTakeover uses a flate.Reader and flate.Writer per connection.
-	// This enables reusing the sliding window from previous messages.
-	// As most WebSocket protocols are repetitive, this can be very efficient.
-	// It carries an overhead of 8 kB for every connection compared to CompressionNoContextTakeover.
-	//
-	// If the peer negotiates NoContextTakeover on the client or server side, it will be
-	// used instead as this is required by the RFC.
-	CompressionContextTakeover
-
-	// CompressionDisabled disables the deflate extension.
-	//
-	// Use this if you are using a predominantly binary protocol with very
-	// little duplication in between messages or CPU and memory are more
-	// important than bandwidth.
-	CompressionDisabled
-)
-
-// MessageType represents the type of a WebSocket message.
-// See https://tools.ietf.org/html/rfc6455#section-5.6
-type MessageType int
-
-// MessageType constants.
-const (
-	// MessageText is for UTF-8 encoded text messages like JSON.
-	MessageText MessageType = iota + 1
-	// MessageBinary is for binary messages like protobufs.
-	MessageBinary
-)
-
-type mu struct {
-	c  *Conn
+type jsMu struct {
+	c  *BrowserConn
 	ch chan struct{}
 }
 
-func newMu(c *Conn) *mu {
-	return &mu{
+func newMu(c *BrowserConn) *jsMu {
+	return &jsMu{
 		c:  c,
 		ch: make(chan struct{}, 1),
 	}
 }
 
-func (m *mu) forceLock() {
+func (c *BrowserConn) newMu() muLocker {
+	return newMu(c)
+}
+
+func (m *jsMu) forceLock() {
 	m.ch <- struct{}{}
 }
 
-func (m *mu) tryLock() bool {
+func (m *jsMu) tryLock() bool {
 	select {
 	case m.ch <- struct{}{}:
 		return true
@@ -586,13 +444,9 @@ func (m *mu) tryLock() bool {
 	}
 }
 
-func (m *mu) unlock() {
+func (m *jsMu) unlock() {
 	select {
 	case <-m.ch:
 	default:
 	}
 }
-
-type noCopy struct{}
-
-func (*noCopy) Lock() {}

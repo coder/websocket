@@ -1,4 +1,4 @@
-//go:build !amd64 && !arm64 && !js
+//go:build !amd64 && !arm64
 
 package websocket
 

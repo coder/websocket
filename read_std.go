@@ -1,6 +1,3 @@
-//go:build !js
-// +build !js
-
 package websocket
 
 import (
@@ -33,13 +30,13 @@ import (
 // use time.AfterFunc to cancel the context passed in.
 // See https://github.com/nhooyr/websocket/issues/87#issue-451703332
 // Most users should not need this.
-func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
+func (c *StdConn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 	return c.reader(ctx)
 }
 
 // Read is a convenience method around Reader to read a single message
 // from the connection.
-func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
+func (c *StdConn) Read(ctx context.Context) (MessageType, []byte, error) {
 	typ, r, err := c.Reader(ctx)
 	if err != nil {
 		return 0, nil, err
@@ -62,7 +59,7 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 // frames are responded to. This means c.Ping and c.Close will still work as expected.
 //
 // This function is idempotent.
-func (c *Conn) CloseRead(ctx context.Context) context.Context {
+func (c *StdConn) CloseRead(ctx context.Context) context.Context {
 	c.closeReadMu.Lock()
 	ctx2 := c.closeReadCtx
 	if ctx2 != nil {
@@ -94,7 +91,7 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 // When the limit is hit, the connection will be closed with StatusMessageTooBig.
 //
 // Set to -1 to disable.
-func (c *Conn) SetReadLimit(n int64) {
+func (c *StdConn) SetReadLimit(n int64) {
 	if n >= 0 {
 		// We read one more byte than the limit in case
 		// there is a fin frame that needs to be read.
@@ -106,7 +103,7 @@ func (c *Conn) SetReadLimit(n int64) {
 
 const defaultReadLimit = 32768
 
-func newMsgReader(c *Conn) *msgReader {
+func newMsgReader(c *StdConn) *msgReader {
 	mr := &msgReader{
 		c:   c,
 		fin: true,
@@ -168,7 +165,7 @@ func (mr *msgReader) flateContextTakeover() bool {
 	return !mr.c.copts.clientNoContextTakeover
 }
 
-func (c *Conn) readRSV1Illegal(h header) bool {
+func (c *StdConn) readRSV1Illegal(h header) bool {
 	// If compression is disabled, rsv1 is illegal.
 	if !c.flate() {
 		return true
@@ -180,7 +177,7 @@ func (c *Conn) readRSV1Illegal(h header) bool {
 	return false
 }
 
-func (c *Conn) readLoop(ctx context.Context) (header, error) {
+func (c *StdConn) readLoop(ctx context.Context) (header, error) {
 	for {
 		h, err := c.readFrameHeader(ctx)
 		if err != nil {
@@ -223,7 +220,7 @@ func (c *Conn) readLoop(ctx context.Context) (header, error) {
 // an error depending on if the connection closed or the context timed
 // out during use. Typically the referenced error is a named return
 // variable of the function calling this method.
-func (c *Conn) prepareRead(ctx context.Context, err *error) (func(), error) {
+func (c *StdConn) prepareRead(ctx context.Context, err *error) (func(), error) {
 	select {
 	case <-c.closed:
 		return nil, net.ErrClosed
@@ -254,7 +251,7 @@ func (c *Conn) prepareRead(ctx context.Context, err *error) (func(), error) {
 	return done, nil
 }
 
-func (c *Conn) readFrameHeader(ctx context.Context) (_ header, err error) {
+func (c *StdConn) readFrameHeader(ctx context.Context) (_ header, err error) {
 	readDone, err := c.prepareRead(ctx, &err)
 	if err != nil {
 		return header{}, err
@@ -269,7 +266,7 @@ func (c *Conn) readFrameHeader(ctx context.Context) (_ header, err error) {
 	return h, nil
 }
 
-func (c *Conn) readFramePayload(ctx context.Context, p []byte) (_ int, err error) {
+func (c *StdConn) readFramePayload(ctx context.Context, p []byte) (_ int, err error) {
 	readDone, err := c.prepareRead(ctx, &err)
 	if err != nil {
 		return 0, err
@@ -284,7 +281,7 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte) (_ int, err error
 	return n, err
 }
 
-func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
+func (c *StdConn) handleControl(ctx context.Context, h header) (err error) {
 	if h.payloadLength < 0 || h.payloadLength > maxControlPayload {
 		err := fmt.Errorf("received control frame payload with invalid length: %d", h.payloadLength)
 		c.writeError(StatusProtocolError, err)
@@ -363,7 +360,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 	return err
 }
 
-func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err error) {
+func (c *StdConn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err error) {
 	defer errd.Wrap(&err, "failed to get reader")
 
 	err = c.readMu.lock(ctx)
@@ -393,7 +390,7 @@ func (c *Conn) reader(ctx context.Context) (_ MessageType, _ io.Reader, err erro
 }
 
 type msgReader struct {
-	c *Conn
+	c *StdConn
 
 	ctx         context.Context
 	flate       bool
@@ -495,13 +492,13 @@ func (mr *msgReader) read(p []byte) (int, error) {
 }
 
 type limitReader struct {
-	c     *Conn
+	c     *StdConn
 	r     io.Reader
 	limit atomic.Int64
 	n     int64
 }
 
-func newLimitReader(c *Conn, r io.Reader, limit int64) *limitReader {
+func newLimitReader(c *StdConn, r io.Reader, limit int64) *limitReader {
 	lr := &limitReader{
 		c: c,
 	}

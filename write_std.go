@@ -1,6 +1,3 @@
-//go:build !js
-// +build !js
-
 package websocket
 
 import (
@@ -26,7 +23,7 @@ import (
 //
 // Only one writer can be open at a time, multiple calls will block until the previous writer
 // is closed.
-func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, error) {
+func (c *StdConn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, error) {
 	w, err := c.writer(ctx, typ)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get writer: %w", err)
@@ -40,7 +37,7 @@ func (c *Conn) Writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 //
 // If compression is disabled or the compression threshold is not met, then it
 // will write the message in a single frame.
-func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
+func (c *StdConn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	_, err := c.write(ctx, typ, p)
 	if err != nil {
 		return fmt.Errorf("failed to write msg: %w", err)
@@ -49,10 +46,10 @@ func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 }
 
 type msgWriter struct {
-	c *Conn
+	c *StdConn
 
-	mu      *mu
-	writeMu *mu
+	mu      *stdMu
+	writeMu *stdMu
 	closed  bool
 
 	ctx    context.Context
@@ -63,11 +60,11 @@ type msgWriter struct {
 	flateWriter *flate.Writer
 }
 
-func newMsgWriter(c *Conn) *msgWriter {
+func newMsgWriter(c *StdConn) *msgWriter {
 	mw := &msgWriter{
 		c:       c,
-		mu:      newMu(c),
-		writeMu: newMu(c),
+		mu:      newStdMu(c),
+		writeMu: newStdMu(c),
 	}
 	return mw
 }
@@ -92,7 +89,7 @@ func (mw *msgWriter) flateContextTakeover() bool {
 	return !mw.c.copts.serverNoContextTakeover
 }
 
-func (c *Conn) writer(ctx context.Context, typ MessageType) (io.WriteCloser, error) {
+func (c *StdConn) writer(ctx context.Context, typ MessageType) (io.WriteCloser, error) {
 	err := c.msgWriter.reset(ctx, typ)
 	if err != nil {
 		return nil, err
@@ -100,7 +97,7 @@ func (c *Conn) writer(ctx context.Context, typ MessageType) (io.WriteCloser, err
 	return c.msgWriter, nil
 }
 
-func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) (int, error) {
+func (c *StdConn) write(ctx context.Context, typ MessageType, p []byte) (int, error) {
 	mw, err := c.writer(ctx, typ)
 	if err != nil {
 		return 0, err
@@ -229,7 +226,7 @@ func (mw *msgWriter) close() {
 	mw.putFlateWriter()
 }
 
-func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error {
+func (c *StdConn) writeControl(ctx context.Context, opcode opcode, p []byte) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
 	defer cancel()
 
@@ -241,7 +238,7 @@ func (c *Conn) writeControl(ctx context.Context, opcode opcode, p []byte) error 
 }
 
 // writeFrame handles all writes to the connection.
-func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opcode, p []byte) (_ int, err error) {
+func (c *StdConn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opcode, p []byte) (_ int, err error) {
 	err = c.writeFrameMu.lock(ctx)
 	if err != nil {
 		return 0, err
@@ -331,7 +328,7 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 	return n, nil
 }
 
-func (c *Conn) writeFramePayload(p []byte) (n int, err error) {
+func (c *StdConn) writeFramePayload(p []byte) (n int, err error) {
 	defer errd.Wrap(&err, "failed to write frame payload")
 
 	if !c.writeHeader.masked {
@@ -387,6 +384,6 @@ func extractBufioWriterBuf(bw *bufio.Writer, w io.Writer) []byte {
 	return writeBuf
 }
 
-func (c *Conn) writeError(code StatusCode, err error) {
+func (c *StdConn) writeError(code StatusCode, err error) {
 	c.writeClose(code, err.Error())
 }
