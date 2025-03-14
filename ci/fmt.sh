@@ -2,8 +2,7 @@
 set -eu
 cd -- "$(dirname "$0")/.."
 
-# Pin golang.org/x/tools, the go.mod of v0.25.0 is incompatible with Go 1.19.
-X_TOOLS_VERSION=v0.24.0
+X_TOOLS_VERSION=v0.31.0
 
 go mod tidy
 (cd ./internal/thirdparty && go mod tidy)
