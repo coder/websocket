@@ -1,6 +1,6 @@
 module github.com/coder/websocket/examples
 
-go 1.22
+go 1.23
 
 replace github.com/coder/websocket => ../..
 

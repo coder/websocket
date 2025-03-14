@@ -1,6 +1,6 @@
 module github.com/coder/websocket/internal/thirdparty
 
-go 1.22
+go 1.23
 
 replace github.com/coder/websocket => ../..
 
