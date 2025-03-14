@@ -38,7 +38,7 @@ jobs:
           go-version-file: ./go.mod
       - name: Generate coverage and badge
         run: |
-          ./ci/test.sh
+          make test
           mkdir -p ./ci/out/static
           cp ./ci/out/coverage.html ./ci/out/static/coverage.html
           percent=$(go tool cover -func ./ci/out/coverage.prof | tail -n1 | awk '{print $3}' | tr -d '%')

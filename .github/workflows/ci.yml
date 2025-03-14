@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
-      - run: ./ci/fmt.sh
+      - run: make fmt
 
   lint:
     runs-on: ubuntu-latest
@@ -28,7 +28,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
-      - run: ./ci/lint.sh
+      - run: make lint
 
   test:
     runs-on: ubuntu-latest
@@ -43,7 +43,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
-      - run: ./ci/test.sh
+      - run: make test
       - uses: actions/upload-artifact@v4
         with:
           name: coverage.html
@@ -56,4 +56,4 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
-      - run: ./ci/bench.sh
+      - run: make bench

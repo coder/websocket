@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
-      - run: AUTOBAHN=1 ./ci/bench.sh
+      - run: AUTOBAHN=1 make bench
   test:
     runs-on: ubuntu-latest
     steps:
@@ -29,7 +29,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
-      - run: AUTOBAHN=1 ./ci/test.sh
+      - run: AUTOBAHN=1 make test
       - uses: actions/upload-artifact@v4
         with:
           name: coverage.html
@@ -43,7 +43,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
-      - run: AUTOBAHN=1 ./ci/bench.sh
+      - run: AUTOBAHN=1 make bench
   test-dev:
     runs-on: ubuntu-latest
     steps:
@@ -59,7 +59,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
-      - run: AUTOBAHN=1 ./ci/test.sh
+      - run: AUTOBAHN=1 make test
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-dev.html
