@@ -2,10 +2,13 @@
 set -eu
 cd -- "$(dirname "$0")/.."
 
+STATICCHECK_VERSION=v0.6.1
+GOVULNCHECK_VERSION=v1.1.4
+
 go vet ./...
 GOOS=js GOARCH=wasm go vet ./...
 
-go install honnef.co/go/tools/cmd/staticcheck@latest
+go install honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}
 staticcheck ./...
 GOOS=js GOARCH=wasm staticcheck ./...
 
@@ -15,7 +18,7 @@ govulncheck() {
 		cat "$tmpf"
 	fi
 }
-go install golang.org/x/vuln/cmd/govulncheck@latest
+go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}
 govulncheck ./...
 GOOS=js GOARCH=wasm govulncheck ./...
 

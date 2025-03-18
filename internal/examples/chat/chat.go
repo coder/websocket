@@ -70,7 +70,7 @@ func (cs *chatServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // subscribeHandler accepts the WebSocket connection and then subscribes
 // it to all future messages.
 func (cs *chatServer) subscribeHandler(w http.ResponseWriter, r *http.Request) {
-	err := cs.subscribe(r.Context(), w, r)
+	err := cs.subscribe(w, r)
 	if errors.Is(err, context.Canceled) {
 		return
 	}
@@ -111,7 +111,7 @@ func (cs *chatServer) publishHandler(w http.ResponseWriter, r *http.Request) {
 //
 // It uses CloseRead to keep reading from the connection to process control
 // messages and cancel the context if the connection drops.
-func (cs *chatServer) subscribe(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+func (cs *chatServer) subscribe(w http.ResponseWriter, r *http.Request) error {
 	var mu sync.Mutex
 	var c *websocket.Conn
 	var closed bool
@@ -142,7 +142,7 @@ func (cs *chatServer) subscribe(ctx context.Context, w http.ResponseWriter, r *h
 	mu.Unlock()
 	defer c.CloseNow()
 
-	ctx = c.CloseRead(ctx)
+	ctx := c.CloseRead(context.Background())
 
 	for {
 		select {
