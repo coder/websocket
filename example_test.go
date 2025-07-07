@@ -25,7 +25,7 @@ func ExampleAccept() {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Second*10)
 		defer cancel()
 
-		var v interface{}
+		var v any
 		err = wsjson.Read(ctx, c, &v)
 		if err != nil {
 			log.Println(err)

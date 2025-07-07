@@ -42,7 +42,7 @@ func TestGin(t *testing.T) {
 	err = wsjson.Write(ctx, c, "hello")
 	assert.Success(t, err)
 
-	var v interface{}
+	var v any
 	err = wsjson.Read(ctx, c, &v)
 	assert.Success(t, err)
 	assert.Equal(t, "read msg", "hello", v)

@@ -14,11 +14,11 @@ import (
 
 // Read reads a JSON message from c into v.
 // It will reuse buffers in between calls to avoid allocations.
-func Read(ctx context.Context, c *websocket.Conn, v interface{}) error {
+func Read(ctx context.Context, c *websocket.Conn, v any) error {
 	return read(ctx, c, v)
 }
 
-func read(ctx context.Context, c *websocket.Conn, v interface{}) (err error) {
+func read(ctx context.Context, c *websocket.Conn, v any) (err error) {
 	defer errd.Wrap(&err, "failed to read JSON message")
 
 	_, r, err := c.Reader(ctx)
@@ -45,11 +45,11 @@ func read(ctx context.Context, c *websocket.Conn, v interface{}) (err error) {
 
 // Write writes the JSON message v to c.
 // It will reuse buffers in between calls to avoid allocations.
-func Write(ctx context.Context, c *websocket.Conn, v interface{}) error {
+func Write(ctx context.Context, c *websocket.Conn, v any) error {
 	return write(ctx, c, v)
 }
 
-func write(ctx context.Context, c *websocket.Conn, v interface{}) (err error) {
+func write(ctx context.Context, c *websocket.Conn, v any) (err error) {
 	defer errd.Wrap(&err, "failed to write JSON message")
 
 	// json.Marshal cannot reuse buffers between calls as it has to return

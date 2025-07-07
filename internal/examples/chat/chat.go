@@ -31,7 +31,7 @@ type chatServer struct {
 
 	// logf controls where logs are sent.
 	// Defaults to log.Printf.
-	logf func(f string, v ...interface{})
+	logf func(f string, v ...any)
 
 	// serveMux routes the various endpoints to the appropriate handler.
 	serveMux http.ServeMux

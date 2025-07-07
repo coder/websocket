@@ -341,7 +341,7 @@ func TestConn(t *testing.T) {
 			return wsjson.Write(tt.ctx, c1, exp)
 		})
 
-		var act interface{}
+		var act any
 		err := wsjson.Read(tt.ctx, c1, &act)
 		assert.Success(t, err)
 		assert.Equal(t, "read msg", exp, act)
@@ -372,7 +372,7 @@ func TestConn(t *testing.T) {
 			return wsjson.Write(tt.ctx, c1, exp)
 		})
 
-		var act interface{}
+		var act any
 		err := wsjson.Read(tt.ctx, c1, &act)
 		assert.Success(t, err)
 		assert.Equal(t, "read msg", exp, act)
@@ -660,7 +660,7 @@ func assertEcho(tb testing.TB, ctx context.Context, c *websocket.Conn) {
 		return wsjson.Write(ctx, c, exp)
 	})
 
-	var act interface{}
+	var act any
 	c.SetReadLimit(1 << 30)
 	err := wsjson.Read(ctx, c, &act)
 	assert.Success(tb, err)

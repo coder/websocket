@@ -68,7 +68,7 @@ http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	var v interface{}
+	var v any
 	err = wsjson.Read(ctx, c, &v)
 	if err != nil {
 		// ...
