@@ -172,7 +172,6 @@ func Test_verifyHostOverride(t *testing.T) {
 			c.CloseNow()
 		})
 	}
-
 }
 
 type mockBody struct {
