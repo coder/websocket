@@ -18,7 +18,7 @@ func Test_slidingWindow(t *testing.T) {
 
 	const testCount = 99
 	const maxWindow = 99999
-	for i := 0; i < testCount; i++ {
+	for range testCount {
 		t.Run("", func(t *testing.T) {
 			t.Parallel()
 

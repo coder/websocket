@@ -28,7 +28,7 @@ func TestWasm(t *testing.T) {
 	assert.Equal(t, "response code", http.StatusSwitchingProtocols, resp.StatusCode)
 
 	c.SetReadLimit(65536)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		err = wstest.Echo(ctx, c, 65536)
 		assert.Success(t, err)
 	}

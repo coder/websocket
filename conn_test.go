@@ -36,7 +36,7 @@ func TestConn(t *testing.T) {
 			return websocket.CompressionMode(xrand.Int(int(websocket.CompressionContextTakeover) + 1))
 		}
 
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			t.Run("", func(t *testing.T) {
 				tt, c1, c2 := newConnTest(t, &websocket.DialOptions{
 					CompressionMode:      compressionMode(),
@@ -50,7 +50,7 @@ func TestConn(t *testing.T) {
 
 				c1.SetReadLimit(131072)
 
-				for i := 0; i < 5; i++ {
+				for range 5 {
 					err := wstest.Echo(tt.ctx, c1, 131072)
 					assert.Success(t, err)
 				}
@@ -76,7 +76,7 @@ func TestConn(t *testing.T) {
 		c1.CloseRead(tt.ctx)
 		c2.CloseRead(tt.ctx)
 
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			err := c1.Ping(tt.ctx)
 			assert.Success(t, err)
 		}
@@ -185,7 +185,7 @@ func TestConn(t *testing.T) {
 		const count = 100
 		errs := make(chan error, count)
 
-		for i := 0; i < count; i++ {
+		for range count {
 			go func() {
 				select {
 				case errs <- c1.Write(tt.ctx, websocket.MessageBinary, msg):
@@ -195,7 +195,7 @@ func TestConn(t *testing.T) {
 			}()
 		}
 
-		for i := 0; i < count; i++ {
+		for range count {
 			select {
 			case err := <-errs:
 				assert.Success(t, err)
@@ -408,7 +408,7 @@ func TestConn(t *testing.T) {
 
 		c1.SetReadLimit(131072)
 
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			err := wstest.Echo(tt.ctx, c1, 131072)
 			assert.Success(t, err)
 		}
@@ -682,7 +682,7 @@ func assertClose(tb testing.TB, c *websocket.Conn) {
 
 func TestConcurrentClosePing(t *testing.T) {
 	t.Parallel()
-	for i := 0; i < 64; i++ {
+	for range 64 {
 		func() {
 			c1, c2 := wstest.Pipe(nil, nil)
 			defer c1.CloseNow()

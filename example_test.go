@@ -150,7 +150,7 @@ func ExampleConn_Ping() {
 	// Required to read the Pongs from the server.
 	ctx = c.CloseRead(ctx)
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		err = c.Ping(ctx)
 		if err != nil {
 			log.Fatal(err)
