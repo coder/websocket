@@ -1,5 +1,4 @@
 //go:build !js
-// +build !js
 
 package websocket
 
@@ -54,7 +53,7 @@ func TestHeader(t *testing.T) {
 			return r.Intn(2) == 0
 		}
 
-		for i := 0; i < 10000; i++ {
+		for range 10000 {
 			h := header{
 				fin:    randBool(),
 				rsv1:   randBool(),

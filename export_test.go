@@ -1,5 +1,4 @@
 //go:build !js
-// +build !js
 
 package websocket
 
@@ -30,9 +29,11 @@ func (c *Conn) RecordBytesRead() *int {
 
 var ErrClosed = net.ErrClosed
 
-var ExportedDial = dial
-var SecWebSocketAccept = secWebSocketAccept
-var SecWebSocketKey = secWebSocketKey
-var VerifyServerResponse = verifyServerResponse
+var (
+	ExportedDial         = dial
+	SecWebSocketAccept   = secWebSocketAccept
+	SecWebSocketKey      = secWebSocketKey
+	VerifyServerResponse = verifyServerResponse
+)
 
 var CompressionModeOpts = CompressionMode.opts

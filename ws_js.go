@@ -196,7 +196,7 @@ func (c *Conn) Ping(ctx context.Context) error {
 // Write writes a message of the given type to the connection.
 // Always non blocking.
 func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
-	err := c.write(ctx, typ, p)
+	err := c.write(typ, p)
 	if err != nil {
 		// Have to ensure the WebSocket is closed after a write error
 		// to match the Go API. It can only error if the message type
@@ -210,7 +210,7 @@ func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	return nil
 }
 
-func (c *Conn) write(ctx context.Context, typ MessageType, p []byte) error {
+func (c *Conn) write(typ MessageType, p []byte) error {
 	if c.isClosed() {
 		return net.ErrClosed
 	}

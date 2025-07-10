@@ -1,5 +1,4 @@
 //go:build !js
-// +build !js
 
 package websocket_test
 
@@ -130,7 +129,7 @@ func wstestServer(tb testing.TB, ctx context.Context) (url string, closeFn func(
 	url = "ws://" + serverAddr
 	const outDir = "ci/out/autobahn-report"
 
-	specFile, err := tempJSONFile(map[string]interface{}{
+	specFile, err := tempJSONFile(map[string]any{
 		"url":           url,
 		"outdir":        outDir,
 		"cases":         autobahnCases,
@@ -280,7 +279,7 @@ func unusedListenAddr() (_ string, err error) {
 	return l.Addr().String(), nil
 }
 
-func tempJSONFile(v interface{}) (string, error) {
+func tempJSONFile(v any) (string, error) {
 	f, err := os.CreateTemp("", "temp.json")
 	if err != nil {
 		return "", fmt.Errorf("temp file: %w", err)

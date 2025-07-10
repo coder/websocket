@@ -1,5 +1,4 @@
 //go:build !js
-// +build !js
 
 package websocket_test
 
@@ -8,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -172,7 +172,6 @@ func Test_verifyHostOverride(t *testing.T) {
 			c.CloseNow()
 		})
 	}
-
 }
 
 type mockBody struct {
@@ -357,11 +356,10 @@ func (fc *forwardProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	for k, v := range resp.Header {
-		w.Header()[k] = v
-	}
+	maps.Copy(w.Header(), resp.Header)
 	w.Header().Set("PROXIED", "true")
 	w.WriteHeader(resp.StatusCode)
+
 	if resprw, ok := resp.Body.(io.ReadWriter); ok {
 		c, brw, err := w.(http.Hijacker).Hijack()
 		if err != nil {

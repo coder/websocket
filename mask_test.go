@@ -40,7 +40,7 @@ func TestMask(t *testing.T) {
 func testMask(t *testing.T, name string, fn func(b []byte, key uint32) uint32) {
 	t.Run(name, func(t *testing.T) {
 		t.Parallel()
-		for i := 0; i < 9999; i++ {
+		for range 9999 {
 			keyb := make([]byte, 4)
 			_, err := rand.Read(keyb)
 			assert.Success(t, err)

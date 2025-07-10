@@ -1,5 +1,4 @@
 //go:build !js
-// +build !js
 
 package websocket
 
@@ -351,10 +350,7 @@ func (c *Conn) writeFramePayload(p []byte) (n int, err error) {
 		// Start of next write in the buffer.
 		i := c.bw.Buffered()
 
-		j := len(p)
-		if j > c.bw.Available() {
-			j = c.bw.Available()
-		}
+		j := min(len(p), c.bw.Available())
 
 		_, err := c.bw.Write(p[:j])
 		if err != nil {

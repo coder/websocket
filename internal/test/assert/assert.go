@@ -9,7 +9,7 @@ import (
 )
 
 // Equal asserts exp == act.
-func Equal(t testing.TB, name string, exp, got interface{}) {
+func Equal(t testing.TB, name string, exp, got any) {
 	t.Helper()
 
 	if !reflect.DeepEqual(exp, got) {
@@ -36,7 +36,7 @@ func Error(t testing.TB, err error) {
 }
 
 // Contains asserts the fmt.Sprint(v) contains sub.
-func Contains(t testing.TB, v interface{}, sub string) {
+func Contains(t testing.TB, v any, sub string) {
 	t.Helper()
 
 	s := fmt.Sprint(v)
