@@ -271,14 +271,10 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 	select {
 	case <-c.closed:
 		return 0, net.ErrClosed
-	case c.writeTimeout <- ctx:
+	default:
 	}
-	defer func() {
-		select {
-		case <-c.closed:
-		case c.writeTimeout <- context.Background():
-		}
-	}()
+	c.setupWriteTimeout(ctx)
+	defer c.clearWriteTimeout()
 
 	c.writeHeader.fin = fin
 	c.writeHeader.opcode = opcode

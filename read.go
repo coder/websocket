@@ -220,22 +220,24 @@ func (c *Conn) readLoop(ctx context.Context) (header, error) {
 // to be called after the read is done. It also returns an error if the
 // connection is closed. The reference to the error is used to assign
 // an error depending on if the connection closed or the context timed
-// out during use. Typically the referenced error is a named return
+// out during use. Typically, the referenced error is a named return
 // variable of the function calling this method.
 func (c *Conn) prepareRead(ctx context.Context, err *error) (func(), error) {
 	select {
 	case <-c.closed:
 		return nil, net.ErrClosed
-	case c.readTimeout <- ctx:
+	default:
 	}
+	c.setupReadTimeout(ctx)
 
 	done := func() {
+		c.clearReadTimeout()
 		select {
 		case <-c.closed:
 			if *err != nil {
 				*err = net.ErrClosed
 			}
-		case c.readTimeout <- context.Background():
+		default:
 		}
 		if *err != nil && ctx.Err() != nil {
 			*err = ctx.Err()
@@ -280,7 +282,7 @@ func (c *Conn) readFramePayload(ctx context.Context, p []byte) (_ int, err error
 		return n, fmt.Errorf("failed to read frame payload: %w", err)
 	}
 
-	return n, err
+	return n, nil
 }
 
 func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
