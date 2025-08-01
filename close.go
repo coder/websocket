@@ -231,12 +231,6 @@ func (c *Conn) waitGoroutines() error {
 	t := time.NewTimer(time.Second * 15)
 	defer t.Stop()
 
-	select {
-	case <-c.timeoutLoopDone:
-	case <-t.C:
-		return errors.New("failed to wait for timeoutLoop goroutine to exit")
-	}
-
 	c.closeReadMu.Lock()
 	closeRead := c.closeReadCtx != nil
 	c.closeReadMu.Unlock()
