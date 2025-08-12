@@ -15,6 +15,7 @@ import (
 	"net/textproto"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/coder/websocket/internal/errd"
@@ -298,15 +299,34 @@ func acceptDeflate(ext websocketExtension, mode CompressionMode) (*compressionOp
 		case "server_no_context_takeover":
 			copts.serverNoContextTakeover = true
 			continue
-		case "client_max_window_bits",
-			"server_max_window_bits=15":
+		case "client_max_window_bits":
+			copts.clientMaxWindowBits = 15 // default
+			continue
+		case "server_max_window_bits":
+			copts.serverMaxWindowBits = 15 // default
 			continue
 		}
 
 		if strings.HasPrefix(p, "client_max_window_bits=") {
-			// We can't adjust the deflate window, but decoding with a larger window is acceptable.
+			// We don't need to change decoder settings; larger window decoder can read smaller windows.
+			if v, err := strconv.Atoi(strings.TrimPrefix(p, "client_max_window_bits=")); err == nil {
+				if v >= 8 && v <= 15 {
+					copts.clientMaxWindowBits = v
+				}
+			}
 			continue
 		}
+
+		if strings.HasPrefix(p, "server_max_window_bits=") {
+			vstr := strings.TrimPrefix(p, "server_max_window_bits=")
+			v, err := strconv.Atoi(vstr)
+			if err != nil || v < 8 || v > 15 {
+				return nil, false // invalid per RFC
+			}
+			copts.serverMaxWindowBits = v
+			continue
+		}
+
 		return nil, false
 	}
 	return copts, true

@@ -3,7 +3,10 @@
 package websocket
 
 import (
-	"compress/flate"
+	"strconv"
+
+	"github.com/klauspost/compress/flate"
+
 	"io"
 	"sync"
 )
@@ -53,12 +56,18 @@ func (m CompressionMode) opts() *compressionOptions {
 	return &compressionOptions{
 		clientNoContextTakeover: m == CompressionNoContextTakeover,
 		serverNoContextTakeover: m == CompressionNoContextTakeover,
+
+		serverMaxWindowBits: 0,
+		clientMaxWindowBits: 0,
 	}
 }
 
 type compressionOptions struct {
 	clientNoContextTakeover bool
 	serverNoContextTakeover bool
+
+	serverMaxWindowBits int
+	clientMaxWindowBits int
 }
 
 func (copts *compressionOptions) String() string {
@@ -69,6 +78,11 @@ func (copts *compressionOptions) String() string {
 	if copts.serverNoContextTakeover {
 		s += "; server_no_context_takeover"
 	}
+
+	if copts.clientMaxWindowBits != 0 {
+		s += "; client_max_window_bits=" + strconv.Itoa(copts.clientMaxWindowBits)
+	}
+
 	return s
 }
 
@@ -147,20 +161,24 @@ func putFlateReader(fr io.Reader) {
 	flateReaderPool.Put(fr)
 }
 
-var flateWriterPool sync.Pool
+var flateWriterPool [16]sync.Pool
 
-func getFlateWriter(w io.Writer) *flate.Writer {
-	fw, ok := flateWriterPool.Get().(*flate.Writer)
+func getFlateWriter(w io.Writer, bits int) *flate.Writer {
+	fw, ok := flateWriterPool[bits].Get().(*flate.Writer)
 	if !ok {
-		fw, _ = flate.NewWriter(w, flate.BestSpeed)
+		if bits == 0 {
+			fw, _ = flate.NewWriter(w, flate.BestCompression)
+		} else {
+			fw, _ = flate.NewWriterWindow(w, 1<<bits)
+		}
 		return fw
 	}
 	fw.Reset(w)
 	return fw
 }
 
-func putFlateWriter(w *flate.Writer) {
-	flateWriterPool.Put(w)
+func putFlateWriter(w *flate.Writer, bits int) {
+	flateWriterPool[bits].Put(w)
 }
 
 type slidingWindow struct {
