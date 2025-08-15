@@ -17,6 +17,8 @@ import (
 	"github.com/coder/websocket/internal/util"
 )
 
+var ErrMessageTooBig = errors.New("websocket: message too big")
+
 // Reader reads from the connection until there is a WebSocket
 // data message to be read. It will handle ping, pong and close frames as appropriate.
 //
@@ -520,7 +522,7 @@ func (lr *limitReader) Read(p []byte) (int, error) {
 	}
 
 	if lr.n == 0 {
-		err := fmt.Errorf("read limited at %v bytes", lr.limit.Load())
+		err := fmt.Errorf("%w: %d bytes", ErrMessageTooBig, lr.limit.Load())
 		lr.c.writeError(StatusMessageTooBig, err)
 		return 0, err
 	}
