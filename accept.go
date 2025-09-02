@@ -40,9 +40,10 @@ type AcceptOptions struct {
 	// In such a case, example.com is the origin and chat.example.com is the request host.
 	// One would set this field to []string{"example.com"} to authorize example.com to connect.
 	//
-	// Each pattern is matched case insensitively against the request origin host
-	// with path.Match.
-	// See https://golang.org/pkg/path/#Match
+	// Each pattern is matched case insensitively with path.Match (see
+	// https://golang.org/pkg/path/#Match). By default, it is matched
+	// against the request origin host. If the pattern contains a URI
+	// scheme ("://"), it will be matched against "scheme://host".
 	//
 	// Please ensure you understand the ramifications of enabling this.
 	// If used incorrectly your WebSocket server will be open to CSRF attacks.
@@ -240,7 +241,11 @@ func authenticateOrigin(r *http.Request, originHosts []string) error {
 	}
 
 	for _, hostPattern := range originHosts {
-		matched, err := match(hostPattern, u.Host)
+		target := u.Host
+		if strings.Contains(hostPattern, "://") {
+			target = u.Scheme + "://" + u.Host
+		}
+		matched, err := match(hostPattern, target)
 		if err != nil {
 			return fmt.Errorf("failed to parse path pattern %q: %w", hostPattern, err)
 		}
