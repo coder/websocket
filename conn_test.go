@@ -421,6 +421,25 @@ func TestConn(t *testing.T) {
 		err = c1.Close(websocket.StatusNormalClosure, "")
 		assert.Success(t, err)
 	})
+
+	t.Run("ReadLimitExceededReturnsErrMessageTooBig", func(t *testing.T) {
+		tt, c1, c2 := newConnTest(t, nil, nil)
+
+		c1.SetReadLimit(1024)
+		_ = c2.CloseRead(tt.ctx)
+
+		writeDone := xsync.Go(func() error {
+			payload := strings.Repeat("x", 4096)
+			return c2.Write(tt.ctx, websocket.MessageText, []byte(payload))
+		})
+
+		_, _, err := c1.Read(tt.ctx)
+		assert.ErrorIs(t, websocket.ErrMessageTooBig, err)
+		assert.Contains(t, err, "read limited at 1025 bytes")
+
+		_ = c2.CloseNow()
+		<-writeDone
+	})
 }
 
 func TestWasm(t *testing.T) {
