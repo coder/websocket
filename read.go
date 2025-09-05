@@ -90,7 +90,8 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 //
 // By default, the connection has a message read limit of 32768 bytes.
 //
-// When the limit is hit, the connection will be closed with StatusMessageTooBig.
+// When the limit is hit, reads return an error wrapping ErrMessageTooBig and
+// the connection is closed with StatusMessageTooBig.
 //
 // Set to -1 to disable.
 func (c *Conn) SetReadLimit(n int64) {
@@ -522,9 +523,9 @@ func (lr *limitReader) Read(p []byte) (int, error) {
 	}
 
 	if lr.n == 0 {
-		err := fmt.Errorf("read limited at %v bytes", lr.limit.Load())
-		lr.c.writeError(StatusMessageTooBig, err)
-		return 0, err
+		reason := fmt.Errorf("read limited at %d bytes", lr.limit.Load())
+		lr.c.writeError(StatusMessageTooBig, reason)
+		return 0, fmt.Errorf("%w: %v", ErrMessageTooBig, reason)
 	}
 
 	if int64(len(p)) > lr.n {

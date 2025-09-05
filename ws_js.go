@@ -144,9 +144,9 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 	}
 	readLimit := c.msgReadLimit.Load()
 	if readLimit >= 0 && int64(len(p)) > readLimit {
-		err := fmt.Errorf("read limited at %v bytes", c.msgReadLimit.Load())
-		c.Close(StatusMessageTooBig, err.Error())
-		return 0, nil, err
+		reason := fmt.Errorf("read limited at %d bytes", c.msgReadLimit.Load())
+		c.Close(StatusMessageTooBig, reason.Error())
+		return 0, nil, fmt.Errorf("%w: %v", ErrMessageTooBig, reason)
 	}
 	return typ, p, nil
 }
