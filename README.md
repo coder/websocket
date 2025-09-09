@@ -109,8 +109,6 @@ Advantages of [gorilla/websocket](https://github.com/gorilla/websocket):
 - Mature and widely used
 - [Prepared writes](https://pkg.go.dev/github.com/gorilla/websocket#PreparedMessage)
 - Configurable [buffer sizes](https://pkg.go.dev/github.com/gorilla/websocket#hdr-Buffers)
-- No extra goroutine per connection to support cancellation with context.Context. This costs github.com/coder/websocket 2 KB of memory per connection.
-  - Will be removed soon with [context.AfterFunc](https://github.com/golang/go/issues/57928). See [#411](https://github.com/nhooyr/websocket/issues/411)
 
 Advantages of github.com/coder/websocket:
 
