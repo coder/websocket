@@ -342,7 +342,7 @@ func Test_verifyClientHandshake(t *testing.T) {
 				r.Header.Add(k, v)
 			}
 
-			_, err := verifyClientRequest(httptest.NewRecorder(), r)
+			_, _, _, err := verifyClientRequest(httptest.NewRecorder(), r, &AcceptOptions{Protocol: ProtocolHTTP1})
 			if tc.success {
 				assert.Success(t, err)
 			} else {

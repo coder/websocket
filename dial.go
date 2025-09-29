@@ -29,6 +29,12 @@ type DialOptions struct {
 	// HTTPHeader specifies the HTTP headers included in the handshake request.
 	HTTPHeader http.Header
 
+	// Protocol selects the HTTP version for the handshake. Zero value defaults
+	// to ProtocolHTTP1. ProtocolAcceptAny is not supported by Dial.
+	//
+	// Experimental: This feature is experimental and may change in the future.
+	Protocol Protocol
+
 	// Host optionally overrides the Host HTTP header to send. If empty, the value
 	// of URL.Host will be used.
 	Host string
@@ -65,13 +71,21 @@ type DialOptions struct {
 	OnPongReceived func(ctx context.Context, payload []byte)
 }
 
-func (opts *DialOptions) cloneWithDefaults(ctx context.Context) (context.Context, context.CancelFunc, *DialOptions) {
+func (opts *DialOptions) cloneWithDefaults(ctx context.Context) (context.Context, context.CancelFunc, *DialOptions, error) {
 	var cancel context.CancelFunc
 
 	var o DialOptions
 	if opts != nil {
 		o = *opts
 	}
+
+	// Defaults to HTTP/1.1 only to preserve existing behavior (zero value).
+	switch o.Protocol {
+	case ProtocolHTTP1, ProtocolHTTP2:
+	default:
+		return nil, nil, nil, fmt.Errorf("websocket: invalid protocol for dial options: %s", o.Protocol)
+	}
+
 	if o.HTTPClient == nil {
 		o.HTTPClient = http.DefaultClient
 	}
@@ -101,7 +115,7 @@ func (opts *DialOptions) cloneWithDefaults(ctx context.Context) (context.Context
 	}
 	o.HTTPClient = &newClient
 
-	return ctx, cancel, &o
+	return ctx, cancel, &o, nil
 }
 
 // Dial performs a WebSocket handshake on url.
@@ -125,7 +139,10 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 	defer errd.Wrap(&err, "failed to WebSocket dial")
 
 	var cancel context.CancelFunc
-	ctx, cancel, opts = opts.cloneWithDefaults(ctx)
+	ctx, cancel, opts, err = opts.cloneWithDefaults(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
 	if cancel != nil {
 		defer cancel()
 	}
@@ -201,7 +218,20 @@ func handshakeRequest(ctx context.Context, urls string, opts *DialOptions, copts
 		return nil, fmt.Errorf("unexpected url scheme: %q", u.Scheme)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	switch opts.Protocol {
+	case ProtocolHTTP2:
+		return handshakeRequestH2(ctx, u, opts, copts, secWebSocketKey)
+	case ProtocolHTTP1:
+		return handshakeRequestH1(ctx, u, opts, copts, secWebSocketKey)
+	default:
+		return nil, fmt.Errorf("unknown protocol: %s", opts.Protocol)
+	}
+}
+
+// handshakeRequestH1 constructs the HTTP/1.1 WebSocket GET+Upgrade request.
+// Behavior and headers are identical to the previous inline construction in handshakeRequest.
+func handshakeRequestH1(ctx context.Context, u *url.URL, opts *DialOptions, copts *compressionOptions, secWebSocketKey string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new http request: %w", err)
 	}
@@ -209,6 +239,10 @@ func handshakeRequest(ctx context.Context, urls string, opts *DialOptions, copts
 		req.Host = opts.Host
 	}
 	req.Header = opts.HTTPHeader.Clone()
+
+	// Do not send H2-only headers on H1.
+	req.Header.Del(":protocol")
+
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "websocket")
 	req.Header.Set("Sec-WebSocket-Version", "13")
@@ -227,6 +261,49 @@ func handshakeRequest(ctx context.Context, urls string, opts *DialOptions, copts
 	return resp, nil
 }
 
+func handshakeRequestH2(ctx context.Context, u *url.URL, opts *DialOptions, copts *compressionOptions, secWebSocketKey string) (_ *http.Response, err error) {
+	// Pipe to allow immediate writes after CONNECT completes.
+	pr, pw := io.Pipe()
+	defer func() {
+		if err != nil {
+			pr.CloseWithError(err)
+		}
+	}()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodConnect, u.String(), pr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create http2 connect handshake request: %w", err)
+	}
+	if len(opts.Host) > 0 {
+		req.Host = opts.Host
+	}
+	req.Header = opts.HTTPHeader.Clone()
+
+	// Do not send H1-only headers on H2.
+	req.Header.Del("Connection")
+	req.Header.Del("Upgrade")
+
+	// RFC 8441 protocol header.
+	req.Header.Set(":protocol", "websocket")
+	req.Header.Set("Sec-WebSocket-Version", "13")
+	req.Header.Set("Sec-WebSocket-Key", secWebSocketKey)
+	if len(opts.Subprotocols) > 0 {
+		req.Header.Set("Sec-WebSocket-Protocol", strings.Join(opts.Subprotocols, ","))
+	}
+	if copts != nil {
+		req.Header.Set("Sec-WebSocket-Extensions", copts.String())
+	}
+
+	resp, err := opts.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send http2 connect handshake request: %w", err)
+	}
+
+	resp.Body = &h2ClientStream{ReadCloser: resp.Body, WriteCloser: pw}
+
+	return resp, nil
+}
+
 func secWebSocketKey(rr io.Reader) (string, error) {
 	if rr == nil {
 		rr = rand.Reader
@@ -240,6 +317,17 @@ func secWebSocketKey(rr io.Reader) (string, error) {
 }
 
 func verifyServerResponse(opts *DialOptions, copts *compressionOptions, secWebSocketKey string, resp *http.Response) (*compressionOptions, error) {
+	switch opts.Protocol {
+	case ProtocolHTTP2:
+		return verifyServerResponseH2(opts, copts, secWebSocketKey, resp)
+	case ProtocolHTTP1:
+		return verifyServerResponseH1(opts, copts, secWebSocketKey, resp)
+	default:
+		return nil, fmt.Errorf("unknown protocol: %s", opts.Protocol)
+	}
+}
+
+func verifyServerResponseH1(opts *DialOptions, copts *compressionOptions, secWebSocketKey string, resp *http.Response) (*compressionOptions, error) {
 	if resp.StatusCode != http.StatusSwitchingProtocols {
 		return nil, fmt.Errorf("expected handshake response status code %v but got %v", http.StatusSwitchingProtocols, resp.StatusCode)
 	}
@@ -250,6 +338,31 @@ func verifyServerResponse(opts *DialOptions, copts *compressionOptions, secWebSo
 
 	if !headerContainsTokenIgnoreCase(resp.Header, "Upgrade", "WebSocket") {
 		return nil, fmt.Errorf("WebSocket protocol violation: Upgrade header %q does not contain websocket", resp.Header.Get("Upgrade"))
+	}
+
+	if resp.Header.Get("Sec-WebSocket-Accept") != secWebSocketAccept(secWebSocketKey) {
+		return nil, fmt.Errorf("WebSocket protocol violation: invalid Sec-WebSocket-Accept %q, key %q",
+			resp.Header.Get("Sec-WebSocket-Accept"),
+			secWebSocketKey,
+		)
+	}
+
+	err := verifySubprotocol(opts.Subprotocols, resp)
+	if err != nil {
+		return nil, err
+	}
+
+	return verifyServerExtensions(copts, resp.Header)
+}
+
+func verifyServerResponseH2(opts *DialOptions, copts *compressionOptions, secWebSocketKey string, resp *http.Response) (*compressionOptions, error) {
+	if resp.ProtoMajor != 2 {
+		return nil, fmt.Errorf("expected HTTP/2 response but got: %s", resp.Proto)
+	}
+
+	// Expect 2xx for extended CONNECT (RFC 8441).
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("expected 2xx status code for extended CONNECT but got: %d", resp.StatusCode)
 	}
 
 	if resp.Header.Get("Sec-WebSocket-Accept") != secWebSocketAccept(secWebSocketKey) {
@@ -290,7 +403,7 @@ func verifyServerExtensions(copts *compressionOptions, h http.Header) (*compress
 
 	ext := exts[0]
 	if ext.name != "permessage-deflate" || len(exts) > 1 || copts == nil {
-		return nil, fmt.Errorf("WebSocket protcol violation: unsupported extensions from server: %+v", exts[1:])
+		return nil, fmt.Errorf("WebSocket protocol violation: unsupported extensions from server: %+v", exts)
 	}
 
 	_copts := *copts
