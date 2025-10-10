@@ -162,10 +162,10 @@ func ExampleConn_Ping() {
 
 // This example demonstrates full stack chat with an automated test.
 func Example_fullStackChat() {
-	// https://github.com/nhooyr/websocket/tree/master/internal/examples/chat
+	// https://github.com/coder/websocket/tree/master/internal/examples/chat
 }
 
 // This example demonstrates a echo server.
 func Example_echo() {
-	// https://github.com/nhooyr/websocket/tree/master/internal/examples/echo
+	// https://github.com/coder/websocket/tree/master/internal/examples/echo
 }
