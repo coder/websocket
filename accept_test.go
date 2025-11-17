@@ -551,6 +551,22 @@ func Test_selectDeflate(t *testing.T) {
 			expCopts: &compressionOptions{
 				clientNoContextTakeover: true,
 				serverNoContextTakeover: true,
+
+				clientMaxWindowBits: 15,
+				serverMaxWindowBits: 0,
+			},
+			expOK: true,
+		},
+		{
+			name:   "permessage-deflate/custom-client-window-bits",
+			mode:   CompressionNoContextTakeover,
+			header: "permessage-deflate; client_max_window_bits=12",
+			expCopts: &compressionOptions{
+				clientNoContextTakeover: true,
+				serverNoContextTakeover: true,
+
+				clientMaxWindowBits: 12,
+				serverMaxWindowBits: 0,
 			},
 			expOK: true,
 		},
@@ -567,6 +583,9 @@ func Test_selectDeflate(t *testing.T) {
 			expCopts: &compressionOptions{
 				clientNoContextTakeover: true,
 				serverNoContextTakeover: true,
+
+				clientMaxWindowBits: 15,
+				serverMaxWindowBits: 0,
 			},
 			expOK: true,
 		},

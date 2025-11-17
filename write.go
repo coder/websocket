@@ -4,7 +4,6 @@ package websocket
 
 import (
 	"bufio"
-	"compress/flate"
 	"context"
 	"crypto/rand"
 	"encoding/binary"
@@ -13,6 +12,8 @@ import (
 	"io"
 	"net"
 	"time"
+
+	"github.com/klauspost/compress/flate"
 
 	"github.com/coder/websocket/internal/errd"
 	"github.com/coder/websocket/internal/util"
@@ -79,7 +80,7 @@ func (mw *msgWriter) ensureFlate() {
 	}
 
 	if mw.flateWriter == nil {
-		mw.flateWriter = getFlateWriter(mw.trimWriter)
+		mw.flateWriter = getFlateWriter(mw.trimWriter, mw.c.copts.serverMaxWindowBits)
 	}
 	mw.flate = true
 }
@@ -137,7 +138,7 @@ func (mw *msgWriter) reset(ctx context.Context, typ MessageType) error {
 
 func (mw *msgWriter) putFlateWriter() {
 	if mw.flateWriter != nil {
-		putFlateWriter(mw.flateWriter)
+		putFlateWriter(mw.flateWriter, mw.c.copts.serverMaxWindowBits)
 		mw.flateWriter = nil
 	}
 }
