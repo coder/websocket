@@ -48,6 +48,18 @@ type DialOptions struct {
 	// for CompressionContextTakeover.
 	CompressionThreshold int
 
+	// MaxErrorResponseBodyBytes controls how many bytes of the HTTP response body
+	// are captured and made available via resp.Body when the WebSocket handshake
+	// fails (i.e. Dial returns a non-nil error after receiving an HTTP response).
+	//
+	// Semantics:
+	//   0  => preserve current behavior and capture up to 1024 bytes (default)
+	//   >0 => capture up to that many bytes
+	//   <0 => do not capture any bytes; resp.Body will remain nil on error
+	//
+	// Regardless of this setting, the original HTTP response body is always closed.
+	MaxErrorResponseBodyBytes int
+
 	// OnPingReceived is an optional callback invoked synchronously when a ping frame is received.
 	//
 	// The payload contains the application data of the ping frame.
@@ -110,7 +122,8 @@ func (opts *DialOptions) cloneWithDefaults(ctx context.Context) (context.Context
 // You never need to close resp.Body yourself.
 //
 // If an error occurs, the returned response may be non nil.
-// However, you can only read the first 1024 bytes of the body.
+// By default, up to the first 1024 bytes of the body are available; this limit
+// can be adjusted via DialOptions.MaxErrorResponseBodyBytes.
 //
 // This function requires at least Go 1.12 as it uses a new feature
 // in net/http to perform WebSocket handshakes.
@@ -148,8 +161,19 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 	resp.Body = nil
 	defer func() {
 		if err != nil {
-			// We read a bit of the body for easier debugging.
-			r := io.LimitReader(respBody, 1024)
+			// Capture a limited portion of the response body for easier debugging,
+			// following the limit configured by MaxErrorResponseBodyBytes.
+			limit := opts.MaxErrorResponseBodyBytes
+			if limit == 0 {
+				limit = 1024
+			}
+			if limit < 0 {
+				// Do not capture any body bytes; ensure original body is closed.
+				respBody.Close()
+				return
+			}
+
+			r := io.LimitReader(respBody, int64(limit))
 
 			timer := time.AfterFunc(time.Second*3, func() {
 				respBody.Close()

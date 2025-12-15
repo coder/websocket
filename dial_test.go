@@ -416,3 +416,102 @@ func TestDialViaProxy(t *testing.T) {
 	assertEcho(t, ctx, c)
 	assertClose(t, c)
 }
+
+// Additional tests for error response body capture behavior.
+// A tracking body to verify Close is called when capture is disabled.
+type trackingBodyDialTest struct {
+	io.ReadCloser
+	closed *bool
+}
+
+func (tb trackingBodyDialTest) Close() error {
+	*tb.closed = true
+	return tb.ReadCloser.Close()
+}
+
+func TestDial_ErrorResponseBodyCapture_DefaultAndCustom(t *testing.T) {
+	t.Parallel()
+
+	longBody := strings.Repeat("x", 4096)
+
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+		io.WriteString(w, longBody)
+	}))
+	defer s.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	// Default behavior (zero value options): capture up to 1024 bytes
+	_, resp, err := websocket.Dial(ctx, s.URL, nil)
+	assert.Error(t, err)
+	if resp == nil {
+		t.Fatal("expected non-nil resp")
+	}
+	assert.Equal(t, "StatusCode", http.StatusTeapot, resp.StatusCode)
+
+	b, rerr := io.ReadAll(resp.Body)
+	assert.Success(t, rerr)
+	if len(b) > 1024 {
+		t.Fatalf("expected captured body length <= 1024, got %d", len(b))
+	}
+	if exp := longBody[:len(b)]; string(b) != exp {
+		t.Fatalf("unexpected body prefix: expected %d bytes prefix match", len(b))
+	}
+
+	// Custom limit (>0)
+	limit := 200
+	_, resp, err = websocket.Dial(ctx, s.URL, &websocket.DialOptions{MaxErrorResponseBodyBytes: limit})
+	assert.Error(t, err)
+	if resp == nil {
+		t.Fatal("expected non-nil resp")
+	}
+	assert.Equal(t, "StatusCode", http.StatusTeapot, resp.StatusCode)
+
+	b, rerr = io.ReadAll(resp.Body)
+	assert.Success(t, rerr)
+	if len(b) > limit {
+		t.Fatalf("expected captured body length <= %d, got %d", limit, len(b))
+	}
+	if exp := longBody[:len(b)]; string(b) != exp {
+		t.Fatalf("unexpected body prefix: expected %d bytes prefix match", len(b))
+	}
+}
+
+func TestDial_ErrorResponseBodyCapture_Disabled_NoBodyWithClose(t *testing.T) {
+	t.Parallel()
+
+	closed := false
+	rt := func(r *http.Request) (*http.Response, error) {
+		// Return a long body and a non-101 status to trigger error path.
+		return &http.Response{
+			StatusCode: http.StatusForbidden,
+			Body:       trackingBodyDialTest{io.NopCloser(strings.NewReader(strings.Repeat("y", 4096))), &closed},
+		}, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	_, resp, err := websocket.Dial(ctx, "ws://example.com", &websocket.DialOptions{
+		HTTPClient:                mockHTTPClient(rt),
+		MaxErrorResponseBodyBytes: -1,
+	})
+	assert.Error(t, err)
+	if resp == nil {
+		t.Fatal("expected non-nil resp")
+	}
+	assert.Equal(t, "StatusCode", http.StatusForbidden, resp.StatusCode)
+	if resp.Body != nil {
+		// If any body is present, ensure it's empty.
+		b, rerr := io.ReadAll(resp.Body)
+		assert.Success(t, rerr)
+		if len(b) != 0 {
+			t.Fatalf("expected no body bytes when capture disabled, got %d", len(b))
+		}
+	}
+	if !closed {
+		t.Fatal("expected original body to be closed")
+	}
+}
