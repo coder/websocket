@@ -515,3 +515,35 @@ func TestDial_ErrorResponseBodyCapture_Disabled_NoBodyWithClose(t *testing.T) {
 		t.Fatal("expected original body to be closed")
 	}
 }
+
+func TestDial_ErrorResponseBodyCapture_NilBody(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	rt := func(r *http.Request) (*http.Response, error) {
+		// No body returned; ensure Dial does not panic when attempting capture.
+		return &http.Response{
+			StatusCode: http.StatusForbidden,
+			Body:       nil,
+		}, nil
+	}
+
+	_, resp, err := websocket.Dial(ctx, "ws://example.com", &websocket.DialOptions{
+		HTTPClient: mockHTTPClient(rt),
+	})
+	assert.Error(t, err)
+	if resp == nil {
+		t.Fatal("expected non-nil resp")
+	}
+	assert.Equal(t, "StatusCode", http.StatusForbidden, resp.StatusCode)
+	if resp.Body == nil {
+		return
+	}
+	b, rerr := io.ReadAll(resp.Body)
+	assert.Success(t, rerr)
+	if len(b) != 0 {
+		t.Fatalf("expected empty body when original body is nil, got %d bytes", len(b))
+	}
+}

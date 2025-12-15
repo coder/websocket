@@ -160,7 +160,7 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 	respBody := resp.Body
 	resp.Body = nil
 	defer func() {
-		if err != nil {
+		if err != nil && respBody != nil {
 			// Capture a limited portion of the response body for easier debugging,
 			// following the limit configured by MaxErrorResponseBodyBytes.
 			limit := opts.MaxErrorResponseBodyBytes
