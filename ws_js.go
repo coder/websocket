@@ -282,9 +282,9 @@ type DialOptions struct {
 	// Subprotocols lists the subprotocols to negotiate with the server.
 	Subprotocols []string
 
-	// Protocol selects the HTTP version for the handshake on native builds.
+	// HTTPProtocol selects the HTTP version for the handshake on native builds.
 	// No-op in Wasm.
-	Protocol Protocol
+	HTTPProtocol HTTPProtocol
 }
 
 // Dial creates a new WebSocket connection to the given url with the given options.
@@ -444,9 +444,9 @@ type AcceptOptions struct {
 	CompressionMode      CompressionMode
 	CompressionThreshold int
 
-	// Protocol selects which HTTP version to accept on native builds.
+	// HTTPProtocol selects which HTTP version to accept on native builds.
 	// No-op in Wasm.
-	Protocol Protocol
+	HTTPProtocol HTTPProtocol
 }
 
 // Accept is stubbed out for Wasm.

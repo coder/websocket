@@ -81,7 +81,7 @@ Examples:
 
 	conn, resp, err := websocket.Dial(ctx, rawURL, &websocket.DialOptions{
 		HTTPClient: hc,
-		Protocol:   websocket.ProtocolHTTP2,
+		HTTPProtocol: websocket.HTTPProtocol2,
 	})
 	if err != nil {
 		if resp != nil {
