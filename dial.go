@@ -29,11 +29,11 @@ type DialOptions struct {
 	// HTTPHeader specifies the HTTP headers included in the handshake request.
 	HTTPHeader http.Header
 
-	// Protocol selects the HTTP version for the handshake. Zero value defaults
-	// to ProtocolHTTP1. ProtocolAcceptAny is not supported by Dial.
+	// HTTPProtocol selects the HTTP version for the handshake. Zero value defaults
+	// to HTTPProtocol1. HTTPProtocolAny is not supported by Dial.
 	//
 	// Experimental: This feature is experimental and may change in the future.
-	Protocol Protocol
+	HTTPProtocol HTTPProtocol
 
 	// Host optionally overrides the Host HTTP header to send. If empty, the value
 	// of URL.Host will be used.
@@ -80,10 +80,10 @@ func (opts *DialOptions) cloneWithDefaults(ctx context.Context) (context.Context
 	}
 
 	// Defaults to HTTP/1.1 only to preserve existing behavior (zero value).
-	switch o.Protocol {
-	case ProtocolHTTP1, ProtocolHTTP2:
+	switch o.HTTPProtocol {
+	case HTTPProtocol1, HTTPProtocol2:
 	default:
-		return nil, nil, nil, fmt.Errorf("websocket: invalid protocol for dial options: %s", o.Protocol)
+		return nil, nil, nil, fmt.Errorf("websocket: invalid protocol for dial options: %s", o.HTTPProtocol)
 	}
 
 	if o.HTTPClient == nil {
@@ -218,13 +218,13 @@ func handshakeRequest(ctx context.Context, urls string, opts *DialOptions, copts
 		return nil, fmt.Errorf("unexpected url scheme: %q", u.Scheme)
 	}
 
-	switch opts.Protocol {
-	case ProtocolHTTP2:
+	switch opts.HTTPProtocol {
+	case HTTPProtocol2:
 		return handshakeRequestH2(ctx, u, opts, copts, secWebSocketKey)
-	case ProtocolHTTP1:
+	case HTTPProtocol1:
 		return handshakeRequestH1(ctx, u, opts, copts, secWebSocketKey)
 	default:
-		return nil, fmt.Errorf("unknown protocol: %s", opts.Protocol)
+		return nil, fmt.Errorf("unknown protocol: %s", opts.HTTPProtocol)
 	}
 }
 
@@ -317,13 +317,13 @@ func secWebSocketKey(rr io.Reader) (string, error) {
 }
 
 func verifyServerResponse(opts *DialOptions, copts *compressionOptions, secWebSocketKey string, resp *http.Response) (*compressionOptions, error) {
-	switch opts.Protocol {
-	case ProtocolHTTP2:
+	switch opts.HTTPProtocol {
+	case HTTPProtocol2:
 		return verifyServerResponseH2(opts, copts, secWebSocketKey, resp)
-	case ProtocolHTTP1:
+	case HTTPProtocol1:
 		return verifyServerResponseH1(opts, copts, secWebSocketKey, resp)
 	default:
-		return nil, fmt.Errorf("unknown protocol: %s", opts.Protocol)
+		return nil, fmt.Errorf("unknown protocol: %s", opts.HTTPProtocol)
 	}
 }
 
