@@ -148,8 +148,8 @@ type runTableTestCase struct {
 	name        string
 	scheme      string // "wss" or "ws"
 	client      func(*testing.T) *http.Client
-	clientProto websocket.Protocol
-	serverProto websocket.Protocol
+	clientProto websocket.HTTPProtocol
+	serverProto websocket.HTTPProtocol
 	wantProto   int  // 1 or 2
 	wantStatus  int  // Wanted status code (e.g., 200 or 100).
 	wantErr     bool // Want a Dial error.
@@ -159,7 +159,7 @@ type runTableTestCase struct {
 func runTable(t *testing.T, cases []runTableTestCase) {
 	for _, tc := range cases {
 		echoHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{Protocol: tc.serverProto})
+			conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{HTTPProtocol: tc.serverProto})
 			if err != nil {
 				return
 			}
@@ -193,8 +193,8 @@ func runTable(t *testing.T, cases []runTableTestCase) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			conn, resp, err := websocket.Dial(ctx, srvURL, &websocket.DialOptions{
-				HTTPClient: tc.client(t),
-				Protocol:   tc.clientProto,
+				HTTPClient:   tc.client(t),
+				HTTPProtocol: tc.clientProto,
 			})
 			if conn != nil {
 				defer conn.CloseNow()
@@ -228,32 +228,32 @@ var sharedTestCases = []runTableTestCase{
 		name:        "Error TLS ClientHTTP1 RequestHTTP2 AcceptAny",
 		scheme:      "wss",
 		client:      func(t *testing.T) *http.Client { return newH1TLSClient() },
-		clientProto: websocket.ProtocolHTTP2,
-		serverProto: websocket.ProtocolAcceptAny,
+		clientProto: websocket.HTTPProtocol2,
+		serverProto: websocket.HTTPProtocolAny,
 		wantErr:     true,
 	},
 	{
 		name:        "Error H2C ClientHTTP1 RequestHTTP2 AcceptAny",
 		scheme:      "ws",
 		client:      func(t *testing.T) *http.Client { return newH1TLSClient() },
-		clientProto: websocket.ProtocolHTTP2,
-		serverProto: websocket.ProtocolAcceptAny,
+		clientProto: websocket.HTTPProtocol2,
+		serverProto: websocket.HTTPProtocolAny,
 		wantErr:     true,
 	},
 	{
 		name:        "Error TLS ClientHTTP2 RequestHTTP2 AcceptHTTP1",
 		scheme:      "wss",
 		client:      func(t *testing.T) *http.Client { return newH2TLSClient() },
-		clientProto: websocket.ProtocolHTTP2,
-		serverProto: websocket.ProtocolHTTP1,
+		clientProto: websocket.HTTPProtocol2,
+		serverProto: websocket.HTTPProtocol1,
 		wantErr:     true,
 	},
 	{
 		name:        "Error TLS ClientHTTP1 RequestHTTP1 AcceptHTTP2",
 		scheme:      "wss",
 		client:      func(t *testing.T) *http.Client { return newH1TLSClient() },
-		clientProto: websocket.ProtocolHTTP1,
-		serverProto: websocket.ProtocolHTTP2,
+		clientProto: websocket.HTTPProtocol1,
+		serverProto: websocket.HTTPProtocol2,
 		wantErr:     true,
 	},
 }
@@ -267,24 +267,24 @@ func TestHTTP2Suite_XCONNECT_Enabled(t *testing.T) {
 			name:        "OK TLS ClientHTTP2 RequestHTTP2 AcceptHTTP2",
 			scheme:      "wss",
 			client:      func(t *testing.T) *http.Client { return newH2TLSClient() },
-			clientProto: websocket.ProtocolHTTP2,
-			serverProto: websocket.ProtocolHTTP2,
+			clientProto: websocket.HTTPProtocol2,
+			serverProto: websocket.HTTPProtocol2,
 			wantProto:   2,
 		},
 		{
 			name:        "OK TLS ClientHTTP2 RequestHTTP2 AcceptAny",
 			scheme:      "wss",
 			client:      func(t *testing.T) *http.Client { return newH2TLSClient() },
-			clientProto: websocket.ProtocolHTTP2,
-			serverProto: websocket.ProtocolAcceptAny,
+			clientProto: websocket.HTTPProtocol2,
+			serverProto: websocket.HTTPProtocolAny,
 			wantProto:   2,
 		},
 		{
 			name:        "OK H2C ClientHTTP2 RequestHTTP2 AcceptAny",
 			scheme:      "ws",
 			client:      func(t *testing.T) *http.Client { return newH2CClient() },
-			clientProto: websocket.ProtocolHTTP2,
-			serverProto: websocket.ProtocolAcceptAny,
+			clientProto: websocket.HTTPProtocol2,
+			serverProto: websocket.HTTPProtocolAny,
 			wantProto:   2,
 		},
 		{
@@ -295,8 +295,8 @@ func TestHTTP2Suite_XCONNECT_Enabled(t *testing.T) {
 					req.Header.Del(":protocol")
 				}, nil)
 			},
-			clientProto: websocket.ProtocolHTTP2,
-			serverProto: websocket.ProtocolHTTP2,
+			clientProto: websocket.HTTPProtocol2,
+			serverProto: websocket.HTTPProtocol2,
 			wantErr:     true,
 		},
 		{
@@ -311,8 +311,8 @@ func TestHTTP2Suite_XCONNECT_Enabled(t *testing.T) {
 					req.Method = http.MethodGet
 				}, nil)
 			},
-			clientProto: websocket.ProtocolHTTP2,
-			serverProto: websocket.ProtocolHTTP2,
+			clientProto: websocket.HTTPProtocol2,
+			serverProto: websocket.HTTPProtocol2,
 			wantErr:     true,
 		},
 		{
@@ -326,8 +326,8 @@ func TestHTTP2Suite_XCONNECT_Enabled(t *testing.T) {
 					_ = resp.Body.Close()
 				})
 			},
-			clientProto: websocket.ProtocolHTTP2,
-			serverProto: websocket.ProtocolHTTP2,
+			clientProto: websocket.HTTPProtocol2,
+			serverProto: websocket.HTTPProtocol2,
 			wantErr:     true,
 		},
 	}...))
@@ -342,16 +342,16 @@ func TestHTTP2Suite_XCONNECT_Disabled(t *testing.T) {
 			name:        "Error TLS ClientHTTP2 RequestHTTP2 AcceptAny NoExtendedConnect",
 			scheme:      "wss",
 			client:      func(t *testing.T) *http.Client { return newH2TLSClient() },
-			clientProto: websocket.ProtocolHTTP2,
-			serverProto: websocket.ProtocolAcceptAny,
+			clientProto: websocket.HTTPProtocol2,
+			serverProto: websocket.HTTPProtocolAny,
 			wantErr:     true,
 		},
 		{
 			name:        "Error H2C ClientHTTP2 RequestHTTP2 AcceptAny NoExtendedConnect",
 			scheme:      "ws",
 			client:      func(t *testing.T) *http.Client { return newH2CClient() },
-			clientProto: websocket.ProtocolHTTP2,
-			serverProto: websocket.ProtocolAcceptAny,
+			clientProto: websocket.HTTPProtocol2,
+			serverProto: websocket.HTTPProtocolAny,
 			wantErr:     true,
 		},
 	}...))

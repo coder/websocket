@@ -41,7 +41,7 @@
 // Some important caveats to be aware of:
 //
 //   - Accept always errors out
-//   - Protocol in DialOptions and AcceptOptions is no-op
+//   - HTTPProtocol in DialOptions and AcceptOptions is no-op
 //   - HTTPClient, HTTPHeader and CompressionMode in DialOptions are no-op
 //   - *http.Response from Dial is &http.Response{} with a 101 status code on success
 //   - Conn.Ping is no-op

@@ -27,12 +27,12 @@ type AcceptOptions struct {
 	// reject it, close the connection when c.Subprotocol() == "".
 	Subprotocols []string
 
-	// Protocol selects which HTTP version to accept. Zero value defaults to
-	// ProtocolHTTP1. ProtocolAcceptAny allows accepting either HTTP/1.1 or
+	// HTTPProtocol selects which HTTP version to accept. Zero value defaults to
+	// HTTPProtocol1. HTTPProtocolAny allows accepting either HTTP/1.1 or
 	// HTTP/2.
 	//
 	// Experimental: This feature is experimental and may change in the future.
-	Protocol Protocol
+	HTTPProtocol HTTPProtocol
 
 	// InsecureSkipVerify is used to disable Accept's origin verification behavior.
 	//
@@ -95,10 +95,10 @@ func (opts *AcceptOptions) cloneWithDefaults() (*AcceptOptions, error) {
 	}
 
 	// Defaults to HTTP/1.1 only to preserve existing behavior (zero value).
-	switch o.Protocol {
-	case ProtocolAcceptAny, ProtocolHTTP1, ProtocolHTTP2:
+	switch o.HTTPProtocol {
+	case HTTPProtocolAny, HTTPProtocol1, HTTPProtocol2:
 	default:
-		return nil, fmt.Errorf("websocket: invalid protocol for accept options: %s", o.Protocol)
+		return nil, fmt.Errorf("websocket: invalid protocol for accept options: %s", o.HTTPProtocol)
 	}
 
 	return &o, nil
@@ -148,7 +148,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	}
 
 	switch proto {
-	case ProtocolHTTP2:
+	case HTTPProtocol2:
 		// Prepare response headers for H2 (no Connection/Upgrade).
 		w.Header().Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
 
@@ -184,7 +184,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 			bw:             getBufioWriter(stream),
 		}), nil
 
-	case ProtocolHTTP1:
+	case HTTPProtocol1:
 		hj, ok := hijacker(w)
 		if !ok {
 			err = errors.New("http.ResponseWriter does not implement http.Hijacker")
@@ -243,32 +243,32 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	}
 }
 
-func verifyClientRequest(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (proto Protocol, key string, errCode int, err error) {
+func verifyClientRequest(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (proto HTTPProtocol, key string, errCode int, err error) {
 	if r.ProtoMajor == 2 {
-		switch opts.Protocol {
-		case ProtocolHTTP1:
-			return ProtocolHTTP2, "", http.StatusBadRequest, errors.New("HTTP/2 extended CONNECT refused: server only accepts HTTP/1.1 Upgrade")
+		switch opts.HTTPProtocol {
+		case HTTPProtocol1:
+			return HTTPProtocol2, "", http.StatusBadRequest, errors.New("HTTP/2 extended CONNECT refused: server only accepts HTTP/1.1 Upgrade")
 		}
 
 		// HTTP/2 extended CONNECT (RFC 8441) path.
 		key, errCode, err = verifyClientRequestH2(w, r)
 		if err != nil {
-			return ProtocolHTTP2, "", errCode, err
+			return HTTPProtocol2, "", errCode, err
 		}
-		return ProtocolHTTP2, key, 0, nil
+		return HTTPProtocol2, key, 0, nil
 	}
 
-	switch opts.Protocol {
-	case ProtocolHTTP2:
-		return ProtocolHTTP1, "", http.StatusBadRequest, errors.New("HTTP/1.1 Upgrade refused: server requires HTTP/2 extended CONNECT")
+	switch opts.HTTPProtocol {
+	case HTTPProtocol2:
+		return HTTPProtocol1, "", http.StatusBadRequest, errors.New("HTTP/1.1 Upgrade refused: server requires HTTP/2 extended CONNECT")
 	}
 
 	// HTTP/1.1 GET/Upgrade handshake validation.
 	key, errCode, err = verifyClientRequestH1(w, r)
 	if err != nil {
-		return ProtocolHTTP1, "", errCode, err
+		return HTTPProtocol1, "", errCode, err
 	}
-	return ProtocolHTTP1, key, 0, nil
+	return HTTPProtocol1, key, 0, nil
 }
 
 // verifyClientRequestH1 validates an HTTP/1.1 WebSocket GET/Upgrade request.
