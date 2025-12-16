@@ -1,21 +1,13 @@
 package main
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -25,8 +17,7 @@ import (
 
 // serverMain starts a minimal HTTP/2 WebSocket echo server.
 // - By default it serves h2c (cleartext HTTP/2): ws://
-// - With -tls it serves TLS+HTTP/2: wss://
-//   - If -cert and -key are not provided, a self-signed certificate is generated.
+// - With -tls it serves TLS+HTTP/2: wss:// (requires -cert and -key)
 func serverMain(prog string, args []string) error {
 	fs := flag.NewFlagSet("server", flag.ExitOnError)
 	addr := fs.String("addr", ":8080", "address to listen on (host:port)")
@@ -43,8 +34,7 @@ Options:
 		fmt.Fprintf(fs.Output(), `
 Examples:
   GODEBUG=http2xconnect=1 %[1]s server -addr :8080
-  GODEBUG=http2xconnect=1 %[1]s server -tls -addr :8443
-  GODEBUG=http2xconnect=1 %[1]s server -tls -cert cert.pem -key key.pem
+  GODEBUG=http2xconnect=1 %[1]s server -tls -cert cert.pem -key key.pem -addr :8443
 `, prog)
 	}
 	if err := fs.Parse(args); err != nil {
@@ -60,7 +50,7 @@ Examples:
 		ctx := r.Context()
 
 		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			Protocol: websocket.ProtocolHTTP2,
+			HTTPProtocol: websocket.HTTPProtocol2,
 		})
 		if err != nil {
 			// Accept already wrote an error response.
@@ -97,24 +87,16 @@ Examples:
 	}
 
 	if *useTLS {
+		if *certFile == "" || *keyFile == "" {
+			return errors.New("-cert and -key are required when using -tls")
+		}
+
 		// Enable HTTP/2 over TLS.
 		if err := http2.ConfigureServer(srv, &http2.Server{}); err != nil {
 			return err
 		}
 
-		selfSigned := ""
-		if *certFile == "" && *keyFile == "" {
-			// No certificate provided, generate an
-			// ephemeral self-signed certificate.
-			cert, err := selfSignedRSA2048()
-			if err != nil {
-				return fmt.Errorf("generate self-signed certificate failed: %w", err)
-			}
-			srv.TLSConfig.Certificates = []tls.Certificate{cert}
-			selfSigned = " (self-signed)"
-		}
-
-		fmt.Printf("listening on wss://%s%s\n", visibleAddr(*addr), selfSigned)
+		fmt.Printf("listening on wss://%s\n", visibleAddr(*addr))
 		return srv.ListenAndServeTLS(*certFile, *keyFile)
 	}
 
@@ -130,43 +112,4 @@ func visibleAddr(addr string) string {
 		return "0.0.0.0" + addr
 	}
 	return addr
-}
-
-// selfSignedRSA2048 returns an ephemeral self-signed certificate
-// suitable for TLS servers.
-//
-// DO NOT USE IN PRODUCTION.
-func selfSignedRSA2048() (tls.Certificate, error) {
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("generate private key failed: %w", err)
-	}
-
-	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("generate serial number failed: %w", err)
-	}
-
-	tpl := x509.Certificate{
-		SerialNumber: serial,
-		Subject: pkix.Name{
-			CommonName:   "websocket-example",
-			Organization: []string{"websocket-example"},
-		},
-		DNSNames:              []string{"localhost"},
-		NotBefore:             time.Now().Add(-time.Hour),
-		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-	}
-
-	der, err := x509.CreateCertificate(rand.Reader, &tpl, &tpl, &priv.PublicKey, priv)
-	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("create certificate failed: %w", err)
-	}
-
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
-	return tls.X509KeyPair(certPEM, keyPEM)
 }
