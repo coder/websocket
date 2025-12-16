@@ -2,7 +2,7 @@
 set -eu
 cd -- "$(dirname "$0")/.."
 
-X_TOOLS_VERSION=v0.31.0
+X_TOOLS_VERSION=v0.40.0
 
 go mod tidy
 (cd ./internal/thirdparty && go mod tidy)
