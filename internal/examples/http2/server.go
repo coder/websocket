@@ -125,9 +125,9 @@ Examples:
 }
 
 func visibleAddr(addr string) string {
-	// If binding to all interfaces with ":port", display "127.0.0.1:port".
+	// If binding to all interfaces with ":port", display "0.0.0.0:port".
 	if strings.HasPrefix(addr, ":") {
-		return "127.0.0.1" + addr
+		return "0.0.0.0" + addr
 	}
 	return addr
 }

@@ -14,7 +14,7 @@ Cleartext HTTP/2:
 
 ```console
 # Server.
-$ cd examples/http2
+$ cd internal/examples/http2
 $ GODEBUG=http2xconnect=1 go run . server -addr :8080
 listening on ws://127.0.0.1:8080 (h2c)
 
@@ -27,7 +27,7 @@ TLS (wss) with self-signed cert:
 
 ```console
 # Server.
-$ cd examples/http2
+$ cd internal/examples/http2
 $ GODEBUG=http2xconnect=1 go run . server -tls -addr :8443
 listening on wss://127.0.0.1:8443 (self-signed)
 
@@ -40,7 +40,7 @@ TLS (wss) with your own cert/key:
 
 ```console
 # Server.
-$ cd examples/http2
+$ cd internal/examples/http2
 $ GODEBUG=http2xconnect=1 go run . server -tls -cert cert.pem -key key.pem -addr :8443
 listening on wss://127.0.0.1:8443 (cert/key)
 
