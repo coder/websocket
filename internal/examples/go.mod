@@ -8,3 +8,5 @@ require (
 	github.com/coder/websocket v0.0.0-00010101000000-000000000000
 	golang.org/x/time v0.7.0
 )
+
+require golang.org/x/sys v0.13.0 // indirect
