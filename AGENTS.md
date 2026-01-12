@@ -64,6 +64,7 @@ Implement in sequential passes. Don't write code until you've completed the veri
 **Pass 2: Check scope.** Does this need to exist? Check if it already exists in the API. Is this the library's job or the user's job? The library handles protocol correctness; application concerns (reconnection, auth, routing) belong in user code.
 
 **Pass 3: Check invariants.** Walk through Key Invariants before writing code:
+
 - Reads: Will something still read from the connection?
 - Pools: Will pooled objects be returned on all paths?
 - Locks: Are you using context-aware `mu`, not `sync.Mutex`?
@@ -118,6 +119,7 @@ Never use emdash. Use commas, semicolons, or separate sentences.
 **Naming matters.** Before proposing a name, stop and review existing names in the file. Ask: what would someone assume from this name? Does it fit with how similar things are named? A good name is accurate on its own and consistent in context.
 
 **Comment content:**
+
 - Add information beyond what the code shows (not tautologies)
 - State directly: "Returns X" (not "Note that this returns X")
 - Drop filler: "basically", "actually", "really" add nothing
