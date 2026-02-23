@@ -27,7 +27,14 @@ type AcceptOptions struct {
 	// reject it, close the connection when c.Subprotocol() == "".
 	Subprotocols []string
 
-	// InsecureSkipVerify is used to disable Accept's origin verification behaviour.
+	// HTTPProtocol selects which HTTP version to accept. Zero value defaults to
+	// HTTPProtocol1. HTTPProtocolAny allows accepting either HTTP/1.1 or
+	// HTTP/2.
+	//
+	// Experimental: This feature is experimental and may change in the future.
+	HTTPProtocol HTTPProtocol
+
+	// InsecureSkipVerify is used to disable Accept's origin verification behavior.
 	//
 	// You probably want to use OriginPatterns instead.
 	InsecureSkipVerify bool
@@ -81,12 +88,20 @@ type AcceptOptions struct {
 	OnPongReceived func(ctx context.Context, payload []byte)
 }
 
-func (opts *AcceptOptions) cloneWithDefaults() *AcceptOptions {
+func (opts *AcceptOptions) cloneWithDefaults() (*AcceptOptions, error) {
 	var o AcceptOptions
 	if opts != nil {
 		o = *opts
 	}
-	return &o
+
+	// Defaults to HTTP/1.1 only to preserve existing behavior (zero value).
+	switch o.HTTPProtocol {
+	case HTTPProtocolAny, HTTPProtocol1, HTTPProtocol2:
+	default:
+		return nil, fmt.Errorf("websocket: invalid protocol for accept options: %s", o.HTTPProtocol)
+	}
+
+	return &o, nil
 }
 
 // Accept accepts a WebSocket handshake from a client and upgrades the
@@ -106,13 +121,20 @@ func Accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Conn, err error) {
 	defer errd.Wrap(&err, "failed to accept WebSocket connection")
 
-	errCode, err := verifyClientRequest(w, r)
+	opts, err = opts.cloneWithDefaults()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return nil, err
+	}
+
+	// Verify client request and determine handshake proto (h1 or h2).
+	proto, key, errCode, err := verifyClientRequest(w, r, opts)
 	if err != nil {
 		http.Error(w, err.Error(), errCode)
 		return nil, err
 	}
 
-	opts = opts.cloneWithDefaults()
+	// Origin/auth checks (common for both H1 and H2).
 	if !opts.InsecureSkipVerify {
 		err = authenticateOrigin(r, opts.OriginPatterns)
 		if err != nil {
@@ -125,104 +147,206 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 		}
 	}
 
-	hj, ok := hijacker(w)
-	if !ok {
-		err = errors.New("http.ResponseWriter does not implement http.Hijacker")
-		http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
-		return nil, err
+	switch proto {
+	case HTTPProtocol2:
+		// Prepare response headers for H2 (no Connection/Upgrade).
+		w.Header().Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
+
+		subproto := selectSubprotocol(r, opts.Subprotocols)
+		if subproto != "" {
+			w.Header().Set("Sec-WebSocket-Protocol", subproto)
+		}
+
+		copts, ok := selectDeflate(websocketExtensions(r.Header), opts.CompressionMode)
+		if ok {
+			w.Header().Set("Sec-WebSocket-Extensions", copts.String())
+		}
+
+		// RFC 8441 requires a 2xx response for extended CONNECT.
+		w.WriteHeader(http.StatusOK)
+		// Flush the response immediately to complete the extended CONNECT
+		// handshake before we start streaming on the tunnel.
+		rc := http.NewResponseController(w)
+		if err := rc.Flush(); err != nil {
+			return nil, err
+		}
+
+		stream := &h2ServerStream{ReadCloser: r.Body, Writer: w, flush: rc.Flush}
+		return newConn(connConfig{
+			subprotocol:    w.Header().Get("Sec-WebSocket-Protocol"),
+			rwc:            stream,
+			client:         false,
+			copts:          copts,
+			flateThreshold: opts.CompressionThreshold,
+			onPingReceived: opts.OnPingReceived,
+			onPongReceived: opts.OnPongReceived,
+			br:             getBufioReader(stream),
+			bw:             getBufioWriter(stream),
+		}), nil
+
+	case HTTPProtocol1:
+		hj, ok := hijacker(w)
+		if !ok {
+			err = errors.New("http.ResponseWriter does not implement http.Hijacker")
+			http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
+			return nil, err
+		}
+
+		w.Header().Set("Upgrade", "websocket")
+		w.Header().Set("Connection", "Upgrade")
+		w.Header().Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
+
+		subproto := selectSubprotocol(r, opts.Subprotocols)
+		if subproto != "" {
+			w.Header().Set("Sec-WebSocket-Protocol", subproto)
+		}
+
+		copts, ok := selectDeflate(websocketExtensions(r.Header), opts.CompressionMode)
+		if ok {
+			w.Header().Set("Sec-WebSocket-Extensions", copts.String())
+		}
+
+		w.WriteHeader(http.StatusSwitchingProtocols)
+		// See https://github.com/coder/websocket/issues/166.
+		if ginWriter, ok := w.(interface {
+			WriteHeaderNow()
+		}); ok {
+			ginWriter.WriteHeaderNow()
+		}
+
+		netConn, brw, err := hj.Hijack()
+		if err != nil {
+			err = fmt.Errorf("failed to hijack connection: %w", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return nil, err
+		}
+
+		// https://github.com/golang/go/issues/32314
+		b, _ := brw.Reader.Peek(brw.Reader.Buffered())
+		brw.Reader.Reset(io.MultiReader(bytes.NewReader(b), netConn))
+
+		return newConn(connConfig{
+			subprotocol:    w.Header().Get("Sec-WebSocket-Protocol"),
+			rwc:            netConn,
+			client:         false,
+			copts:          copts,
+			flateThreshold: opts.CompressionThreshold,
+			onPingReceived: opts.OnPingReceived,
+			onPongReceived: opts.OnPongReceived,
+
+			br: brw.Reader,
+			bw: brw.Writer,
+		}), nil
+	default:
+		http.Error(w, "unsupported protocol: "+r.Proto, http.StatusBadRequest)
+		return nil, errors.New("unsupported protocol: " + r.Proto)
 	}
-
-	w.Header().Set("Upgrade", "websocket")
-	w.Header().Set("Connection", "Upgrade")
-
-	key := r.Header.Get("Sec-WebSocket-Key")
-	w.Header().Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
-
-	subproto := selectSubprotocol(r, opts.Subprotocols)
-	if subproto != "" {
-		w.Header().Set("Sec-WebSocket-Protocol", subproto)
-	}
-
-	copts, ok := selectDeflate(websocketExtensions(r.Header), opts.CompressionMode)
-	if ok {
-		w.Header().Set("Sec-WebSocket-Extensions", copts.String())
-	}
-
-	w.WriteHeader(http.StatusSwitchingProtocols)
-	// See https://github.com/nhooyr/websocket/issues/166
-	if ginWriter, ok := w.(interface {
-		WriteHeaderNow()
-	}); ok {
-		ginWriter.WriteHeaderNow()
-	}
-
-	netConn, brw, err := hj.Hijack()
-	if err != nil {
-		err = fmt.Errorf("failed to hijack connection: %w", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return nil, err
-	}
-
-	// https://github.com/golang/go/issues/32314
-	b, _ := brw.Reader.Peek(brw.Reader.Buffered())
-	brw.Reader.Reset(io.MultiReader(bytes.NewReader(b), netConn))
-
-	return newConn(connConfig{
-		subprotocol:    w.Header().Get("Sec-WebSocket-Protocol"),
-		rwc:            netConn,
-		client:         false,
-		copts:          copts,
-		flateThreshold: opts.CompressionThreshold,
-		onPingReceived: opts.OnPingReceived,
-		onPongReceived: opts.OnPongReceived,
-
-		br: brw.Reader,
-		bw: brw.Writer,
-	}), nil
 }
 
-func verifyClientRequest(w http.ResponseWriter, r *http.Request) (errCode int, _ error) {
-	if !r.ProtoAtLeast(1, 1) {
-		return http.StatusUpgradeRequired, fmt.Errorf("WebSocket protocol violation: handshake request must be at least HTTP/1.1: %q", r.Proto)
+func verifyClientRequest(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (proto HTTPProtocol, key string, errCode int, err error) {
+	if r.ProtoMajor == 2 {
+		switch opts.HTTPProtocol {
+		case HTTPProtocol1:
+			return HTTPProtocol2, "", http.StatusBadRequest, errors.New("HTTP/2 extended CONNECT refused: server only accepts HTTP/1.1 Upgrade")
+		}
+
+		// HTTP/2 extended CONNECT (RFC 8441) path.
+		key, errCode, err = verifyClientRequestH2(w, r)
+		if err != nil {
+			return HTTPProtocol2, "", errCode, err
+		}
+		return HTTPProtocol2, key, 0, nil
+	}
+
+	switch opts.HTTPProtocol {
+	case HTTPProtocol2:
+		return HTTPProtocol1, "", http.StatusBadRequest, errors.New("HTTP/1.1 Upgrade refused: server requires HTTP/2 extended CONNECT")
+	}
+
+	// HTTP/1.1 GET/Upgrade handshake validation.
+	key, errCode, err = verifyClientRequestH1(w, r)
+	if err != nil {
+		return HTTPProtocol1, "", errCode, err
+	}
+	return HTTPProtocol1, key, 0, nil
+}
+
+// verifyClientRequestH1 validates an HTTP/1.1 WebSocket GET/Upgrade request.
+func verifyClientRequestH1(w http.ResponseWriter, r *http.Request) (key string, errCode int, _ error) {
+	if !r.ProtoAtLeast(1, 1) || r.ProtoMajor != 1 {
+		return "", http.StatusUpgradeRequired, fmt.Errorf("WebSocket protocol violation: handshake request must be at least HTTP/1.1: %q", r.Proto)
 	}
 
 	if !headerContainsTokenIgnoreCase(r.Header, "Connection", "Upgrade") {
 		w.Header().Set("Connection", "Upgrade")
 		w.Header().Set("Upgrade", "websocket")
-		return http.StatusUpgradeRequired, fmt.Errorf("WebSocket protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
+		return "", http.StatusUpgradeRequired, fmt.Errorf("WebSocket protocol violation: Connection header %q does not contain Upgrade", r.Header.Get("Connection"))
 	}
 
 	if !headerContainsTokenIgnoreCase(r.Header, "Upgrade", "websocket") {
 		w.Header().Set("Connection", "Upgrade")
 		w.Header().Set("Upgrade", "websocket")
-		return http.StatusUpgradeRequired, fmt.Errorf("WebSocket protocol violation: Upgrade header %q does not contain websocket", r.Header.Get("Upgrade"))
+		return "", http.StatusUpgradeRequired, fmt.Errorf("WebSocket protocol violation: Upgrade header %q does not contain websocket", r.Header.Get("Upgrade"))
 	}
 
-	if r.Method != "GET" {
-		return http.StatusMethodNotAllowed, fmt.Errorf("WebSocket protocol violation: handshake request method is not GET but %q", r.Method)
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		return "", http.StatusMethodNotAllowed, fmt.Errorf("WebSocket protocol violation: handshake request method is not GET but %q", r.Method)
 	}
 
+	key, errCode, err := validateSecWebSocketHeaders(w, r)
+	if err != nil {
+		return "", errCode, err
+	}
+
+	return key, 0, nil
+}
+
+func verifyClientRequestH2(w http.ResponseWriter, r *http.Request) (key string, errCode int, _ error) {
+	if r.ProtoMajor != 2 {
+		return "", http.StatusBadRequest, fmt.Errorf("WebSocket protocol violation: handshake request must be HTTP/2: %q", r.Proto)
+	}
+
+	if r.Header.Get(":protocol") != "websocket" {
+		return "", http.StatusBadRequest, fmt.Errorf("WebSocket protocol violation: :protocol header not set or does not match websocket: %q", r.Header.Get(":protocol"))
+	}
+
+	if r.Method != http.MethodConnect {
+		w.Header().Set("Allow", http.MethodConnect)
+		return "", http.StatusMethodNotAllowed, fmt.Errorf("WebSocket protocol violation: handshake request method is not CONNECT but %q", r.Method)
+	}
+
+	key, errCode, err := validateSecWebSocketHeaders(w, r)
+	if err != nil {
+		return "", errCode, err
+	}
+
+	return key, 0, nil
+}
+
+// validateSecWebSocketHeaders validates Sec-WebSocket-Version/Sec-WebSocket-Key
+// and returns the trimmed key.
+//
+// It sets Sec-WebSocket-Version: 13 on version mismatch.
+func validateSecWebSocketHeaders(w http.ResponseWriter, r *http.Request) (key string, errCode int, _ error) {
 	if r.Header.Get("Sec-WebSocket-Version") != "13" {
 		w.Header().Set("Sec-WebSocket-Version", "13")
-		return http.StatusBadRequest, fmt.Errorf("unsupported WebSocket protocol version (only 13 is supported): %q", r.Header.Get("Sec-WebSocket-Version"))
+		return "", http.StatusBadRequest, fmt.Errorf("unsupported WebSocket protocol version (only 13 is supported): %q", r.Header.Get("Sec-WebSocket-Version"))
 	}
 
 	websocketSecKeys := r.Header.Values("Sec-WebSocket-Key")
 	if len(websocketSecKeys) == 0 {
-		return http.StatusBadRequest, errors.New("WebSocket protocol violation: missing Sec-WebSocket-Key")
+		return "", http.StatusBadRequest, errors.New("WebSocket protocol violation: missing Sec-WebSocket-Key")
 	}
-
 	if len(websocketSecKeys) > 1 {
-		return http.StatusBadRequest, errors.New("WebSocket protocol violation: multiple Sec-WebSocket-Key headers")
+		return "", http.StatusBadRequest, errors.New("WebSocket protocol violation: multiple Sec-WebSocket-Key headers")
+	}
+	key = strings.TrimSpace(websocketSecKeys[0])
+	if v, err := base64.StdEncoding.DecodeString(key); err != nil || len(v) != 16 {
+		return "", http.StatusBadRequest, fmt.Errorf("WebSocket protocol violation: invalid Sec-WebSocket-Key %q, must be a 16 byte base64 encoded string", key)
 	}
 
-	// The RFC states to remove any leading or trailing whitespace.
-	websocketSecKey := strings.TrimSpace(websocketSecKeys[0])
-	if v, err := base64.StdEncoding.DecodeString(websocketSecKey); err != nil || len(v) != 16 {
-		return http.StatusBadRequest, fmt.Errorf("WebSocket protocol violation: invalid Sec-WebSocket-Key %q, must be a 16 byte base64 encoded string", websocketSecKey)
-	}
-
-	return 0, nil
+	return key, 0, nil
 }
 
 func authenticateOrigin(r *http.Request, originHosts []string) error {

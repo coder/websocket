@@ -251,7 +251,7 @@ func checkWSTestIndex(t *testing.T, path string) {
 				switch result.BehaviorClose {
 				case "OK", "INFORMATIONAL":
 				default:
-					t.Errorf("bad close behaviour")
+					t.Errorf("bad close behavior")
 				}
 
 				switch result.Behavior {

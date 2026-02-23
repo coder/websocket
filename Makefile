@@ -13,6 +13,11 @@ lint:
 test:
 	./ci/test.sh
 
+.PHONY: static
+static:
+	make test
+	./ci/static.sh
+
 .PHONY: bench
 bench:
 	./ci/bench.sh

@@ -31,6 +31,11 @@ go get github.com/coder/websocket
 - [RFC 7692](https://tools.ietf.org/html/rfc7692) permessage-deflate compression
 - [CloseRead](https://pkg.go.dev/github.com/coder/websocket#Conn.CloseRead) helper for write only connections
 - Compile to [Wasm](https://pkg.go.dev/github.com/coder/websocket#hdr-Wasm)
+- Experimental support for HTTP/2 extended CONNECT (RFC 8441)
+  - Requires opt-in via the [AcceptOptions](https://pkg.go.dev/github.com/coder/websocket#AcceptOptions) and [DialOptions](https://pkg.go.dev/github.com/coder/websocket#DialOptions) Protocol option
+    - Clients must provide a `http2.Transport`
+    - Servers must be started with `GODEBUG=http2xconnect=1`, see https://github.com/golang/go/issues/53208
+  - See the [http2 example](./internal/examples/http2)
 
 ## Roadmap
 
@@ -43,7 +48,7 @@ See GitHub issues for minor issues but the major future enhancements are:
 - [ ] Graceful shutdown helpers [#209](https://github.com/nhooyr/websocket/issues/209)
 - [ ] Assembly for WebSocket masking [#16](https://github.com/nhooyr/websocket/issues/16)
   - WIP at [#326](https://github.com/nhooyr/websocket/pull/326), about 3x faster
-- [ ] HTTP/2 [#4](https://github.com/nhooyr/websocket/issues/4)
+- [x] HTTP/2 extended CONNECT (RFC 8441) [#4](https://github.com/coder/websocket/issues/4)
 - [ ] The holy grail [#402](https://github.com/nhooyr/websocket/issues/402)
 
 ## Examples
@@ -52,6 +57,8 @@ For a production quality example that demonstrates the complete API, see the
 [echo example](./internal/examples/echo).
 
 For a full stack example, see the [chat example](./internal/examples/chat).
+
+For a HTTP/2 WebSocket example, see the [http2 example](./internal/examples/http2).
 
 ### Server
 
