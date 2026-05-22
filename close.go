@@ -118,11 +118,7 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 func (c *Conn) closeAndWait(ce CloseError) (err error) {
 	defer errd.Wrap(&err, "failed to close WebSocket")
 
-	if c.casClosing() {
-		err = c.waitGoroutines()
-		if err != nil {
-			return err
-		}
+	if c.userClosed.Swap(true) && c.isClosed() {
 		return net.ErrClosed
 	}
 	defer func() {
@@ -130,6 +126,10 @@ func (c *Conn) closeAndWait(ce CloseError) (err error) {
 			err = nil
 		}
 	}()
+
+	if c.casClosing() {
+		return c.waitGoroutines()
+	}
 
 	err = c.closeHandshake(ce)
 
@@ -151,11 +151,7 @@ func (c *Conn) closeAndWait(ce CloseError) (err error) {
 func (c *Conn) CloseNow() (err error) {
 	defer errd.Wrap(&err, "failed to immediately close WebSocket")
 
-	if c.casClosing() {
-		err = c.waitGoroutines()
-		if err != nil {
-			return err
-		}
+	if c.userClosed.Swap(true) && c.isClosed() {
 		return net.ErrClosed
 	}
 	defer func() {
@@ -163,6 +159,10 @@ func (c *Conn) CloseNow() (err error) {
 			err = nil
 		}
 	}()
+
+	if c.casClosing() {
+		return c.waitGoroutines()
+	}
 
 	err = c.close()
 

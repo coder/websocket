@@ -77,9 +77,10 @@ type Conn struct {
 	closeReadCtx  context.Context
 	closeReadDone chan struct{}
 
-	closing atomic.Bool
-	closeMu sync.Mutex // Protects following.
-	closed  chan struct{}
+	userClosed atomic.Bool // Set by Close/CloseNow on first user call.
+	closing    atomic.Bool
+	closeMu    sync.Mutex // Protects following.
+	closed     chan struct{}
 
 	pingCounter    atomic.Int64
 	activePingsMu  sync.Mutex
