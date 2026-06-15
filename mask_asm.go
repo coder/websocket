@@ -2,6 +2,8 @@
 
 package websocket
 
+import "golang.org/x/sys/cpu"
+
 func mask(b []byte, key uint32) uint32 {
 	// TODO: Will enable in v1.9.0.
 	return maskGo(b, key)
@@ -21,6 +23,9 @@ func mask(b []byte, key uint32) uint32 {
 // The AVX2 code I had to disable anyway as it wasn't performing as expected.
 // See https://github.com/nhooyr/websocket/pull/326#issuecomment-1771138049
 //
+
+var useAVX2 = cpu.X86.HasAVX2 //lint:ignore U1000 mask_amd64.s
+
 //go:noescape
 //lint:ignore U1000 disabled till v1.9.0
 func maskAsm(b *byte, len int, key uint32) uint32
