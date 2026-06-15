@@ -218,29 +218,33 @@ func (c *Conn) readLoop(ctx context.Context) (header, error) {
 }
 
 // prepareRead sets the read timeout and checks whether the connection is closed.
-func (c *Conn) prepareRead(ctx context.Context) error {
+func (c *Conn) prepareRead(ctx context.Context) (bool, error) {
 	select {
 	case <-c.closed:
-		return net.ErrClosed
+		return false, net.ErrClosed
 	default:
 	}
-	c.setupReadTimeout(ctx)
+	timeoutSet := c.setupReadTimeout(ctx)
 
 	c.closeStateMu.Lock()
 	closeReceivedErr := c.closeReceivedErr
 	c.closeStateMu.Unlock()
 	if closeReceivedErr != nil {
-		c.clearReadTimeout()
-		return closeReceivedErr
+		if timeoutSet {
+			c.clearReadTimeout()
+		}
+		return false, closeReceivedErr
 	}
 
-	return nil
+	return timeoutSet, nil
 }
 
 // finishRead clears the read timeout and reports whether the connection or
 // operation context ended while the read was in progress.
-func (c *Conn) finishRead(ctx context.Context, err *error) {
-	c.clearReadTimeout()
+func (c *Conn) finishRead(ctx context.Context, err *error, timeoutSet bool) {
+	if timeoutSet {
+		c.clearReadTimeout()
+	}
 	select {
 	case <-c.closed:
 		if *err != nil {
@@ -254,11 +258,11 @@ func (c *Conn) finishRead(ctx context.Context, err *error) {
 }
 
 func (c *Conn) readFrameHeader(ctx context.Context) (_ header, err error) {
-	err = c.prepareRead(ctx)
+	timeoutSet, err := c.prepareRead(ctx)
 	if err != nil {
 		return header{}, err
 	}
-	defer c.finishRead(ctx, &err)
+	defer c.finishRead(ctx, &err, timeoutSet)
 
 	h, err := readFrameHeader(c.br, c.readHeaderBuf[:])
 	if err != nil {
@@ -269,11 +273,11 @@ func (c *Conn) readFrameHeader(ctx context.Context) (_ header, err error) {
 }
 
 func (c *Conn) readFramePayload(ctx context.Context, p []byte) (_ int, err error) {
-	err = c.prepareRead(ctx)
+	timeoutSet, err := c.prepareRead(ctx)
 	if err != nil {
 		return 0, err
 	}
-	defer c.finishRead(ctx, &err)
+	defer c.finishRead(ctx, &err, timeoutSet)
 
 	n, err := io.ReadFull(c.br, p)
 	if err != nil {

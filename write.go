@@ -318,8 +318,9 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 		return 0, net.ErrClosed
 	default:
 	}
-	c.setupWriteTimeout(ctx)
-	defer c.clearWriteTimeout()
+	if c.setupWriteTimeout(ctx) {
+		defer c.clearWriteTimeout()
+	}
 
 	c.writeHeader.fin = fin
 	c.writeHeader.opcode = opcode
