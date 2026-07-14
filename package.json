@@ -1,0 +1,11 @@
+{
+  "name": "coder-websocket-docs",
+  "private": true,
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "docs:build": "sourcey build -o ci/out/static && node scripts/normalize-doc-links.mjs"
+  },
+  "devDependencies": {
+    "sourcey": "3.6.5"
+  }
+}
