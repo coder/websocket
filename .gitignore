@@ -1,1 +1,3 @@
 PLAN.md
+node_modules/
+/ci/out/

@@ -3,6 +3,9 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/coder/websocket.svg)](https://pkg.go.dev/github.com/coder/websocket)
 [![Go Coverage](https://coder.github.io/websocket/coverage.svg)](https://coder.github.io/websocket/coverage.html)
 
+[API documentation](https://coder.github.io/websocket/) includes searchable
+reference pages for the core package and the `wsjson` helpers.
+
 websocket is a minimal and idiomatic WebSocket library for Go.
 
 ## Install

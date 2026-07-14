@@ -36,6 +36,16 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install documentation dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build API documentation
+        run: pnpm docs:build
       - name: Generate coverage and badge
         run: |
           make test
