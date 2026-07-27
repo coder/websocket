@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"time"
 
 	"github.com/coder/websocket/internal/bpool"
@@ -320,6 +321,14 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 	}
 	if c.setupWriteTimeout(ctx) {
 		defer c.clearWriteTimeout()
+	}
+
+	// Armed here rather than in SetWriteDeadline so that it is under
+	// writeFrameMu together with the frame it bounds.
+	if expired, armed := c.armWriteDeadline(); expired {
+		return 0, os.ErrDeadlineExceeded
+	} else if armed {
+		defer c.stopWriteDeadline()
 	}
 
 	c.writeHeader.fin = fin
