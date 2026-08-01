@@ -139,6 +139,13 @@ func (c WebSocket) Close(code int, reason string) (err error) {
 	return err
 }
 
+// CloseNow closes the WebSocket without a status code or reason.
+func (c WebSocket) CloseNow() (err error) {
+	defer handleJSError(&err, nil)
+	c.v.Call("close")
+	return err
+}
+
 // SendText sends the given string as a text message
 // on the WebSocket.
 func (c WebSocket) SendText(v string) (err error) {
@@ -153,6 +160,15 @@ func (c WebSocket) SendBytes(v []byte) (err error) {
 	defer handleJSError(&err, nil)
 	c.v.Call("send", uint8Array(v))
 	return err
+}
+
+// BufferedAmount returns the number of bytes of data that have been queued
+// using calls to send() but not yet transmitted to the network.
+// This value resets to zero once all queued data has been sent.
+// Use this to implement backpressure detection - if this value grows over time,
+// the client is falling behind and may need throttling or reconnection.
+func (c WebSocket) BufferedAmount() uint64 {
+	return uint64(c.v.Get("bufferedAmount").Int())
 }
 
 func extractArrayBuffer(arrayBuffer js.Value) []byte {

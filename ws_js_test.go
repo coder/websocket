@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"syscall/js"
 	"testing"
 	"time"
 
@@ -38,16 +39,38 @@ func TestWasm(t *testing.T) {
 }
 
 func TestWasmDialTimeout(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
-	defer cancel()
+	js.Global().Call("eval", `(() => {
+		globalThis.__originalWebSocket = globalThis.WebSocket;
+		globalThis.__activeWebSocketListeners = 0;
+		const trackedEvents = new Set(["close", "error", "message", "open"]);
+		globalThis.WebSocket = class extends globalThis.__originalWebSocket {
+			addEventListener(type, listener, options) {
+				if (trackedEvents.has(type)) globalThis.__activeWebSocketListeners++;
+				return super.addEventListener(type, listener, options);
+			}
+			removeEventListener(type, listener, options) {
+				if (trackedEvents.has(type)) globalThis.__activeWebSocketListeners--;
+				return super.removeEventListener(type, listener, options);
+			}
+		};
+	})()`)
+	defer js.Global().Call("eval", `(() => {
+		globalThis.WebSocket = globalThis.__originalWebSocket;
+		delete globalThis.__originalWebSocket;
+		delete globalThis.__activeWebSocketListeners;
+	})()`)
 
 	beforeDial := time.Now()
-	_, _, err := websocket.Dial(ctx, "ws://example.com:9893", &websocket.DialOptions{
-		Subprotocols: []string{"echo"},
-	})
-	assert.Error(t, err)
+	for i := 0; i < 10; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, _, err := websocket.Dial(ctx, "ws://example.com:9893", &websocket.DialOptions{
+			Subprotocols: []string{"echo"},
+		})
+		assert.Error(t, err)
+		assert.Equal(t, "active WebSocket event listeners", 0, js.Global().Get("__activeWebSocketListeners").Int())
+	}
 	if time.Since(beforeDial) >= time.Second {
 		t.Fatal("wasm context dial timeout is not working", time.Since(beforeDial))
 	}

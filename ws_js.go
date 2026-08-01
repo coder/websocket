@@ -57,6 +57,7 @@ type Conn struct {
 	closeErr      error
 	closeWasClean bool
 
+	releaseOnce      sync.Once
 	releaseOnClose   func()
 	releaseOnError   func()
 	releaseOnMessage func()
@@ -94,15 +95,11 @@ func (c *Conn) init() {
 		// its possible the browser triggered it without us
 		// explicitly sending it.
 		c.close(err, e.WasClean)
-
-		c.releaseOnClose()
-		c.releaseOnError()
-		c.releaseOnMessage()
+		c.releaseEventHandlers()
 	})
 
 	c.releaseOnError = c.ws.OnError(func(v js.Value) {
-		c.setCloseErr(errors.New(v.Get("message").String()))
-		c.closeWithInternal()
+		c.abort(errors.New(v.Get("message").String()))
 	})
 
 	c.releaseOnMessage = c.ws.OnMessage(func(e wsjs.MessageEvent) {
@@ -124,8 +121,22 @@ func (c *Conn) init() {
 	})
 }
 
+func (c *Conn) releaseEventHandlers() {
+	c.releaseOnce.Do(func() {
+		c.releaseOnClose()
+		c.releaseOnError()
+		c.releaseOnMessage()
+	})
+}
+
+func (c *Conn) abort(err error) {
+	c.close(err, false)
+	c.releaseEventHandlers()
+	_ = c.ws.CloseNow()
+}
+
 func (c *Conn) closeWithInternal() {
-	c.Close(StatusInternalError, "something went wrong")
+	c.abort(errors.New("something went wrong"))
 }
 
 // Read attempts to read a message from the connection.
@@ -238,11 +249,12 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 
 // CloseNow closes the WebSocket connection without attempting a close handshake.
 // Use when you do not want the overhead of the close handshake.
-//
-// note: No different from Close(StatusGoingAway, "") in WASM as there is no way to close
-// a WebSocket without the close handshake.
 func (c *Conn) CloseNow() error {
-	return c.Close(StatusGoingAway, "")
+	if c.isClosed() {
+		return net.ErrClosed
+	}
+	c.abort(fmt.Errorf("sent close: %w", CloseError{Code: StatusGoingAway}))
+	return nil
 }
 
 func (c *Conn) exportedClose(code StatusCode, reason string) error {
@@ -261,6 +273,7 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 	c.setCloseErr(ce)
 	err := c.ws.Close(int(code), reason)
 	if err != nil {
+		c.abort(ce)
 		return err
 	}
 
@@ -321,7 +334,7 @@ func dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Resp
 
 	select {
 	case <-ctx.Done():
-		c.Close(StatusPolicyViolation, "dial timed out")
+		c.abort(ctx.Err())
 		return nil, nil, ctx.Err()
 	case <-opench:
 		return c, &http.Response{
@@ -415,6 +428,14 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 // SetReadLimit implements *Conn.SetReadLimit for wasm.
 func (c *Conn) SetReadLimit(n int64) {
 	c.msgReadLimit.Store(n)
+}
+
+// BufferedAmount returns the number of bytes of data that have been queued
+// using calls to Write() but not yet transmitted to the network.
+// Monitor this to detect backpressure - a growing value indicates the browser
+// is falling behind and may need throttling or reconnection.
+func (c *Conn) BufferedAmount() uint64 {
+	return c.ws.BufferedAmount()
 }
 
 func (c *Conn) setCloseErr(err error) {
