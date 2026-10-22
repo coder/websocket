@@ -42,8 +42,15 @@ func (s *h2ServerStream) Flush() error {
 
 func (s *h2ServerStream) Close() error {
 	// TODO(mafredri): Verify if the flush is necessary before closing the reader.
-	err := s.Flush()
-	return errors.Join(err, s.ReadCloser.Close())
+
+	//err := s.Flush()
+	//return errors.Join(err, s.ReadCloser.Close())
+	// Write flushes after every write, so nothing is left buffered here.
+	// Flushing in Close is also unsafe: Close can run on a context.AfterFunc
+	// goroutine (e.g. after the peer sends RST_STREAM) while another
+	// goroutine is in Write, and http.ResponseWriter is not safe for
+	// concurrent use.
+	return s.ReadCloser.Close()
 }
 
 // h2ClientStream is a minimal io.ReadWriteCloser for an HTTP/2 extended CONNECT
