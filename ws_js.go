@@ -268,12 +268,12 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 	c.setCloseErr(ce)
 	err := c.ws.Close(int(code), reason)
 	if err != nil {
-		return err
+		return errors.Join(err, truncErr)
 	}
 
 	<-c.closed
 	if !c.closeWasClean {
-		return errors.Join(truncErr, c.closeErr)
+		return errors.Join(c.closeErr, truncErr)
 	}
 	return truncErr
 }

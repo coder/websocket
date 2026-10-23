@@ -147,6 +147,8 @@ func TestConn(t *testing.T) {
 		err := c1.Close(websocket.StatusNormalClosure, strings.Repeat("x", 124))
 		assert.ErrorIs(t, websocket.ErrCloseReasonTruncated, err)
 		assert.ErrorIs(t, io.ErrClosedPipe, err)
+		// The close failure leads; the truncation notice follows it.
+		assert.Equal(t, "truncation last", true, strings.HasSuffix(err.Error(), "\nwebsocket: close reason truncated from 124 to 123 bytes"))
 	})
 
 	t.Run("ping", func(t *testing.T) {
