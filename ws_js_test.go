@@ -53,7 +53,7 @@ func TestWasmCloseReasonTruncated(t *testing.T) {
 	// the reason was truncated. The echo server checks the code.
 	err = c.Close(websocket.StatusNormalClosure, strings.Repeat("é", 62))
 	assert.ErrorIs(t, websocket.ErrCloseReasonTruncated, err)
-	assert.Equal(t, "close error", "failed to close WebSocket: websocket: close reason truncated: sent 122 of 124 bytes", err.Error())
+	assert.Equal(t, "close error", "failed to close WebSocket: websocket: close reason truncated from 124 to 122 bytes", err.Error())
 }
 
 func TestWasmDialTimeout(t *testing.T) {
