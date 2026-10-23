@@ -2,8 +2,8 @@
 set -eu
 cd -- "$(dirname "$0")/.."
 
-STATICCHECK_VERSION=v0.6.1
-GOVULNCHECK_VERSION=v1.1.4
+STATICCHECK_VERSION=v0.8.2
+GOVULNCHECK_VERSION=v1.9.0
 
 go vet ./...
 GOOS=js GOARCH=wasm go vet ./...
