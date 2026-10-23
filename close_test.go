@@ -113,8 +113,8 @@ func Test_wireCloseReason(t *testing.T) {
 		{name: "invalidRun", reason: "a\x80\x80\xffb", want: "a\uFFFDb"},
 		{name: "incompleteRune", reason: "a\xe2\x82", want: "a\uFFFD"},
 		{name: "invalidRunOverMax", reason: strings.Repeat("\x80", 200), want: "\uFFFD"},
-		{name: "growthFromMax", reason: ascii[:122] + "\x80", want: ascii[:122], wantErrSuffix: "from 125 to 122 bytes"},
-		{name: "growthIsolated", reason: strings.Repeat("\x80x", 61), want: strings.Repeat("\uFFFDx", 30) + "\uFFFD", wantErrSuffix: "from 244 to 123 bytes"},
+		{name: "growthFromMax", reason: ascii[:122] + "\x80", want: ascii[:122], wantErrSuffix: "from 125 to 122 bytes after replacing invalid UTF-8"},
+		{name: "growthIsolated", reason: strings.Repeat("\x80x", 61), want: strings.Repeat("\uFFFDx", 30) + "\uFFFD", wantErrSuffix: "from 244 to 123 bytes after replacing invalid UTF-8"},
 	}
 
 	for _, tc := range testCases {
