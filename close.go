@@ -97,8 +97,8 @@ func CloseStatus(err error) StatusCode {
 // Close returns an error wrapping ErrCloseReasonTruncated. An invalid code is
 // replaced by StatusInternalError and reported as an error.
 //
-// Close always closes the connection. A non-nil error reports a problem
-// during the close, not that the connection is still open.
+// When the first call to Close returns, the connection is closed, even if
+// Close returns an error. A non-nil error reports a problem during the close.
 //
 // Close will unblock all goroutines interacting with the connection once
 // complete.
