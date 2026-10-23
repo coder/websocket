@@ -67,7 +67,7 @@ func benchmark_mask(b *testing.B) {
 		},
 
 		{
-			name: "nhooyr-go",
+			name: "coder-go",
 			fn: func(b *testing.B, key [4]byte, p []byte) {
 				key32 := binary.LittleEndian.Uint32(key[:])
 				b.ResetTimer()

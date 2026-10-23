@@ -3,31 +3,30 @@ set -eu
 cd -- "$(dirname "$0")/.."
 
 (
-  cd ./internal/examples
-  go test "$@" ./...
+	cd ./internal/examples
+	go test "$@" ./...
 )
 (
-  cd ./internal/thirdparty
-  go test "$@" ./...
+	cd ./internal/thirdparty
+	go test "$@" ./...
 )
 
 (
-  GOARCH=arm64 go test -c -o ./ci/out/websocket-arm64.test "$@" .
-  if [ "$#" -eq 0 ]; then
-    if [ "${CI-}" ]; then
-      sudo apt-get update
-      sudo apt-get install -y qemu-user-static
-	  ln -s /usr/bin/qemu-aarch64-static /usr/local/bin/qemu-aarch64
-    fi
-    qemu-aarch64 ./ci/out/websocket-arm64.test -test.run=TestMask
-  fi
+	GOARCH=arm64 go test -c -o ./ci/out/websocket-arm64.test "$@" .
+	if [ "$#" -eq 0 ]; then
+		if [ "${CI-}" ]; then
+			sudo apt-get update
+			sudo apt-get install -y qemu-user-static
+			ln -s /usr/bin/qemu-aarch64-static /usr/local/bin/qemu-aarch64
+		fi
+		qemu-aarch64 ./ci/out/websocket-arm64.test -test.run=TestMask
+	fi
 )
-
 
 go install github.com/agnivade/wasmbrowsertest@8be019f6c6dceae821467b4c589eb195c2b761ce
 go test --race --bench=. --timeout=1h --covermode=atomic --coverprofile=ci/out/coverage.prof --coverpkg=./... "$@" ./...
 sed -i.bak '/stringer\.go/d' ci/out/coverage.prof
-sed -i.bak '/nhooyr.io\/websocket\/internal\/test/d' ci/out/coverage.prof
+sed -i.bak '/github\.com\/coder\/websocket\/internal\/test\//d' ci/out/coverage.prof
 sed -i.bak '/examples/d' ci/out/coverage.prof
 
 # Last line is the total coverage.
