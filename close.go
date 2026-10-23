@@ -99,6 +99,7 @@ func CloseStatus(err error) StatusCode {
 // Invalid codes are sent as StatusInternalError and reported as errors.
 //
 // When the first call to Close returns, the connection is closed, even on error.
+// A non-nil error reports a problem during the close.
 //
 // Close will unblock all goroutines interacting with the connection once
 // complete.
@@ -117,7 +118,8 @@ func (c *Conn) Close(code StatusCode, reason string) (err error) {
 		if errors.Is(err, net.ErrClosed) {
 			err = nil
 		}
-		// Preserve wireErr when net.ErrClosed is ignored.
+		// Joined after the net.ErrClosed check so that wireErr is not set to nil.
+		// The close failure is first; wireErr only reports changes to the sent frame.
 		if wireErr != nil {
 			err = errors.Join(err, wireErr)
 		}
@@ -179,6 +181,7 @@ func (c *Conn) closeHandshake(code StatusCode, reason string) error {
 }
 
 func (c *Conn) writeClose(code StatusCode, reason string) error {
+	// Close returns this error to its caller.
 	ce, _ := wireCloseError(code, reason)
 
 	var p []byte
@@ -296,6 +299,9 @@ func validWireCloseCode(code StatusCode) bool {
 	return false
 }
 
+// wireCloseError returns a CloseError that can always be sent. It replaces an
+// invalid code with StatusInternalError and passes the reason through
+// wireCloseReason. The error reports a replaced code or a truncated reason.
 func wireCloseError(code StatusCode, reason string) (CloseError, error) {
 	if code == StatusNoStatusRcvd {
 		return CloseError{Code: code}, nil

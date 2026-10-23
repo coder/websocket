@@ -14,6 +14,7 @@ const maxControlPayload = 125
 const maxCloseReason = maxControlPayload - 2
 
 func wireCloseReason(reason string) (string, error) {
+	// RFC 6455 section 5.5.1 requires a UTF-8 reason.
 	valid := strings.ToValidUTF8(reason, "\uFFFD")
 	if len(valid) <= maxCloseReason {
 		return valid, nil
