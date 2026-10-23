@@ -98,7 +98,7 @@ func Test_wireCloseReason(t *testing.T) {
 		name      string
 		reason    string
 		want      string
-		truncated string // Expected error message, empty if not truncated.
+		truncated string
 	}{
 		{name: "empty", reason: "", want: ""},
 		{name: "max", reason: ascii, want: ascii},
@@ -108,13 +108,11 @@ func Test_wireCloseReason(t *testing.T) {
 		{name: "threeByteAligned", reason: strings.Repeat("€", 42), want: strings.Repeat("€", 41), truncated: "from 126 to 123 bytes"},
 		{name: "threeByteSplit", reason: ascii[:122] + "€", want: ascii[:122], truncated: "from 125 to 122 bytes"},
 		{name: "fourByteSplit", reason: strings.Repeat("😀", 31), want: strings.Repeat("😀", 30), truncated: "from 124 to 120 bytes"},
-		// U+FFFD decodes as utf8.RuneError but is a valid 3 byte rune.
 		{name: "replacementCharSplit", reason: ascii[:122] + "\uFFFD", want: ascii[:122], truncated: "from 125 to 122 bytes"},
 		{name: "invalidByte", reason: "a\x80b", want: "a\uFFFDb"},
 		{name: "invalidRun", reason: "a\x80\x80\xffb", want: "a\uFFFDb"},
 		{name: "incompleteRune", reason: "a\xe2\x82", want: "a\uFFFD"},
 		{name: "invalidRunOverMax", reason: strings.Repeat("\x80", 200), want: "\uFFFD"},
-		// Replacement grows these past maxCloseReason.
 		{name: "growthFromMax", reason: ascii[:122] + "\x80", want: ascii[:122], truncated: "from 125 to 122 bytes"},
 		{name: "growthIsolated", reason: strings.Repeat("\x80x", 61), want: strings.Repeat("\uFFFDx", 30) + "\uFFFD", truncated: "from 244 to 123 bytes"},
 	}
