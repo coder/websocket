@@ -92,10 +92,11 @@ func CloseStatus(err error) StatusCode {
 // The connection can only be closed once. Additional calls to Close
 // are no-ops.
 //
-// The reason is limited to 123 bytes. A longer reason is cut to the longest
-// prefix that does not split a UTF-8 encoded rune, the handshake proceeds, and
-// Close returns an error wrapping ErrCloseReasonTruncated. An invalid code is
-// replaced by StatusInternalError and reported as an error.
+// The reason is limited to 123 bytes. Invalid UTF-8 in the reason is replaced
+// with U+FFFD. A longer reason is then cut to the longest prefix that does not
+// split a UTF-8 encoded rune, the handshake proceeds, and Close returns an
+// error wrapping ErrCloseReasonTruncated. An invalid code is replaced by
+// StatusInternalError and reported as an error.
 //
 // When the first call to Close returns, the connection is closed, even if
 // Close returns an error. A non-nil error reports a problem during the close.
@@ -301,8 +302,8 @@ func validWireCloseCode(code StatusCode) bool {
 
 // wireCloseError returns the CloseError to send for code and reason. A marshal
 // problem must not prevent sending a close frame, so an invalid code is
-// replaced by StatusInternalError and a long reason is truncated. The error
-// reports either change.
+// replaced by StatusInternalError and the reason goes through wireCloseReason.
+// The error reports a replaced code or a truncated reason.
 func wireCloseError(code StatusCode, reason string) (CloseError, error) {
 	if code == StatusNoStatusRcvd {
 		return CloseError{Code: code}, nil // Sent as an empty close frame.
@@ -310,7 +311,7 @@ func wireCloseError(code StatusCode, reason string) (CloseError, error) {
 	if !validWireCloseCode(code) {
 		return CloseError{Code: StatusInternalError}, fmt.Errorf("failed to marshal close frame: status code %v cannot be set", code)
 	}
-	reason, err := truncateCloseReason(reason)
+	reason, err := wireCloseReason(reason)
 	return CloseError{Code: code, Reason: reason}, err
 }
 

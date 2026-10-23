@@ -82,14 +82,16 @@ func TestConn(t *testing.T) {
 		const code websocket.StatusCode = 4000
 		ascii := strings.Repeat("x", 123)
 		testCases := []struct {
-			name   string
-			reason string
-			want   string
+			name      string
+			reason    string
+			want      string
+			truncated bool
 		}{
 			{name: "max", reason: ascii, want: ascii},
-			{name: "ascii", reason: ascii + "xyz", want: ascii},
-			{name: "twoByteSplit", reason: ascii[:122] + "é", want: ascii[:122]},
-			{name: "fourByteSplit", reason: strings.Repeat("😀", 40), want: strings.Repeat("😀", 30)},
+			{name: "ascii", reason: ascii + "xyz", want: ascii, truncated: true},
+			{name: "twoByteSplit", reason: ascii[:122] + "é", want: ascii[:122], truncated: true},
+			{name: "fourByteSplit", reason: strings.Repeat("😀", 40), want: strings.Repeat("😀", 30), truncated: true},
+			{name: "invalidUTF8", reason: "bad \xff\xfe reason", want: "bad \uFFFD reason"},
 		}
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
@@ -101,7 +103,7 @@ func TestConn(t *testing.T) {
 				})
 
 				err := c1.Close(code, tc.reason)
-				if tc.want == tc.reason {
+				if !tc.truncated {
 					assert.Success(t, err)
 				} else {
 					assert.ErrorIs(t, websocket.ErrCloseReasonTruncated, err)
