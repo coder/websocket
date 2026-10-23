@@ -9,8 +9,8 @@ import (
 // ErrMessageTooBig is returned when a message exceeds the read limit.
 var ErrMessageTooBig = errors.New("websocket: message too big")
 
-// ErrCloseReasonTruncated is returned by Close when the reason did not fit in
-// a close frame and a truncated reason was sent instead.
+// ErrCloseReasonTruncated is returned by Close when the reason was longer than
+// 123 bytes and Close shortened it.
 var ErrCloseReasonTruncated = errors.New("websocket: close reason truncated")
 
 // maxCloseReason is the 125 byte control frame payload limit minus the 2 byte
@@ -36,5 +36,5 @@ func truncateCloseReason(reason string) (string, error) {
 			break
 		}
 	}
-	return reason[:n], fmt.Errorf("%w: sent %d of %d bytes", ErrCloseReasonTruncated, n, len(reason))
+	return reason[:n], fmt.Errorf("%w from %d to %d bytes", ErrCloseReasonTruncated, len(reason), n)
 }
