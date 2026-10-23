@@ -92,9 +92,10 @@ func CloseStatus(err error) StatusCode {
 // The connection can only be closed once. Additional calls to Close
 // are no-ops.
 //
-// The maximum length of reason must be 125 bytes. Avoid sending a dynamic reason.
-// An invalid code or reason is replaced by StatusInternalError and reported as
-// an error.
+// The reason is limited to 123 bytes. A longer reason is cut to the longest
+// prefix that does not split a UTF-8 encoded rune, the handshake proceeds, and
+// Close returns an error wrapping ErrCloseReasonTruncated. An invalid code is
+// replaced by StatusInternalError and reported as an error.
 //
 // Close always closes the connection. A non-nil error reports a problem
 // during the close, not that the connection is still open.
@@ -299,22 +300,19 @@ func validWireCloseCode(code StatusCode) bool {
 }
 
 // wireCloseError returns the CloseError to send for code and reason. A marshal
-// problem must not prevent sending a close frame, so an invalid code or reason
-// is replaced by StatusInternalError. The error reports the change.
+// problem must not prevent sending a close frame, so an invalid code is
+// replaced by StatusInternalError and a long reason is truncated. The error
+// reports either change.
 func wireCloseError(code StatusCode, reason string) (CloseError, error) {
 	if code == StatusNoStatusRcvd {
 		return CloseError{Code: code}, nil // Sent as an empty close frame.
 	}
-	if len(reason) > maxCloseReason {
-		return CloseError{Code: StatusInternalError}, fmt.Errorf("failed to marshal close frame: reason string max is %v but got %q with length %v", maxCloseReason, reason, len(reason))
-	}
 	if !validWireCloseCode(code) {
 		return CloseError{Code: StatusInternalError}, fmt.Errorf("failed to marshal close frame: status code %v cannot be set", code)
 	}
-	return CloseError{Code: code, Reason: reason}, nil
+	reason, err := truncateCloseReason(reason)
+	return CloseError{Code: code, Reason: reason}, err
 }
-
-const maxCloseReason = maxControlPayload - 2
 
 // bytes encodes ce as a close frame payload. ce must come from wireCloseError.
 func (ce CloseError) bytes() []byte {
