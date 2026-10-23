@@ -93,17 +93,29 @@ func CloseStatus(err error) StatusCode {
 // are no-ops.
 //
 // Close replaces invalid UTF-8 in reason with U+FFFD, then truncates it to fit
-// 123 bytes without splitting a rune. The handshake proceeds, but Close returns
-// an error wrapping ErrCloseReasonTruncated if the reason was truncated.
+// 123 bytes without splitting a rune. If it truncated the reason and the close
+// had no other error, Close returns an error wrapping ErrCloseReasonTruncated.
 //
-// Invalid codes are sent as StatusInternalError and reported as errors.
+// Valid codes are 1000 to 1003, 1007 to 1014, and 3000 to 4999. Close sends
+// any other code as StatusInternalError with no reason and returns an error.
+// The exception is StatusNoStatusRcvd, which sends a close frame with no code
+// and no reason.
 //
 // When the first call to Close returns, the connection is closed, even on error.
 // A non-nil error reports a problem during the close.
 //
 // Close will unblock all goroutines interacting with the connection once
 // complete.
-func (c *Conn) Close(code StatusCode, reason string) (err error) {
+func (c *Conn) Close(code StatusCode, reason string) error {
+	ce, wireErr := wireCloseError(code, reason)
+	err := c.exportedClose(ce.Code, ce.Reason)
+	if err != nil {
+		return err
+	}
+	return wireErr
+}
+
+func (c *Conn) exportedClose(code StatusCode, reason string) (err error) {
 	defer errd.Wrap(&err, "failed to close WebSocket")
 
 	if c.casClosing() {
@@ -113,19 +125,13 @@ func (c *Conn) Close(code StatusCode, reason string) (err error) {
 		}
 		return net.ErrClosed
 	}
-	ce, wireErr := wireCloseError(code, reason)
 	defer func() {
 		if errors.Is(err, net.ErrClosed) {
 			err = nil
 		}
-		// Joined after the net.ErrClosed check so that wireErr is not set to nil.
-		// The close failure is first; wireErr only reports changes to the sent frame.
-		if wireErr != nil {
-			err = errors.Join(err, wireErr)
-		}
 	}()
 
-	err = c.closeHandshake(ce.Code, ce.Reason)
+	err = c.closeHandshake(code, reason)
 
 	err2 := c.close()
 	if err == nil && err2 != nil {
@@ -307,7 +313,7 @@ func wireCloseError(code StatusCode, reason string) (CloseError, error) {
 		return CloseError{Code: code}, nil
 	}
 	if !validWireCloseCode(code) {
-		return CloseError{Code: StatusInternalError}, fmt.Errorf("failed to marshal close frame: status code %v cannot be set", code)
+		return CloseError{Code: StatusInternalError}, fmt.Errorf("websocket: invalid close status code %v, sent %v instead", code, StatusInternalError)
 	}
 	reason, err := wireCloseReason(reason)
 	return CloseError{Code: code, Reason: reason}, err

@@ -52,7 +52,7 @@ func TestWasmCloseReasonTruncated(t *testing.T) {
 	// The echo server checks the close code.
 	err = c.Close(websocket.StatusNormalClosure, strings.Repeat("é", 62))
 	assert.ErrorIs(t, websocket.ErrCloseReasonTruncated, err)
-	assert.Equal(t, "close error", "failed to close WebSocket: websocket: close reason truncated from 124 to 122 bytes", err.Error())
+	assert.Equal(t, "close error", "websocket: close reason truncated from 124 to 122 bytes", err.Error())
 }
 
 func TestWasmCloseReasonInvalidUTF8(t *testing.T) {

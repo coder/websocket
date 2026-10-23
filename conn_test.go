@@ -70,7 +70,7 @@ func TestConn(t *testing.T) {
 		})
 
 		err := c1.Close(-1, "")
-		assert.Contains(t, err, "failed to marshal close frame: status code StatusCode(-1) cannot be set")
+		assert.Equal(t, "close error", "websocket: invalid close status code StatusCode(-1), sent StatusInternalError instead", err.Error())
 
 		assert.Equal(t, "peer close status", websocket.StatusInternalError, websocket.CloseStatus(<-readErr))
 	})
@@ -87,7 +87,7 @@ func TestConn(t *testing.T) {
 			truncated bool
 		}{
 			{name: "max", reason: ascii, want: ascii},
-			{name: "ascii", reason: ascii + "xyz", want: ascii, truncated: true},
+			{name: "overMax", reason: ascii + "xyz", want: ascii, truncated: true},
 			{name: "twoByteSplit", reason: ascii[:122] + "é", want: ascii[:122], truncated: true},
 			{name: "fourByteSplit", reason: strings.Repeat("😀", 40), want: strings.Repeat("😀", 30), truncated: true},
 			{name: "invalidUTF8", reason: "bad \xff\xfe reason", want: "bad \uFFFD reason"},
@@ -106,11 +106,11 @@ func TestConn(t *testing.T) {
 					assert.Success(t, err)
 				} else {
 					assert.ErrorIs(t, websocket.ErrCloseReasonTruncated, err)
-					assert.Equal(t, "close error", fmt.Sprintf("failed to close WebSocket: websocket: close reason truncated from %d to %d bytes", len(tc.reason), len(tc.want)), err.Error())
+					assert.Equal(t, "close error", fmt.Sprintf("websocket: close reason truncated from %d to %d bytes", len(tc.reason), len(tc.want)), err.Error())
 				}
 
-				var ce websocket.CloseError
-				if !errors.As(<-readErr, &ce) {
+				ce, ok := errors.AsType[websocket.CloseError](<-readErr)
+				if !ok {
 					t.Fatal("peer did not receive a close frame")
 				}
 				assert.Equal(t, "peer close error", websocket.CloseError{Code: code, Reason: tc.want}, ce)
@@ -131,7 +131,7 @@ func TestConn(t *testing.T) {
 
 		err := c1.Close(websocket.StatusNormalClosure, strings.Repeat("x", 124))
 		assert.ErrorIs(t, websocket.ErrCloseReasonTruncated, err)
-		assert.Equal(t, "close error", "failed to close WebSocket: websocket: close reason truncated from 124 to 123 bytes", err.Error())
+		assert.Equal(t, "close error", "websocket: close reason truncated from 124 to 123 bytes", err.Error())
 		assert.Equal(t, "peer close status", websocket.StatusNormalClosure, websocket.CloseStatus(<-readErr))
 	})
 
@@ -141,9 +141,22 @@ func TestConn(t *testing.T) {
 		assert.Success(t, c2.CloseNow())
 
 		err := c1.Close(websocket.StatusNormalClosure, strings.Repeat("x", 124))
-		assert.ErrorIs(t, websocket.ErrCloseReasonTruncated, err)
 		assert.ErrorIs(t, io.ErrClosedPipe, err)
-		assert.Equal(t, "truncation last", true, strings.HasSuffix(err.Error(), "\nwebsocket: close reason truncated from 124 to 123 bytes"))
+		assert.Equal(t, "reports truncation", false, errors.Is(err, websocket.ErrCloseReasonTruncated))
+	})
+
+	t.Run("writeErrorReasonTruncated", func(t *testing.T) {
+		tt, c1, c2 := newConnTest(t, nil, nil)
+
+		_ = c1.CloseRead(tt.ctx)
+		readErr := xsync.Go(func() error {
+			_, _, err := c2.Read(tt.ctx)
+			return err
+		})
+
+		c1.WriteError(websocket.StatusProtocolError, errors.New(strings.Repeat("x", 124)))
+		ce, _ := errors.AsType[websocket.CloseError](<-readErr)
+		assert.Equal(t, "peer close error", websocket.CloseError{Code: websocket.StatusProtocolError, Reason: strings.Repeat("x", 123)}, ce)
 	})
 
 	t.Run("ping", func(t *testing.T) {
