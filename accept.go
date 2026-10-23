@@ -149,7 +149,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	}
 
 	w.WriteHeader(http.StatusSwitchingProtocols)
-	// See https://github.com/nhooyr/websocket/issues/166
+	// See https://github.com/coder/websocket/issues/166
 	if ginWriter, ok := w.(interface {
 		WriteHeaderNow()
 	}); ok {
@@ -282,7 +282,7 @@ func selectDeflate(extensions []websocketExtension, mode CompressionMode) (*comp
 	for _, ext := range extensions {
 		switch ext.name {
 		// We used to implement x-webkit-deflate-frame too for Safari but Safari has bugs...
-		// See https://github.com/nhooyr/websocket/issues/218
+		// See https://github.com/coder/websocket/issues/218
 		case "permessage-deflate":
 			copts, ok := acceptDeflate(ext, mode)
 			if ok {

@@ -15,7 +15,7 @@ import (
 // It's for tunneling arbitrary protocols over WebSockets.
 // Few users of the library will need this but it's tricky to implement
 // correctly and so provided in the library.
-// See https://github.com/nhooyr/websocket/issues/100.
+// See https://github.com/coder/websocket/issues/100.
 //
 // Every Write to the net.Conn will correspond to a message write of
 // the given type on *websocket.Conn.

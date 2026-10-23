@@ -19,7 +19,7 @@ func mask(b []byte, key uint32) uint32 {
 // For example, the arm64 implementation doesn't align memory like the amd64.
 // Or the amd64 implementation could use AVX512 instead of just AVX2.
 // The AVX2 code I had to disable anyway as it wasn't performing as expected.
-// See https://github.com/nhooyr/websocket/pull/326#issuecomment-1771138049
+// See https://github.com/coder/websocket/pull/326#issuecomment-1771138049
 //
 //go:noescape
 //lint:ignore U1000 disabled till v1.9.0

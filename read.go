@@ -30,7 +30,7 @@ import (
 //
 // If you need a separate timeout on the Reader call and the Read itself,
 // use time.AfterFunc to cancel the context passed in.
-// See https://github.com/nhooyr/websocket/issues/87#issue-451703332
+// See https://github.com/coder/websocket/issues/87#issue-451703332
 // Most users should not need this.
 func (c *Conn) Reader(ctx context.Context) (MessageType, io.Reader, error) {
 	return c.reader(ctx)
