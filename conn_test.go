@@ -106,7 +106,7 @@ func TestConn(t *testing.T) {
 				} else {
 					assert.ErrorIs(t, websocket.ErrCloseReasonTruncated, err)
 					// The handshake succeeded, so nothing else is reported.
-					assert.Equal(t, "close error", fmt.Sprintf("failed to close WebSocket: websocket: close reason truncated: sent %d of %d bytes", len(tc.want), len(tc.reason)), err.Error())
+					assert.Equal(t, "close error", fmt.Sprintf("failed to close WebSocket: websocket: close reason truncated from %d to %d bytes", len(tc.reason), len(tc.want)), err.Error())
 				}
 
 				var ce websocket.CloseError
@@ -132,7 +132,7 @@ func TestConn(t *testing.T) {
 
 		err := c1.Close(websocket.StatusNormalClosure, strings.Repeat("x", 124))
 		assert.ErrorIs(t, websocket.ErrCloseReasonTruncated, err)
-		assert.Equal(t, "close error", "failed to close WebSocket: websocket: close reason truncated: sent 123 of 124 bytes", err.Error())
+		assert.Equal(t, "close error", "failed to close WebSocket: websocket: close reason truncated from 124 to 123 bytes", err.Error())
 		assert.Equal(t, "peer close status", websocket.StatusNormalClosure, websocket.CloseStatus(<-readErr))
 	})
 
