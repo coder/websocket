@@ -230,7 +230,9 @@ func (c *Conn) write(typ MessageType, p []byte) error {
 // It thus performs the full WebSocket close handshake.
 //
 // A reason over 123 bytes is truncated, and Close returns an error wrapping
-// ErrCloseReasonTruncated.
+// ErrCloseReasonTruncated. Truncation only makes valid UTF-8 fit: invalid
+// bytes grow when converted to a JavaScript string, so the browser may still
+// reject the reason.
 func (c *Conn) Close(code StatusCode, reason string) error {
 	err := c.exportedClose(code, reason)
 	if err != nil {
