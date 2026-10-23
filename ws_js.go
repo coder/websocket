@@ -228,6 +228,9 @@ func (c *Conn) write(typ MessageType, p []byte) error {
 // It will wait until the peer responds with a close frame
 // or the connection is closed.
 // It thus performs the full WebSocket close handshake.
+//
+// A reason over 123 bytes is truncated, and Close returns an error wrapping
+// ErrCloseReasonTruncated.
 func (c *Conn) Close(code StatusCode, reason string) error {
 	err := c.exportedClose(code, reason)
 	if err != nil {
@@ -246,6 +249,9 @@ func (c *Conn) CloseNow() error {
 }
 
 func (c *Conn) exportedClose(code StatusCode, reason string) error {
+	// Browsers throw on a reason over 123 bytes and leave the connection open.
+	reason, truncErr := truncateCloseReason(reason)
+
 	c.closingMu.Lock()
 	defer c.closingMu.Unlock()
 
@@ -266,9 +272,9 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 
 	<-c.closed
 	if !c.closeWasClean {
-		return c.closeErr
+		return errors.Join(truncErr, c.closeErr)
 	}
-	return nil
+	return truncErr
 }
 
 // Subprotocol returns the negotiated subprotocol.
