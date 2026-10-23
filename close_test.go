@@ -107,6 +107,8 @@ func Test_truncateCloseReason(t *testing.T) {
 		{name: "threeByteAligned", reason: strings.Repeat("€", 42), want: strings.Repeat("€", 41)},
 		{name: "threeByteSplit", reason: ascii[:122] + "€", want: ascii[:122]},
 		{name: "fourByteSplit", reason: strings.Repeat("😀", 31), want: strings.Repeat("😀", 30)},
+		// U+FFFD decodes as utf8.RuneError but is a valid 3 byte rune.
+		{name: "replacementCharSplit", reason: ascii[:122] + "\uFFFD", want: ascii[:122]},
 		// Invalid UTF-8 is cut at the limit, not scanned for a boundary.
 		{name: "continuationBytes", reason: strings.Repeat("\x80", 200), want: strings.Repeat("\x80", maxCloseReason)},
 		{name: "incompleteRune", reason: ascii[:122] + "\xe2\x82x", want: ascii[:122] + "\xe2"},
