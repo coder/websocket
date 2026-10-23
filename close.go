@@ -92,14 +92,13 @@ func CloseStatus(err error) StatusCode {
 // The connection can only be closed once. Additional calls to Close
 // are no-ops.
 //
-// The reason is limited to 123 bytes. Invalid UTF-8 in the reason is replaced
-// with U+FFFD. A longer reason is then cut to the longest prefix that does not
-// split a UTF-8 encoded rune, the handshake proceeds, and Close returns an
-// error wrapping ErrCloseReasonTruncated. An invalid code is replaced by
-// StatusInternalError and reported as an error.
+// Close replaces invalid UTF-8 in reason with U+FFFD, then truncates it to fit
+// 123 bytes without splitting a rune. The handshake proceeds, but Close returns
+// an error wrapping ErrCloseReasonTruncated if the reason was truncated.
 //
-// When the first call to Close returns, the connection is closed, even if
-// Close returns an error. A non-nil error reports a problem during the close.
+// Invalid codes are sent as StatusInternalError and reported as errors.
+//
+// When the first call to Close returns, the connection is closed, even on error.
 //
 // Close will unblock all goroutines interacting with the connection once
 // complete.
@@ -118,10 +117,7 @@ func (c *Conn) Close(code StatusCode, reason string) (err error) {
 		if errors.Is(err, net.ErrClosed) {
 			err = nil
 		}
-		// Joined after the check above so it is not dropped along with a
-		// net.ErrClosed from the handshake. The close failure comes first
-		// because wireErr only reports how the sent frame differs from the
-		// arguments.
+		// Preserve wireErr when net.ErrClosed is ignored.
 		if wireErr != nil {
 			err = errors.Join(err, wireErr)
 		}
@@ -183,8 +179,6 @@ func (c *Conn) closeHandshake(code StatusCode, reason string) error {
 }
 
 func (c *Conn) writeClose(code StatusCode, reason string) error {
-	// Close reports the wire error to the user. Internal callers only need
-	// a close frame to be sent.
 	ce, _ := wireCloseError(code, reason)
 
 	var p []byte
@@ -302,13 +296,9 @@ func validWireCloseCode(code StatusCode) bool {
 	return false
 }
 
-// wireCloseError returns the CloseError to send for code and reason. A marshal
-// problem must not prevent sending a close frame, so an invalid code is
-// replaced by StatusInternalError and the reason goes through wireCloseReason.
-// The error reports a replaced code or a truncated reason.
 func wireCloseError(code StatusCode, reason string) (CloseError, error) {
 	if code == StatusNoStatusRcvd {
-		return CloseError{Code: code}, nil // Sent as an empty close frame.
+		return CloseError{Code: code}, nil
 	}
 	if !validWireCloseCode(code) {
 		return CloseError{Code: StatusInternalError}, fmt.Errorf("failed to marshal close frame: status code %v cannot be set", code)
@@ -317,7 +307,7 @@ func wireCloseError(code StatusCode, reason string) (CloseError, error) {
 	return CloseError{Code: code, Reason: reason}, err
 }
 
-// bytes encodes ce as a close frame payload. ce must come from wireCloseError.
+// bytes requires ce to come from wireCloseError.
 func (ce CloseError) bytes() []byte {
 	buf := make([]byte, 2+len(ce.Reason))
 	binary.BigEndian.PutUint16(buf, uint16(ce.Code))
