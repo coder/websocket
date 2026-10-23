@@ -17,11 +17,16 @@ func TestCloseError(t *testing.T) {
 	testCases := []struct {
 		name    string
 		ce      CloseError
+		want    CloseError
 		success bool
 	}{
 		{
 			name: "normal",
 			ce: CloseError{
+				Code:   StatusNormalClosure,
+				Reason: strings.Repeat("x", maxCloseReason),
+			},
+			want: CloseError{
 				Code:   StatusNormalClosure,
 				Reason: strings.Repeat("x", maxCloseReason),
 			},
@@ -33,6 +38,7 @@ func TestCloseError(t *testing.T) {
 				Code:   StatusNormalClosure,
 				Reason: strings.Repeat("x", maxCloseReason+1),
 			},
+			want:    CloseError{Code: StatusInternalError},
 			success: false,
 		},
 		{
@@ -41,7 +47,17 @@ func TestCloseError(t *testing.T) {
 				Code:   math.MaxUint16,
 				Reason: strings.Repeat("x", maxCloseReason),
 			},
+			want:    CloseError{Code: StatusInternalError},
 			success: false,
+		},
+		{
+			name: "noStatus",
+			ce: CloseError{
+				Code:   StatusNoStatusRcvd,
+				Reason: "dropped",
+			},
+			want:    CloseError{Code: StatusNoStatusRcvd},
+			success: true,
 		},
 	}
 
@@ -50,12 +66,13 @@ func TestCloseError(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := tc.ce.bytesErr()
+			ce, err := wireCloseError(tc.ce.Code, tc.ce.Reason)
 			if tc.success {
 				assert.Success(t, err)
 			} else {
 				assert.Error(t, err)
 			}
+			assert.Equal(t, "wire close error", tc.want, ce)
 		})
 	}
 

@@ -64,10 +64,16 @@ func TestConn(t *testing.T) {
 	t.Run("badClose", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
 
-		c2.CloseRead(tt.ctx)
+		readErr := xsync.Go(func() error {
+			_, _, err := c2.Read(tt.ctx)
+			return err
+		})
 
 		err := c1.Close(-1, "")
 		assert.Contains(t, err, "failed to marshal close frame: status code StatusCode(-1) cannot be set")
+
+		// The peer still gets a close frame.
+		assert.Equal(t, "peer close status", websocket.StatusInternalError, websocket.CloseStatus(<-readErr))
 	})
 
 	t.Run("ping", func(t *testing.T) {
