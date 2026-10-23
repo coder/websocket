@@ -102,7 +102,6 @@ func CloseStatus(err error) StatusCode {
 // and no reason.
 //
 // When the first call to Close returns, the connection is closed, even on error.
-// A non-nil error reports a problem during the close.
 //
 // Close will unblock all goroutines interacting with the connection once
 // complete.
