@@ -136,6 +136,17 @@ func TestConn(t *testing.T) {
 		assert.Equal(t, "peer close status", websocket.StatusNormalClosure, websocket.CloseStatus(<-readErr))
 	})
 
+	t.Run("closeReasonTruncatedWithWriteError", func(t *testing.T) {
+		_, c1, c2 := newConnTest(t, nil, nil)
+
+		// Closing the peer's end of the pipe makes writing the close frame fail.
+		assert.Success(t, c2.CloseNow())
+
+		err := c1.Close(websocket.StatusNormalClosure, strings.Repeat("x", 124))
+		assert.ErrorIs(t, websocket.ErrCloseReasonTruncated, err)
+		assert.ErrorIs(t, io.ErrClosedPipe, err)
+	})
+
 	t.Run("ping", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
 
