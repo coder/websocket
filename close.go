@@ -187,18 +187,14 @@ func (c *Conn) closeHandshake(code StatusCode, reason string) error {
 }
 
 func (c *Conn) writeClose(code StatusCode, reason string) error {
-	// Close returns this error to its caller.
+	// The error is dropped: Close reports it from its own wireCloseError call,
+	// and writeError and the reply to a peer's close frame do not report it.
 	ce, _ := wireCloseError(code, reason)
-
-	var p []byte
-	if ce.Code != StatusNoStatusRcvd {
-		p = ce.bytes()
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	err := c.writeControl(ctx, opClose, p)
+	err := c.writeControl(ctx, opClose, ce.bytes())
 	// If the connection closed as we're writing we ignore the error as we might
 	// have written the close frame, the peer responded and then someone else read it
 	// and closed the connection.
@@ -305,9 +301,8 @@ func validWireCloseCode(code StatusCode) bool {
 	return false
 }
 
-// wireCloseError returns a CloseError that can always be sent. It replaces an
-// invalid code with StatusInternalError and passes the reason through
-// wireCloseReason. The error reports a replaced code or a truncated reason.
+// wireCloseError returns the CloseError to send for code and reason, also when
+// the error is non-nil. The error reports a replaced code or a truncated reason.
 func wireCloseError(code StatusCode, reason string) (CloseError, error) {
 	if code == StatusNoStatusRcvd {
 		return CloseError{Code: code}, nil
@@ -319,8 +314,12 @@ func wireCloseError(code StatusCode, reason string) (CloseError, error) {
 	return CloseError{Code: code, Reason: reason}, err
 }
 
-// bytes requires ce to come from wireCloseError.
+// bytes returns the close frame payload for ce, which must come from
+// wireCloseError.
 func (ce CloseError) bytes() []byte {
+	if ce.Code == StatusNoStatusRcvd {
+		return nil
+	}
 	buf := make([]byte, 2+len(ce.Reason))
 	binary.BigEndian.PutUint16(buf, uint16(ce.Code))
 	copy(buf[2:], ce.Reason)
