@@ -72,7 +72,6 @@ func TestConn(t *testing.T) {
 		err := c1.Close(-1, "")
 		assert.Contains(t, err, "failed to marshal close frame: status code StatusCode(-1) cannot be set")
 
-		// The peer still gets a close frame.
 		assert.Equal(t, "peer close status", websocket.StatusInternalError, websocket.CloseStatus(<-readErr))
 	})
 
@@ -107,7 +106,6 @@ func TestConn(t *testing.T) {
 					assert.Success(t, err)
 				} else {
 					assert.ErrorIs(t, websocket.ErrCloseReasonTruncated, err)
-					// The handshake succeeded, so nothing else is reported.
 					assert.Equal(t, "close error", fmt.Sprintf("failed to close WebSocket: websocket: close reason truncated from %d to %d bytes", len(tc.reason), len(tc.want)), err.Error())
 				}
 
@@ -120,9 +118,6 @@ func TestConn(t *testing.T) {
 		}
 	})
 
-	// The CloseRead goroutine may read the echoed close frame and close the
-	// connection, failing the handshake with net.ErrClosed, which Close
-	// ignores. The truncation must still be reported.
 	t.Run("closeReasonTruncatedWithCloseRead", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
 
@@ -141,13 +136,11 @@ func TestConn(t *testing.T) {
 	t.Run("closeReasonTruncatedWithWriteError", func(t *testing.T) {
 		_, c1, c2 := newConnTest(t, nil, nil)
 
-		// Closing the peer's end of the pipe makes writing the close frame fail.
 		assert.Success(t, c2.CloseNow())
 
 		err := c1.Close(websocket.StatusNormalClosure, strings.Repeat("x", 124))
 		assert.ErrorIs(t, websocket.ErrCloseReasonTruncated, err)
 		assert.ErrorIs(t, io.ErrClosedPipe, err)
-		// The close failure leads; the truncation notice follows it.
 		assert.Equal(t, "truncation last", true, strings.HasSuffix(err.Error(), "\nwebsocket: close reason truncated from 124 to 123 bytes"))
 	})
 
