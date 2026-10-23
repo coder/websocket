@@ -33,7 +33,5 @@ func wireCloseReason(reason string) (string, error) {
 	for !utf8.RuneStart(valid[n]) {
 		n--
 	}
-	// "from" is the caller's length and "to" the sent length. Replacement can
-	// grow a reason, so "from" can be maxCloseReason or less, even below "to".
-	return valid[:n], fmt.Errorf("%w from %d to %d bytes", ErrCloseReasonTruncated, len(reason), n)
+	return valid[:n], fmt.Errorf("%w from %d to %d bytes", ErrCloseReasonTruncated, len(valid), n)
 }
