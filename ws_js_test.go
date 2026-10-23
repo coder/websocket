@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,6 +36,24 @@ func TestWasm(t *testing.T) {
 
 	err = c.Close(websocket.StatusNormalClosure, "")
 	assert.Success(t, err)
+}
+
+func TestWasmCloseReasonTruncated(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	c, _, err := websocket.Dial(ctx, os.Getenv("WS_ECHO_SERVER_URL"), &websocket.DialOptions{
+		Subprotocols: []string{"echo"},
+	})
+	assert.Success(t, err)
+
+	// The browser throws on reasons over 123 bytes, so a clean close shows
+	// the reason was truncated. The echo server checks the code.
+	err = c.Close(websocket.StatusNormalClosure, strings.Repeat("é", 62))
+	assert.ErrorIs(t, websocket.ErrCloseReasonTruncated, err)
+	assert.Equal(t, "close error", "failed to close WebSocket: websocket: close reason truncated: sent 122 of 124 bytes", err.Error())
 }
 
 func TestWasmDialTimeout(t *testing.T) {
