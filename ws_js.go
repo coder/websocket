@@ -229,15 +229,17 @@ func (c *Conn) write(typ MessageType, p []byte) error {
 // or the connection is closed.
 // It thus performs the full WebSocket close handshake.
 //
-// The reason is limited to 123 bytes. Invalid UTF-8 in the reason is replaced
-// with U+FFFD. A longer reason is then truncated, and Close returns an error
-// wrapping ErrCloseReasonTruncated.
+// Close replaces invalid UTF-8 in reason with U+FFFD, then truncates it to fit
+// 123 bytes without splitting a rune. If it truncated the reason and the close
+// had no other error, Close returns an error wrapping ErrCloseReasonTruncated.
 func (c *Conn) Close(code StatusCode, reason string) error {
+	// Browsers throw on a reason over 123 bytes and leave the connection open.
+	reason, truncErr := wireCloseReason(reason)
 	err := c.exportedClose(code, reason)
 	if err != nil {
 		return fmt.Errorf("failed to close WebSocket: %w", err)
 	}
-	return nil
+	return truncErr
 }
 
 // CloseNow closes the WebSocket connection without attempting a close handshake.
@@ -250,9 +252,6 @@ func (c *Conn) CloseNow() error {
 }
 
 func (c *Conn) exportedClose(code StatusCode, reason string) error {
-	// Browsers throw on a reason over 123 bytes and leave the connection open.
-	reason, truncErr := wireCloseReason(reason)
-
 	c.closingMu.Lock()
 	defer c.closingMu.Unlock()
 
@@ -268,14 +267,14 @@ func (c *Conn) exportedClose(code StatusCode, reason string) error {
 	c.setCloseErr(ce)
 	err := c.ws.Close(int(code), reason)
 	if err != nil {
-		return errors.Join(err, truncErr)
+		return err
 	}
 
 	<-c.closed
 	if !c.closeWasClean {
-		return errors.Join(c.closeErr, truncErr)
+		return c.closeErr
 	}
-	return truncErr
+	return nil
 }
 
 // Subprotocol returns the negotiated subprotocol.
