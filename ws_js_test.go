@@ -56,6 +56,24 @@ func TestWasmCloseReasonTruncated(t *testing.T) {
 	assert.Equal(t, "close error", "failed to close WebSocket: websocket: close reason truncated from 124 to 122 bytes", err.Error())
 }
 
+func TestWasmCloseReasonInvalidUTF8(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	c, _, err := websocket.Dial(ctx, os.Getenv("WS_ECHO_SERVER_URL"), &websocket.DialOptions{
+		Subprotocols: []string{"echo"},
+	})
+	assert.Success(t, err)
+
+	// Without replacement, converting these bytes to a JavaScript string
+	// grows them past 123 bytes and the browser throws. The echo server
+	// checks the code.
+	err = c.Close(websocket.StatusNormalClosure, strings.Repeat("\x80", 50))
+	assert.Success(t, err)
+}
+
 func TestWasmDialTimeout(t *testing.T) {
 	t.Parallel()
 
