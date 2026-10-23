@@ -7,6 +7,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/coder/websocket/internal/test/assert"
 )
@@ -38,7 +39,10 @@ func TestCloseError(t *testing.T) {
 				Code:   StatusNormalClosure,
 				Reason: strings.Repeat("x", maxCloseReason+1),
 			},
-			want:    CloseError{Code: StatusInternalError},
+			want: CloseError{
+				Code:   StatusNormalClosure,
+				Reason: strings.Repeat("x", maxCloseReason),
+			},
 			success: false,
 		},
 		{
@@ -84,6 +88,46 @@ func TestCloseError(t *testing.T) {
 		}.Error()
 		assert.Equal(t, "CloseError.Error()", exp, act)
 	})
+}
+
+func Test_truncateCloseReason(t *testing.T) {
+	t.Parallel()
+
+	ascii := strings.Repeat("x", maxCloseReason)
+	testCases := []struct {
+		name   string
+		reason string
+		want   string
+	}{
+		{name: "empty", reason: "", want: ""},
+		{name: "max", reason: ascii, want: ascii},
+		{name: "maxPlusOne", reason: ascii + "x", want: ascii},
+		{name: "twoByteFits", reason: ascii[:121] + "é", want: ascii[:121] + "é"},
+		{name: "twoByteSplit", reason: ascii[:122] + "é", want: ascii[:122]},
+		{name: "threeByteAligned", reason: strings.Repeat("€", 42), want: strings.Repeat("€", 41)},
+		{name: "threeByteSplit", reason: ascii[:122] + "€", want: ascii[:122]},
+		{name: "fourByteSplit", reason: strings.Repeat("😀", 31), want: strings.Repeat("😀", 30)},
+		// Invalid UTF-8 is cut at the limit, not scanned for a boundary.
+		{name: "continuationBytes", reason: strings.Repeat("\x80", 200), want: strings.Repeat("\x80", maxCloseReason)},
+		{name: "incompleteRune", reason: ascii[:122] + "\xe2\x82x", want: ascii[:122] + "\xe2"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := truncateCloseReason(tc.reason)
+			assert.Equal(t, "reason", tc.want, got)
+			if got == tc.reason {
+				assert.Success(t, err)
+			} else {
+				assert.ErrorIs(t, ErrCloseReasonTruncated, err)
+			}
+			if utf8.ValidString(tc.reason) && !utf8.ValidString(got) {
+				t.Fatalf("truncated valid UTF-8 into invalid UTF-8: %q", got)
+			}
+		})
+	}
 }
 
 func Test_parseClosePayload(t *testing.T) {
