@@ -49,6 +49,7 @@ func TestWasmCloseReasonTruncated(t *testing.T) {
 	})
 	assert.Success(t, err)
 
+	// The echo server checks the close code.
 	err = c.Close(websocket.StatusNormalClosure, strings.Repeat("é", 62))
 	assert.ErrorIs(t, websocket.ErrCloseReasonTruncated, err)
 	assert.Equal(t, "close error", "failed to close WebSocket: websocket: close reason truncated from 124 to 122 bytes", err.Error())
@@ -65,7 +66,8 @@ func TestWasmCloseReasonInvalidUTF8(t *testing.T) {
 	})
 	assert.Success(t, err)
 
-	// JavaScript string conversion expands these 50 bytes past the reason limit.
+	// Without the U+FFFD replacement, these 50 bytes become more than 123 bytes
+	// when converted to a JavaScript string. The echo server checks the close code.
 	err = c.Close(websocket.StatusNormalClosure, strings.Repeat("\x80", 50))
 	assert.Success(t, err)
 }

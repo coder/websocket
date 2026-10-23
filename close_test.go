@@ -95,26 +95,26 @@ func Test_wireCloseReason(t *testing.T) {
 
 	ascii := strings.Repeat("x", maxCloseReason)
 	testCases := []struct {
-		name      string
-		reason    string
-		want      string
-		truncated string
+		name          string
+		reason        string
+		want          string
+		wantErrSuffix string
 	}{
 		{name: "empty", reason: "", want: ""},
 		{name: "max", reason: ascii, want: ascii},
-		{name: "maxPlusOne", reason: ascii + "x", want: ascii, truncated: "from 124 to 123 bytes"},
+		{name: "maxPlusOne", reason: ascii + "x", want: ascii, wantErrSuffix: "from 124 to 123 bytes"},
 		{name: "twoByteFits", reason: ascii[:121] + "é", want: ascii[:121] + "é"},
-		{name: "twoByteSplit", reason: ascii[:122] + "é", want: ascii[:122], truncated: "from 124 to 122 bytes"},
-		{name: "threeByteAligned", reason: strings.Repeat("€", 42), want: strings.Repeat("€", 41), truncated: "from 126 to 123 bytes"},
-		{name: "threeByteSplit", reason: ascii[:122] + "€", want: ascii[:122], truncated: "from 125 to 122 bytes"},
-		{name: "fourByteSplit", reason: strings.Repeat("😀", 31), want: strings.Repeat("😀", 30), truncated: "from 124 to 120 bytes"},
-		{name: "replacementCharSplit", reason: ascii[:122] + "\uFFFD", want: ascii[:122], truncated: "from 125 to 122 bytes"},
+		{name: "twoByteSplit", reason: ascii[:122] + "é", want: ascii[:122], wantErrSuffix: "from 124 to 122 bytes"},
+		{name: "threeByteAligned", reason: strings.Repeat("€", 42), want: strings.Repeat("€", 41), wantErrSuffix: "from 126 to 123 bytes"},
+		{name: "threeByteSplit", reason: ascii[:122] + "€", want: ascii[:122], wantErrSuffix: "from 125 to 122 bytes"},
+		{name: "fourByteSplit", reason: strings.Repeat("😀", 31), want: strings.Repeat("😀", 30), wantErrSuffix: "from 124 to 120 bytes"},
+		{name: "replacementCharSplit", reason: ascii[:122] + "\uFFFD", want: ascii[:122], wantErrSuffix: "from 125 to 122 bytes"},
 		{name: "invalidByte", reason: "a\x80b", want: "a\uFFFDb"},
 		{name: "invalidRun", reason: "a\x80\x80\xffb", want: "a\uFFFDb"},
 		{name: "incompleteRune", reason: "a\xe2\x82", want: "a\uFFFD"},
 		{name: "invalidRunOverMax", reason: strings.Repeat("\x80", 200), want: "\uFFFD"},
-		{name: "growthFromMax", reason: ascii[:122] + "\x80", want: ascii[:122], truncated: "from 125 to 122 bytes"},
-		{name: "growthIsolated", reason: strings.Repeat("\x80x", 61), want: strings.Repeat("\uFFFDx", 30) + "\uFFFD", truncated: "from 244 to 123 bytes"},
+		{name: "growthFromMax", reason: ascii[:122] + "\x80", want: ascii[:122], wantErrSuffix: "from 125 to 122 bytes"},
+		{name: "growthIsolated", reason: strings.Repeat("\x80x", 61), want: strings.Repeat("\uFFFDx", 30) + "\uFFFD", wantErrSuffix: "from 244 to 123 bytes"},
 	}
 
 	for _, tc := range testCases {
@@ -123,11 +123,11 @@ func Test_wireCloseReason(t *testing.T) {
 
 			got, err := wireCloseReason(tc.reason)
 			assert.Equal(t, "reason", tc.want, got)
-			if tc.truncated == "" {
+			if tc.wantErrSuffix == "" {
 				assert.Success(t, err)
 			} else {
 				assert.ErrorIs(t, ErrCloseReasonTruncated, err)
-				assert.Equal(t, "error", "websocket: close reason truncated "+tc.truncated, err.Error())
+				assert.Equal(t, "error", "websocket: close reason truncated "+tc.wantErrSuffix, err.Error())
 			}
 			if !utf8.ValidString(got) || len(got) > maxCloseReason {
 				t.Fatalf("reason %q is not valid UTF-8 within %d bytes", got, maxCloseReason)

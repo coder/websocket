@@ -118,6 +118,8 @@ func TestConn(t *testing.T) {
 		}
 	})
 
+	// The CloseRead goroutine can read the peer's close frame before Close does,
+	// so the handshake fails with net.ErrClosed, which Close ignores.
 	t.Run("closeReasonTruncatedWithCloseRead", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
 
