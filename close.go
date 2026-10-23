@@ -119,9 +119,11 @@ func (c *Conn) Close(code StatusCode, reason string) (err error) {
 			err = nil
 		}
 		// Joined after the check above so it is not dropped along with a
-		// net.ErrClosed from the handshake.
+		// net.ErrClosed from the handshake. The close failure comes first
+		// because wireErr only reports how the sent frame differs from the
+		// arguments.
 		if wireErr != nil {
-			err = errors.Join(wireErr, err)
+			err = errors.Join(err, wireErr)
 		}
 	}()
 
