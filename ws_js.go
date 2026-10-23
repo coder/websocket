@@ -252,7 +252,7 @@ func (c *Conn) CloseNow() error {
 
 func (c *Conn) exportedClose(code StatusCode, reason string) error {
 	// Browsers throw on a reason over 123 bytes and leave the connection open.
-	reason, truncErr := truncateCloseReason(reason)
+	reason, truncErr := wireCloseReason(reason)
 
 	c.closingMu.Lock()
 	defer c.closingMu.Unlock()

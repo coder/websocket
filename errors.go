@@ -3,38 +3,37 @@ package websocket
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"unicode/utf8"
 )
 
 // ErrMessageTooBig is returned when a message exceeds the read limit.
 var ErrMessageTooBig = errors.New("websocket: message too big")
 
-// ErrCloseReasonTruncated is returned by Close when the reason was longer than
-// 123 bytes and Close shortened it.
+// ErrCloseReasonTruncated is returned by Close when the reason, after invalid
+// UTF-8 was replaced, was longer than 123 bytes and Close shortened it.
 var ErrCloseReasonTruncated = errors.New("websocket: close reason truncated")
 
 // maxCloseReason is the 125 byte control frame payload limit minus the 2 byte
 // status code, see RFC 6455 section 5.5.
 const maxCloseReason = 123
 
-// truncateCloseReason returns the longest prefix of reason that fits in a
-// close frame without splitting a valid UTF-8 encoded rune. The error wraps
-// ErrCloseReasonTruncated if reason was cut.
-func truncateCloseReason(reason string) (string, error) {
-	if len(reason) <= maxCloseReason {
-		return reason, nil
+// wireCloseReason returns reason as Close sends it: invalid UTF-8 replaced
+// with U+FFFD, then cut to the longest prefix of at most maxCloseReason bytes
+// that does not split a rune. The error wraps ErrCloseReasonTruncated if the
+// reason was cut.
+func wireCloseReason(reason string) (string, error) {
+	// RFC 6455 section 5.5.1 defines the reason as UTF-8, and peers that
+	// check it fail the connection (section 8.1) instead of reading the code.
+	valid := strings.ToValidUTF8(reason, "\uFFFD")
+	if len(valid) <= maxCloseReason {
+		return valid, nil
 	}
 	n := maxCloseReason
-	// Back off only to keep a valid multi-byte rune whole. Invalid UTF-8 is
-	// cut as is because the library does not validate it.
-	for i := n; i > n-utf8.UTFMax; i-- {
-		if utf8.RuneStart(reason[i]) {
-			r, size := utf8.DecodeRuneInString(reason[i:])
-			if (r != utf8.RuneError || size > 1) && i+size > n {
-				n = i
-			}
-			break
-		}
+	for !utf8.RuneStart(valid[n]) {
+		n--
 	}
-	return reason[:n], fmt.Errorf("%w from %d to %d bytes", ErrCloseReasonTruncated, len(reason), n)
+	// "from" is the caller's length and "to" the sent length. Replacement can
+	// grow a reason, so "from" can be maxCloseReason or less, even below "to".
+	return valid[:n], fmt.Errorf("%w from %d to %d bytes", ErrCloseReasonTruncated, len(reason), n)
 }
