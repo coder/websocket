@@ -50,11 +50,11 @@ const _MessageType_name = "MessageTextMessageBinary"
 var _MessageType_index = [...]uint8{0, 11, 24}
 
 func (i MessageType) String() string {
-	i -= 1
-	if i < 0 || i >= MessageType(len(_MessageType_index)-1) {
-		return "MessageType(" + strconv.FormatInt(int64(i+1), 10) + ")"
+	idx := int(i) - 1
+	if i < 1 || idx >= len(_MessageType_index)-1 {
+		return "MessageType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _MessageType_name[_MessageType_index[i]:_MessageType_index[i+1]]
+	return _MessageType_name[_MessageType_index[idx]:_MessageType_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -83,9 +83,9 @@ const _StatusCode_name = "StatusNormalClosureStatusGoingAwayStatusProtocolErrorS
 var _StatusCode_index = [...]uint16{0, 19, 34, 53, 74, 88, 106, 127, 156, 177, 196, 220, 239, 259, 278, 294, 312}
 
 func (i StatusCode) String() string {
-	i -= 1000
-	if i < 0 || i >= StatusCode(len(_StatusCode_index)-1) {
-		return "StatusCode(" + strconv.FormatInt(int64(i+1000), 10) + ")"
+	idx := int(i) - 1000
+	if i < 1000 || idx >= len(_StatusCode_index)-1 {
+		return "StatusCode(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _StatusCode_name[_StatusCode_index[i]:_StatusCode_index[i+1]]
+	return _StatusCode_name[_StatusCode_index[idx]:_StatusCode_index[idx+1]]
 }
