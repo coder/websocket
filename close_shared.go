@@ -6,9 +6,13 @@ import (
 	"unicode/utf8"
 )
 
-// maxCloseReason is the 125 byte control frame payload limit minus the 2 byte
-// status code, see RFC 6455 section 5.5.
-const maxCloseReason = 123
+// maxControlPayload is the maximum length of a control frame payload.
+// See https://tools.ietf.org/html/rfc6455#section-5.5.
+const maxControlPayload = 125
+
+// maxCloseReason is the control frame payload limit minus the 2 byte status
+// code.
+const maxCloseReason = maxControlPayload - 2
 
 // wireCloseReason returns reason as Close sends it: invalid UTF-8 replaced
 // with U+FFFD, then cut to the longest prefix of at most maxCloseReason bytes
