@@ -444,7 +444,18 @@ func (mr *msgReader) Read(p []byte) (n int, err error) {
 		p = p[:n]
 		mr.dict.write(p)
 	}
-	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) && mr.fin && mr.flate {
+	if mr.flate && errors.Is(err, io.EOF) {
+		// A DEFLATE block with BFINAL set can end before the final frame.
+		// Discard its padding, but still require the complete message framing.
+		mr.flateBufio.Reset(mr.readFunc)
+		if !mr.fin || mr.payloadLength != 0 {
+			_, err = io.Copy(io.Discard, mr.readFunc)
+			if err == nil {
+				err = io.EOF
+			}
+		}
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) && mr.fin && mr.flate && mr.payloadLength == 0 {
 		mr.putFlateReader()
 		return n, io.EOF
 	}
@@ -466,6 +477,9 @@ func (mr *msgReader) read(p []byte) (int, error) {
 
 			h, err := mr.c.readLoop(mr.ctx)
 			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return 0, io.ErrUnexpectedEOF
+				}
 				return 0, err
 			}
 			if h.opcode != opContinuation {
@@ -484,6 +498,9 @@ func (mr *msgReader) read(p []byte) (int, error) {
 
 		n, err := mr.c.readFramePayload(mr.ctx, p)
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return n, io.ErrUnexpectedEOF
+			}
 			return n, err
 		}
 
