@@ -41,9 +41,12 @@ const (
 	//
 	// This means less efficient compression as the sliding window from previous messages will not be used but the
 	// memory overhead will be lower as there will be no fixed cost for the flate.Writer nor the 32 KB sliding window.
-	// Especially if the connections are long lived and seldom written to.
+	// Especially if the connections are long-lived and seldom written to.
 	//
 	// Thus, it uses less memory than CompressionContextTakeover but compresses less efficiently.
+	//
+	// A message written with Conn.Write or Conn.WritePrepared is sent uncompressed if compression does not make it
+	// smaller, such as already compressed data.
 	//
 	// If the peer does not support CompressionNoContextTakeover then we will fall back to CompressionDisabled.
 	CompressionNoContextTakeover
