@@ -174,7 +174,7 @@ func (nc *netConn) read(p []byte) (int, error) {
 		}
 		if typ != nc.msgType {
 			err := fmt.Errorf("unexpected frame type read (expected %v): %v", nc.msgType, typ)
-			nc.c.Close(StatusUnsupportedData, err.Error())
+			nc.c.closeWithHandshake(StatusUnsupportedData, err.Error())
 			return 0, err
 		}
 		nc.reader = r

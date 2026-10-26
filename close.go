@@ -107,6 +107,17 @@ func CloseStatus(err error) StatusCode {
 // Close will unblock all goroutines interacting with the connection once
 // complete.
 func (c *Conn) Close(code StatusCode, reason string) error {
+	firstCall := !c.closeCalled.Swap(true)
+	err := c.closeWithHandshake(code, reason)
+	if firstCall && errors.Is(err, net.ErrClosed) {
+		return nil
+	}
+	return err
+}
+
+// closeWithHandshake implements Close for library code, which must not set
+// closeCalled.
+func (c *Conn) closeWithHandshake(code StatusCode, reason string) error {
 	ce, wireErr := wireCloseError(code, reason)
 	err := c.closeAndWait(ce)
 	if err != nil {
@@ -118,7 +129,11 @@ func (c *Conn) Close(code StatusCode, reason string) error {
 func (c *Conn) closeAndWait(ce CloseError) (err error) {
 	defer errd.Wrap(&err, "failed to close WebSocket")
 
-	if c.userClosed.Swap(true) && c.isClosed() {
+	if c.casClosing() {
+		err = c.waitGoroutines()
+		if err != nil {
+			return err
+		}
 		return net.ErrClosed
 	}
 	defer func() {
@@ -126,10 +141,6 @@ func (c *Conn) closeAndWait(ce CloseError) (err error) {
 			err = nil
 		}
 	}()
-
-	if c.casClosing() {
-		return c.waitGoroutines()
-	}
 
 	err = c.closeHandshake(ce)
 
@@ -148,10 +159,23 @@ func (c *Conn) closeAndWait(ce CloseError) (err error) {
 
 // CloseNow closes the WebSocket connection without attempting a close handshake.
 // Use when you do not want the overhead of the close handshake.
-func (c *Conn) CloseNow() (err error) {
+func (c *Conn) CloseNow() error {
+	firstCall := !c.closeCalled.Swap(true)
+	err := c.closeWithoutHandshake()
+	if firstCall && errors.Is(err, net.ErrClosed) {
+		return nil
+	}
+	return err
+}
+
+func (c *Conn) closeWithoutHandshake() (err error) {
 	defer errd.Wrap(&err, "failed to immediately close WebSocket")
 
-	if c.userClosed.Swap(true) && c.isClosed() {
+	if c.casClosing() {
+		err = c.waitGoroutines()
+		if err != nil {
+			return err
+		}
 		return net.ErrClosed
 	}
 	defer func() {
@@ -159,10 +183,6 @@ func (c *Conn) CloseNow() (err error) {
 			err = nil
 		}
 	}()
-
-	if c.casClosing() {
-		return c.waitGoroutines()
-	}
 
 	err = c.close()
 
