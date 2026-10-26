@@ -13,8 +13,8 @@ const maxControlPayload = 125
 // maxCloseReason is maxControlPayload minus the 2-byte status code.
 const maxCloseReason = maxControlPayload - 2
 
-// wireCloseReason returns a reason that can always be sent, and an error if it
-// truncated reason.
+// wireCloseReason returns the reason to send, also when the error is non-nil.
+// The error reports a truncated reason.
 func wireCloseReason(reason string) (string, error) {
 	// RFC 6455 section 5.5.1 requires a UTF-8 reason.
 	valid := strings.ToValidUTF8(reason, "\uFFFD")
