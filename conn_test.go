@@ -514,6 +514,21 @@ func TestWasm(t *testing.T) {
 	}
 
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Sec-WebSocket-Protocol") == "close" {
+			// Closes first so the client's Close runs after the browser
+			// closed the connection.
+			c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+				Subprotocols:       []string{"close"},
+				InsecureSkipVerify: true,
+			})
+			if err == nil {
+				err = c.Close(websocket.StatusNormalClosure, "")
+			}
+			if err != nil {
+				t.Error(err)
+			}
+			return
+		}
 		err := echoServer(w, r, &websocket.AcceptOptions{
 			Subprotocols:       []string{"echo"},
 			InsecureSkipVerify: true,
