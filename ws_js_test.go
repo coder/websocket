@@ -2,6 +2,7 @@ package websocket_test
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -69,6 +70,25 @@ func TestWasmCloseReasonInvalidUTF8(t *testing.T) {
 	// Without the U+FFFD replacement, these 50 bytes become more than 123 bytes
 	// when converted to a JavaScript string. The echo server checks the close code.
 	err = c.Close(websocket.StatusNormalClosure, strings.Repeat("\x80", 50))
+	assert.Success(t, err)
+}
+
+func TestWasmFirstCloseAfterPeerClose(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	c, _, err := websocket.Dial(ctx, os.Getenv("WS_ECHO_SERVER_URL"), &websocket.DialOptions{
+		Subprotocols: []string{"close"},
+	})
+	assert.Success(t, err)
+
+	_, _, err = c.Read(ctx)
+	// Read returns once the browser has closed the connection.
+	assert.ErrorIs(t, net.ErrClosed, err)
+
+	err = c.Close(websocket.StatusNormalClosure, "")
 	assert.Success(t, err)
 }
 
