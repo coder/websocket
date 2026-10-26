@@ -469,7 +469,7 @@ func TestWasm(t *testing.T) {
 	// a retry cannot hide a library failure.
 	const chromeStartTimeout = "websocket url timeout reached"
 	const attempts = 3
-	for attempt := 1; ; attempt++ {
+	for attempt := 1; attempt <= attempts; attempt++ {
 		cmd := exec.CommandContext(ctx, "go", "test", "-exec=wasmbrowsertest", ".", "-v")
 		cmd.Env = append(cleanEnv(os.Environ()), "GOOS=js", "GOARCH=wasm", fmt.Sprintf("WS_ECHO_SERVER_URL=%v", s.URL))
 
@@ -477,11 +477,10 @@ func TestWasm(t *testing.T) {
 		if err == nil {
 			return
 		}
-		if attempt < attempts && ctx.Err() == nil && bytes.Contains(b, []byte(chromeStartTimeout)) {
-			t.Logf("attempt %d/%d: Chrome did not start in time, retrying", attempt, attempts)
-			continue
+		if attempt == attempts || ctx.Err() != nil || !bytes.Contains(b, []byte(chromeStartTimeout)) {
+			t.Fatalf("wasm test binary failed: %v:\n%s", err, b)
 		}
-		t.Fatalf("wasm test binary failed: %v:\n%s", err, b)
+		t.Logf("attempt %d/%d: Chrome did not start in time, retrying", attempt, attempts)
 	}
 }
 
