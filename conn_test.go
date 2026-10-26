@@ -462,11 +462,8 @@ func TestWasm(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	// wasmbrowsertest fails with this message when Chrome does not print its
-	// DevTools address within chromedp's 20s limit, which it gives no option
-	// to raise. On a fresh CI runner the first Chrome start can take over 20s;
-	// later starts take about a second. No wasm test has run at that point, so
-	// a retry cannot hide a library failure.
+	// Chrome's first start on a fresh CI runner can exceed the 20s that
+	// wasmbrowsertest allows. No wasm test has run by then, so retrying is safe.
 	const chromeStartTimeout = "websocket url timeout reached"
 	const attempts = 3
 	for attempt := 1; attempt <= attempts; attempt++ {
