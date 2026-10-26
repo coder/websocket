@@ -300,14 +300,14 @@ func validWireCloseCode(code StatusCode) bool {
 	return false
 }
 
-// wireCloseError returns the CloseError to send for code and reason, also when
-// the error is non-nil. The error reports a replaced code or a truncated reason.
+// wireCloseError returns the CloseError to send, also when the error is
+// non-nil. The error reports a replaced code or a truncated reason.
 func wireCloseError(code StatusCode, reason string) (CloseError, error) {
 	if code == StatusNoStatusRcvd {
 		return CloseError{Code: code}, nil
 	}
 	if !validWireCloseCode(code) {
-		return CloseError{Code: StatusInternalError}, fmt.Errorf("websocket: invalid close status code %v, sent %v instead", code, StatusInternalError)
+		return CloseError{Code: StatusInternalError}, fmt.Errorf("websocket: invalid close status code %v, replaced with %v", code, StatusInternalError)
 	}
 	reason, err := wireCloseReason(reason)
 	return CloseError{Code: code, Reason: reason}, err

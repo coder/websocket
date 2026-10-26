@@ -70,7 +70,7 @@ func TestConn(t *testing.T) {
 		})
 
 		err := c1.Close(-1, "")
-		assert.Equal(t, "close error", "websocket: invalid close status code StatusCode(-1), sent StatusInternalError instead", err.Error())
+		assert.Equal(t, "close error", "websocket: invalid close status code StatusCode(-1), replaced with StatusInternalError", err.Error())
 
 		assert.Success(t, assertCloseStatus(websocket.StatusInternalError, <-readErr))
 	})
