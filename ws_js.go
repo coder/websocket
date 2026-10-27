@@ -46,6 +46,7 @@ type Conn struct {
 
 	// read limit for a message in bytes.
 	msgReadLimit atomic.Int64
+	readLimitSet atomic.Bool
 
 	closeReadMu  sync.Mutex
 	closeReadCtx context.Context
@@ -414,6 +415,11 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 
 // SetReadLimit implements *Conn.SetReadLimit for wasm.
 func (c *Conn) SetReadLimit(n int64) {
+	c.readLimitSet.Store(true)
+	c.setReadLimit(n)
+}
+
+func (c *Conn) setReadLimit(n int64) {
 	c.msgReadLimit.Store(n)
 }
 
