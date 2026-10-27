@@ -114,6 +114,9 @@ func (opts *DialOptions) cloneWithDefaults(ctx context.Context) (context.Context
 // connection. For any other status, resp.Body holds at most the first
 // 1024 bytes of the body.
 //
+// If the server answers with a status other than 101 Switching Protocols,
+// err wraps ErrBadStatus and the response is non nil.
+//
 // This function requires at least Go 1.12 as it uses a new feature
 // in net/http to perform WebSocket handshakes.
 // See docs on the HTTPClient option and https://github.com/golang/go/issues/26937#issuecomment-415855861
@@ -252,7 +255,7 @@ func secWebSocketKey(rr io.Reader) (string, error) {
 
 func verifyServerResponse(opts *DialOptions, copts *compressionOptions, secWebSocketKey string, resp *http.Response) (*compressionOptions, error) {
 	if resp.StatusCode != http.StatusSwitchingProtocols {
-		return nil, fmt.Errorf("expected handshake response status code %v but got %v", http.StatusSwitchingProtocols, resp.StatusCode)
+		return nil, fmt.Errorf("%w: expected handshake response status code %v but got %v", ErrBadStatus, http.StatusSwitchingProtocols, resp.StatusCode)
 	}
 
 	if !headerContainsTokenIgnoreCase(resp.Header, "Connection", "Upgrade") {
