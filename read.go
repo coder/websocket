@@ -95,6 +95,11 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 //
 // Set to -1 to disable.
 func (c *Conn) SetReadLimit(n int64) {
+	c.readLimitSet.Store(true)
+	c.setReadLimit(n)
+}
+
+func (c *Conn) setReadLimit(n int64) {
 	if n >= 0 {
 		// We read one more byte than the limit in case
 		// there is a fin frame that needs to be read.
