@@ -59,6 +59,7 @@ type Conn struct {
 	readHeaderBuf  [8]byte
 	readControlBuf [maxControlPayload]byte
 	msgReader      *msgReader
+	readLimitSet   atomic.Bool
 
 	// Write state.
 	msgWriter      *msgWriter
