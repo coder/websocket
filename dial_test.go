@@ -416,3 +416,62 @@ func TestDialViaProxy(t *testing.T) {
 	assertEcho(t, ctx, c)
 	assertClose(t, c)
 }
+
+func TestDialFailedHandshakeBody(t *testing.T) {
+	t.Parallel()
+
+	t.Run("switchingProtocols", func(t *testing.T) {
+		t.Parallel()
+
+		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			conn, brw, err := http.NewResponseController(w).Hijack()
+			if err != nil {
+				t.Errorf("failed to hijack: %v", err)
+				return
+			}
+			defer conn.Close()
+			brw.WriteString("HTTP/1.1 101 Switching Protocols\r\n" +
+				"Connection: Upgrade\r\n" +
+				"Upgrade: websocket\r\n" +
+				"Sec-WebSocket-Accept: xd\r\n\r\n")
+			brw.Flush()
+			// Send nothing more and wait for the client to close.
+			io.Copy(io.Discard, conn)
+		}))
+		defer s.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		start := time.Now()
+		_, resp, err := websocket.Dial(ctx, s.URL, nil)
+		elapsed := time.Since(start)
+		assert.Contains(t, err, "invalid Sec-WebSocket-Accept")
+		assert.Equal(t, "StatusCode", http.StatusSwitchingProtocols, resp.StatusCode)
+		b, err := io.ReadAll(resp.Body)
+		assert.Success(t, err)
+		assert.Equal(t, "body", "", string(b))
+		if elapsed > time.Second {
+			t.Fatalf("Dial took %v, want under 1s", elapsed)
+		}
+	})
+
+	t.Run("forbidden", func(t *testing.T) {
+		t.Parallel()
+
+		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "forbidden by test", http.StatusForbidden)
+		}))
+		defer s.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		_, resp, err := websocket.Dial(ctx, s.URL, nil)
+		assert.Error(t, err)
+		assert.Equal(t, "StatusCode", http.StatusForbidden, resp.StatusCode)
+		b, err := io.ReadAll(resp.Body)
+		assert.Success(t, err)
+		assert.Equal(t, "body", "forbidden by test\n", string(b))
+	})
+}
