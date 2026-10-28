@@ -243,7 +243,7 @@ func secWebSocketKey(rr io.Reader) (string, error) {
 
 func verifyServerResponse(opts *DialOptions, copts *compressionOptions, secWebSocketKey string, resp *http.Response) (*compressionOptions, error) {
 	if resp.StatusCode != http.StatusSwitchingProtocols {
-		return nil, fmt.Errorf("%w: expected handshake response status code %v but got %v", ErrBadStatus, http.StatusSwitchingProtocols, resp.StatusCode)
+		return nil, badStatusError{statusCode: resp.StatusCode}
 	}
 
 	if !headerContainsTokenIgnoreCase(resp.Header, "Connection", "Upgrade") {
@@ -267,6 +267,20 @@ func verifyServerResponse(opts *DialOptions, copts *compressionOptions, secWebSo
 	}
 
 	return verifyServerExtensions(copts, resp.Header)
+}
+
+// badStatusError wraps ErrBadStatus without adding its text, because
+// callers match on the Dial error string from before ErrBadStatus existed.
+type badStatusError struct {
+	statusCode int
+}
+
+func (e badStatusError) Error() string {
+	return fmt.Sprintf("expected handshake response status code %v but got %v", http.StatusSwitchingProtocols, e.statusCode)
+}
+
+func (badStatusError) Unwrap() error {
+	return ErrBadStatus
 }
 
 func verifySubprotocol(subprotos []string, resp *http.Response) error {
