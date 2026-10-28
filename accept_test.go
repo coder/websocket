@@ -207,6 +207,155 @@ func TestAccept(t *testing.T) {
 	})
 }
 
+func newHandshakeRequest() *http.Request {
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Connection", "Upgrade")
+	r.Header.Set("Upgrade", "websocket")
+	r.Header.Set("Sec-WebSocket-Version", "13")
+	r.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	return r
+}
+
+// acceptRejectionTests covers every rejection before the 101 response. The
+// http.ResponseWriter is an httptest.ResponseRecorder, which does not
+// implement http.Hijacker.
+var acceptRejectionTests = []struct {
+	name       string
+	modify     func(r *http.Request)
+	opts       AcceptOptions
+	wantStatus int
+	wantErr    string
+	// wantHeader is the response header when the handler runs.
+	wantHeader http.Header
+}{
+	{
+		name: "http1.0",
+		modify: func(r *http.Request) {
+			r.Proto, r.ProtoMajor, r.ProtoMinor = "HTTP/1.0", 1, 0
+		},
+		wantStatus: http.StatusUpgradeRequired,
+		wantErr:    `WebSocket protocol violation: handshake request must be at least HTTP/1.1: "HTTP/1.0"`,
+		wantHeader: http.Header{},
+	},
+	{
+		name:       "noConnectionUpgrade",
+		modify:     func(r *http.Request) { r.Header.Set("Connection", "keep-alive") },
+		wantStatus: http.StatusUpgradeRequired,
+		wantErr:    `WebSocket protocol violation: Connection header "keep-alive" does not contain Upgrade`,
+		wantHeader: http.Header{"Connection": {"Upgrade"}, "Upgrade": {"websocket"}},
+	},
+	{
+		name:       "noUpgradeWebSocket",
+		modify:     func(r *http.Request) { r.Header.Set("Upgrade", "h2c") },
+		wantStatus: http.StatusUpgradeRequired,
+		wantErr:    `WebSocket protocol violation: Upgrade header "h2c" does not contain websocket`,
+		wantHeader: http.Header{"Connection": {"Upgrade"}, "Upgrade": {"websocket"}},
+	},
+	{
+		name:       "methodNotGet",
+		modify:     func(r *http.Request) { r.Method = "POST" },
+		wantStatus: http.StatusMethodNotAllowed,
+		wantErr:    `WebSocket protocol violation: handshake request method is not GET but "POST"`,
+		wantHeader: http.Header{},
+	},
+	{
+		name:       "unsupportedVersion",
+		modify:     func(r *http.Request) { r.Header.Set("Sec-WebSocket-Version", "8") },
+		wantStatus: http.StatusBadRequest,
+		wantErr:    `unsupported WebSocket protocol version (only 13 is supported): "8"`,
+		wantHeader: http.Header{"Sec-Websocket-Version": {"13"}},
+	},
+	{
+		name:       "missingKey",
+		modify:     func(r *http.Request) { r.Header.Del("Sec-WebSocket-Key") },
+		wantStatus: http.StatusBadRequest,
+		wantErr:    "WebSocket protocol violation: missing Sec-WebSocket-Key",
+		wantHeader: http.Header{},
+	},
+	{
+		name:       "multipleKeys",
+		modify:     func(r *http.Request) { r.Header.Add("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==") },
+		wantStatus: http.StatusBadRequest,
+		wantErr:    "WebSocket protocol violation: multiple Sec-WebSocket-Key headers",
+		wantHeader: http.Header{},
+	},
+	{
+		name:       "invalidKey",
+		modify:     func(r *http.Request) { r.Header.Set("Sec-WebSocket-Key", "notbase64") },
+		wantStatus: http.StatusBadRequest,
+		wantErr:    `WebSocket protocol violation: invalid Sec-WebSocket-Key "notbase64", must be a 16 byte base64 encoded string`,
+		wantHeader: http.Header{},
+	},
+	{
+		name:       "unauthorizedOrigin",
+		modify:     func(r *http.Request) { r.Header.Set("Origin", "https://other.com") },
+		wantStatus: http.StatusForbidden,
+		wantErr:    `request Origin "other.com" is not authorized for Host "example.com"`,
+		wantHeader: http.Header{},
+	},
+	{
+		// The pattern error is logged and not sent to the client.
+		name:       "badOriginPattern",
+		modify:     func(r *http.Request) { r.Header.Set("Origin", "https://other.com") },
+		opts:       AcceptOptions{OriginPatterns: []string{"["}},
+		wantStatus: http.StatusForbidden,
+		wantErr:    "Forbidden",
+		wantHeader: http.Header{},
+	},
+	{
+		name:       "noHijacker",
+		wantStatus: http.StatusNotImplemented,
+		wantErr:    "http.ResponseWriter does not implement http.Hijacker",
+		wantHeader: http.Header{},
+	},
+}
+
+// TestAcceptRejectionDefault pins the response Accept writes without an
+// ErrorHandler.
+func TestAcceptRejectionDefault(t *testing.T) {
+	t.Parallel()
+
+	plain := func(h http.Header) http.Header {
+		h.Set("Content-Type", "text/plain; charset=utf-8")
+		h.Set("X-Content-Type-Options", "nosniff")
+		return h
+	}
+	want := map[string]struct {
+		header http.Header
+		body   string
+	}{
+		"http1.0":             {plain(http.Header{}), `WebSocket protocol violation: handshake request must be at least HTTP/1.1: "HTTP/1.0"` + "\n"},
+		"noConnectionUpgrade": {plain(http.Header{"Connection": {"Upgrade"}, "Upgrade": {"websocket"}}), `WebSocket protocol violation: Connection header "keep-alive" does not contain Upgrade` + "\n"},
+		"noUpgradeWebSocket":  {plain(http.Header{"Connection": {"Upgrade"}, "Upgrade": {"websocket"}}), `WebSocket protocol violation: Upgrade header "h2c" does not contain websocket` + "\n"},
+		"methodNotGet":        {plain(http.Header{}), `WebSocket protocol violation: handshake request method is not GET but "POST"` + "\n"},
+		"unsupportedVersion":  {plain(http.Header{"Sec-Websocket-Version": {"13"}}), `unsupported WebSocket protocol version (only 13 is supported): "8"` + "\n"},
+		"missingKey":          {plain(http.Header{}), "WebSocket protocol violation: missing Sec-WebSocket-Key\n"},
+		"multipleKeys":        {plain(http.Header{}), "WebSocket protocol violation: multiple Sec-WebSocket-Key headers\n"},
+		"invalidKey":          {plain(http.Header{}), `WebSocket protocol violation: invalid Sec-WebSocket-Key "notbase64", must be a 16 byte base64 encoded string` + "\n"},
+		"unauthorizedOrigin":  {plain(http.Header{}), `request Origin "other.com" is not authorized for Host "example.com"` + "\n"},
+		"badOriginPattern":    {plain(http.Header{}), "Forbidden\n"},
+		"noHijacker":          {plain(http.Header{}), "Not Implemented\n"},
+	}
+
+	for _, tc := range acceptRejectionTests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			r := newHandshakeRequest()
+			if tc.modify != nil {
+				tc.modify(r)
+			}
+			w := httptest.NewRecorder()
+
+			_, err := Accept(w, r, &tc.opts)
+			assert.Equal(t, "err", "failed to accept WebSocket connection: "+tc.wantErr, err.Error())
+			assert.Equal(t, "status", tc.wantStatus, w.Code)
+			assert.Equal(t, "header", want[tc.name].header, w.Header())
+			assert.Equal(t, "body", want[tc.name].body, w.Body.String())
+		})
+	}
+}
+
 func Test_verifyClientHandshake(t *testing.T) {
 	t.Parallel()
 
