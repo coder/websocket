@@ -95,7 +95,7 @@ func TestBadDials(t *testing.T) {
 				}, nil
 			}),
 		})
-		assert.Contains(t, err, "failed to WebSocket dial: websocket: bad status: expected handshake response status code 101 but got 0")
+		assert.Contains(t, err, "failed to WebSocket dial: expected handshake response status code 101 but got 0")
 	})
 
 	t.Run("badBody", func(t *testing.T) {
@@ -141,8 +141,9 @@ func TestDialErrBadStatus(t *testing.T) {
 		defer cancel()
 
 		_, resp, err := websocket.Dial(ctx, s.URL, nil)
+		assert.Error(t, err)
+		assert.Equal(t, "error", "failed to WebSocket dial: expected handshake response status code 101 but got 403", err.Error())
 		assert.ErrorIs(t, websocket.ErrBadStatus, err)
-		assert.Contains(t, err, "expected handshake response status code 101 but got 403")
 		if resp == nil {
 			t.Fatal("expected non-nil response")
 		}
