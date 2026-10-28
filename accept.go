@@ -79,6 +79,16 @@ type AcceptOptions struct {
 	// Unlike OnPingReceived, this callback does not return a value because a pong frame
 	// is a response to a ping and does not trigger any further frame transmission.
 	OnPongReceived func(ctx context.Context, payload []byte)
+
+	// ErrorHandler writes the HTTP response when Accept rejects the handshake
+	// request. status is the HTTP status Accept chose, w.Header() holds the
+	// headers Accept set for the rejection, and Accept returns an error
+	// wrapping err. ErrorHandler must write a response; otherwise net/http
+	// sends 200 OK with an empty body. If nil, Accept writes a plain text
+	// response with http.Error. ErrorHandler is not called when hijacking the
+	// connection fails, because Accept has already written 101 Switching
+	// Protocols.
+	ErrorHandler func(w http.ResponseWriter, r *http.Request, status int, err error)
 }
 
 func (opts *AcceptOptions) cloneWithDefaults() *AcceptOptions {
@@ -95,7 +105,9 @@ func (opts *AcceptOptions) cloneWithDefaults() *AcceptOptions {
 // Accept will not allow cross origin requests by default.
 // See the InsecureSkipVerify and OriginPatterns options to allow cross origin requests.
 //
-// Accept will write a response to w on all errors.
+// Accept writes a response to w on all errors, through
+// AcceptOptions.ErrorHandler when it rejects the handshake request. Do not
+// write to w after Accept returns an error.
 //
 // Note that using the http.Request Context after Accept returns may lead to
 // unexpected behavior (see http.Hijacker).
@@ -106,13 +118,14 @@ func Accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Conn, err error) {
 	defer errd.Wrap(&err, "failed to accept WebSocket connection")
 
+	opts = opts.cloneWithDefaults()
+
 	errCode, err := verifyClientRequest(w, r)
 	if err != nil {
-		http.Error(w, err.Error(), errCode)
+		opts.writeRejection(w, r, errCode, err, err.Error())
 		return nil, err
 	}
 
-	opts = opts.cloneWithDefaults()
 	if !opts.InsecureSkipVerify {
 		err = authenticateOrigin(r, opts.OriginPatterns)
 		if err != nil {
@@ -120,7 +133,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 				log.Printf("websocket: %v", err)
 				err = errors.New(http.StatusText(http.StatusForbidden))
 			}
-			http.Error(w, err.Error(), http.StatusForbidden)
+			opts.writeRejection(w, r, http.StatusForbidden, err, err.Error())
 			return nil, err
 		}
 	}
@@ -128,7 +141,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	hj, ok := hijacker(w)
 	if !ok {
 		err = errors.New("http.ResponseWriter does not implement http.Hijacker")
-		http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
+		opts.writeRejection(w, r, http.StatusNotImplemented, err, http.StatusText(http.StatusNotImplemented))
 		return nil, err
 	}
 
@@ -179,6 +192,16 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 		br: brw.Reader,
 		bw: brw.Writer,
 	}), nil
+}
+
+// writeRejection writes the response for a handshake request that Accept
+// rejects. body is the http.Error text used when ErrorHandler is nil.
+func (opts *AcceptOptions) writeRejection(w http.ResponseWriter, r *http.Request, status int, err error, body string) {
+	if opts.ErrorHandler != nil {
+		opts.ErrorHandler(w, r, status, err)
+		return
+	}
+	http.Error(w, body, status)
 }
 
 func verifyClientRequest(w http.ResponseWriter, r *http.Request) (errCode int, _ error) {

@@ -439,6 +439,7 @@ type AcceptOptions struct {
 	OriginPatterns       []string
 	CompressionMode      CompressionMode
 	CompressionThreshold int
+	ErrorHandler         func(w http.ResponseWriter, r *http.Request, status int, err error)
 }
 
 // Accept is stubbed out for Wasm.
