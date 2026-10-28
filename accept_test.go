@@ -5,6 +5,7 @@ package websocket
 import (
 	"bufio"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -308,6 +309,93 @@ var acceptRejectionTests = []struct {
 		wantErr:    "http.ResponseWriter does not implement http.Hijacker",
 		wantHeader: http.Header{},
 	},
+}
+
+func TestAcceptErrorHandler(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range acceptRejectionTests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			r := newHandshakeRequest()
+			if tc.modify != nil {
+				tc.modify(r)
+			}
+			w := httptest.NewRecorder()
+
+			var (
+				calls     int
+				gotStatus int
+				gotErr    error
+				gotHeader http.Header
+			)
+			opts := tc.opts
+			opts.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, status int, err error) {
+				calls++
+				gotStatus, gotErr, gotHeader = status, err, w.Header().Clone()
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(`{"message":"custom"}`))
+			}
+
+			_, err := Accept(w, r, &opts)
+			assert.Equal(t, "handler calls", 1, calls)
+			assert.Equal(t, "handler status", tc.wantStatus, gotStatus)
+			assert.Equal(t, "handler err", tc.wantErr, gotErr.Error())
+			assert.ErrorIs(t, gotErr, err)
+			assert.Equal(t, "header when handler runs", tc.wantHeader, gotHeader)
+
+			assert.Equal(t, "response status", tc.wantStatus, w.Code)
+			assert.Equal(t, "response content type", "application/json", w.Header().Get("Content-Type"))
+			assert.Equal(t, "response body", `{"message":"custom"}`, w.Body.String())
+		})
+	}
+
+	// The handler response reaches a client over a real connection, and a
+	// handler that writes nothing leaves net/http's default 200 OK.
+	t.Run("server", func(t *testing.T) {
+		t.Parallel()
+
+		for _, tc := range []struct {
+			name       string
+			write      bool
+			wantStatus int
+			wantBody   string
+		}{
+			{name: "writes", write: true, wantStatus: http.StatusForbidden, wantBody: `{"message":"custom"}`},
+			{name: "writesNothing", write: false, wantStatus: http.StatusOK, wantBody: ""},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+
+				s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					_, _ = Accept(w, r, &AcceptOptions{
+						ErrorHandler: func(w http.ResponseWriter, _ *http.Request, status int, _ error) {
+							if tc.write {
+								w.WriteHeader(status)
+								_, _ = w.Write([]byte(`{"message":"custom"}`))
+							}
+						},
+					})
+				}))
+				defer s.Close()
+
+				req, err := http.NewRequest("GET", s.URL, nil)
+				assert.Success(t, err)
+				req.Header = newHandshakeRequest().Header
+				req.Header.Set("Origin", "https://other.com")
+				res, err := s.Client().Do(req)
+				assert.Success(t, err)
+				defer res.Body.Close()
+				body, err := io.ReadAll(res.Body)
+				assert.Success(t, err)
+
+				assert.Equal(t, "status", tc.wantStatus, res.StatusCode)
+				assert.Equal(t, "body", tc.wantBody, string(body))
+			})
+		}
+	})
 }
 
 // TestAcceptRejectionDefault pins the response Accept writes without an
