@@ -345,6 +345,10 @@ func verifyServerResponse(opts *DialOptions, copts *compressionOptions, secWebSo
 }
 
 func verifyServerResponseH1(opts *DialOptions, copts *compressionOptions, secWebSocketKey string, resp *http.Response) (*compressionOptions, error) {
+	if resp.ProtoMajor != 1 {
+		return nil, fmt.Errorf("expected HTTP/1.x response but got: %s", resp.Proto)
+	}
+
 	if resp.StatusCode != http.StatusSwitchingProtocols {
 		return nil, badStatusError{statusCode: resp.StatusCode}
 	}
