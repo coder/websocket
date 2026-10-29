@@ -81,7 +81,7 @@ Examples:
 	defer cancel()
 
 	conn, resp, err := websocket.Dial(ctx, rawURL, &websocket.DialOptions{
-		HTTPClient: hc,
+		HTTPClient:   hc,
 		HTTPProtocol: websocket.HTTPProtocol2,
 	})
 	if err != nil {
