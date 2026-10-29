@@ -592,10 +592,11 @@ func BenchmarkConn(b *testing.B) {
 			msg := []byte(strings.Repeat("1234", 128))
 			readBuf := make([]byte, len(msg))
 			writes := make(chan struct{})
-			defer close(writes)
 			werrs := make(chan error)
+			writerDone := make(chan struct{})
 
 			go func() {
+				defer close(writerDone)
 				for range writes {
 					select {
 					case werrs <- c1.Write(bb.ctx, websocket.MessageText, msg):
@@ -649,6 +650,13 @@ func BenchmarkConn(b *testing.B) {
 				}
 			}
 			b.StopTimer()
+
+			close(writes)
+			select {
+			case <-writerDone:
+			case <-bb.ctx.Done():
+				b.Fatal(bb.ctx.Err())
+			}
 
 			b.ReportMetric(float64(*bytesWritten/b.N), "written/op")
 			b.ReportMetric(float64(*bytesRead/b.N), "read/op")
