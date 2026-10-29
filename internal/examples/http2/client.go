@@ -60,8 +60,9 @@ Examples:
 		// Cleartext HTTP/2 (h2c).
 		h2t := &http2.Transport{
 			AllowHTTP: true,
-			DialTLS: func(network, addr string, _ *tls.Config) (net.Conn, error) {
-				return net.Dial(network, addr)
+			DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
+				var d net.Dialer
+				return d.DialContext(ctx, network, addr)
 			},
 		}
 		hc = &http.Client{Transport: h2t}
