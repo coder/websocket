@@ -90,8 +90,7 @@ func TestBadDials(t *testing.T) {
 		_, _, err := websocket.Dial(ctx, "ws://example.com", &websocket.DialOptions{
 			HTTPClient: mockHTTPClient(func(*http.Request) (*http.Response, error) {
 				return &http.Response{
-					ProtoMajor: 1,
-					Body:       io.NopCloser(strings.NewReader("hi")),
+					Body: io.NopCloser(strings.NewReader("hi")),
 				}, nil
 			}),
 		})
@@ -130,7 +129,6 @@ func TestBadDials(t *testing.T) {
 			h.Set("Sec-WebSocket-Accept", websocket.SecWebSocketAccept(r.Header.Get("Sec-WebSocket-Key")))
 
 			return &http.Response{
-				ProtoMajor: 1,
 				StatusCode: http.StatusSwitchingProtocols,
 				Header:     h,
 				Body:       io.NopCloser(strings.NewReader("hi")),
@@ -179,7 +177,6 @@ func Test_verifyHostOverride(t *testing.T) {
 				h.Set("Sec-WebSocket-Accept", websocket.SecWebSocketAccept(r.Header.Get("Sec-WebSocket-Key")))
 
 				return &http.Response{
-					ProtoMajor: 1,
 					StatusCode: http.StatusSwitchingProtocols,
 					Header:     h,
 					Body:       mockBody{bytes.NewBufferString("hi")},
@@ -339,8 +336,7 @@ func TestDialRedirect(t *testing.T) {
 	_, _, err := websocket.Dial(ctx, "ws://example.com", &websocket.DialOptions{
 		HTTPClient: mockHTTPClient(func(r *http.Request) (*http.Response, error) {
 			resp := &http.Response{
-				ProtoMajor: 1,
-				Header:     http.Header{},
+				Header: http.Header{},
 			}
 			if r.URL.Scheme != "https" {
 				resp.Header.Set("Location", "wss://example.com")
