@@ -12,8 +12,7 @@ go test --run=^$ --bench=. --benchmem "$@" ./...
 	if [ "$#" -eq 0 ]; then
 		if [ "${CI-}" ]; then
 			sudo apt-get update
-			sudo apt-get install -y qemu-user-static
-			ln -s /usr/bin/qemu-aarch64-static /usr/local/bin/qemu-aarch64
+			sudo apt-get install -y qemu-user
 		fi
 		qemu-aarch64 ../../ci/out/thirdparty-arm64.test --test.run=^$ --test.bench=Benchmark_mask --test.benchmem
 	fi

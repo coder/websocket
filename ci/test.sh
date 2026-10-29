@@ -34,8 +34,7 @@ if [[ $# -eq 0 ]]; then
 	if [[ $(go env GOARCH) != "arm64" ]]; then
 		if [ "${CI-}" ]; then
 			sudo apt-get update
-			sudo apt-get install -y qemu-user-static
-			ln -s /usr/bin/qemu-aarch64-static /usr/local/bin/qemu-aarch64
+			sudo apt-get install -y qemu-user
 		fi
 		GOARCH=arm64 go test -c -o ./ci/out/websocket-arm64.test "$@" .
 		run_test=(qemu-aarch64 ./ci/out/websocket-arm64.test)
