@@ -79,7 +79,7 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 		defer c.close()
 		_, _, err := c.Reader(ctx)
 		if err == nil {
-			c.Close(StatusPolicyViolation, "unexpected data message")
+			c.closeWithHandshake(StatusPolicyViolation, "unexpected data message")
 		}
 	}()
 	return ctx

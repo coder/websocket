@@ -2,6 +2,7 @@ package websocket_test
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"os"
 	"testing"
@@ -32,6 +33,25 @@ func TestWasm(t *testing.T) {
 		err = wstest.Echo(ctx, c, 65536)
 		assert.Success(t, err)
 	}
+
+	err = c.Close(websocket.StatusNormalClosure, "")
+	assert.Success(t, err)
+}
+
+func TestWasmFirstCloseAfterPeerClose(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	c, _, err := websocket.Dial(ctx, os.Getenv("WS_ECHO_SERVER_URL"), &websocket.DialOptions{
+		Subprotocols: []string{"close"},
+	})
+	assert.Success(t, err)
+
+	_, _, err = c.Read(ctx)
+	// Read returns once the browser has closed the connection.
+	assert.ErrorIs(t, net.ErrClosed, err)
 
 	err = c.Close(websocket.StatusNormalClosure, "")
 	assert.Success(t, err)
