@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -96,6 +97,10 @@ func (opts *DialOptions) cloneWithDefaults(ctx context.Context) (context.Context
 		}
 		if oldCheckRedirect != nil {
 			return oldCheckRedirect(req, via)
+		}
+		// net/http only applies its default limit when CheckRedirect is nil.
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
 		}
 		return nil
 	}

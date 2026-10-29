@@ -333,6 +333,33 @@ func TestDialRedirect(t *testing.T) {
 	assert.Contains(t, err, "failed to WebSocket dial: WebSocket protocol violation: Upgrade header \"meow\" does not contain websocket")
 }
 
+func TestDialRedirectLimit(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	var requests int
+	_, _, err := websocket.Dial(ctx, "ws://example.com", &websocket.DialOptions{
+		HTTPClient: mockHTTPClient(func(r *http.Request) (*http.Response, error) {
+			requests++
+			resp := &http.Response{
+				Header: http.Header{},
+				Body:   http.NoBody,
+			}
+			if requests > 20 { // Bound the test if the limit is missing.
+				resp.StatusCode = http.StatusNotFound
+				return resp, nil
+			}
+			resp.Header.Set("Location", "wss://example.com")
+			resp.StatusCode = http.StatusFound
+			return resp, nil
+		}),
+	})
+	assert.Contains(t, err, "stopped after 10 redirects")
+	assert.Equal(t, "requests", 10, requests)
+}
+
 type forwardProxy struct {
 	hc *http.Client
 }
