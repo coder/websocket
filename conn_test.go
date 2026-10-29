@@ -459,15 +459,25 @@ func TestWasm(t *testing.T) {
 	}))
 	defer s.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "go", "test", "-exec=wasmbrowsertest", ".", "-v")
-	cmd.Env = append(cleanEnv(os.Environ()), "GOOS=js", "GOARCH=wasm", fmt.Sprintf("WS_ECHO_SERVER_URL=%v", s.URL))
+	// Chrome's first start on a fresh CI runner can exceed the 20s that
+	// wasmbrowsertest allows. No wasm test has run by then, so retrying is safe.
+	const chromeStartTimeout = "websocket url timeout reached"
+	const attempts = 3
+	for attempt := 1; attempt <= attempts; attempt++ {
+		cmd := exec.CommandContext(ctx, "go", "test", "-exec=wasmbrowsertest", ".", "-v")
+		cmd.Env = append(cleanEnv(os.Environ()), "GOOS=js", "GOARCH=wasm", fmt.Sprintf("WS_ECHO_SERVER_URL=%v", s.URL))
 
-	b, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("wasm test binary failed: %v:\n%s", err, b)
+		b, err := cmd.CombinedOutput()
+		if err == nil {
+			return
+		}
+		if attempt == attempts || ctx.Err() != nil || !bytes.Contains(b, []byte(chromeStartTimeout)) {
+			t.Fatalf("wasm test binary failed: %v:\n%s", err, b)
+		}
+		t.Logf("attempt %d/%d: Chrome did not start in time, retrying", attempt, attempts)
 	}
 }
 
