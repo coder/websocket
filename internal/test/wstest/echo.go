@@ -49,6 +49,19 @@ func EchoLoop(ctx context.Context, c *websocket.Conn) error {
 
 // Echo writes a message and ensures the same is sent back on c.
 func Echo(ctx context.Context, c *websocket.Conn, max int) error {
+	return echo(ctx, c, max, func(typ websocket.MessageType, msg []byte) error {
+		return c.Write(ctx, typ, msg)
+	})
+}
+
+// EchoPrepared is like Echo but writes the message with Conn.WritePrepared.
+func EchoPrepared(ctx context.Context, c *websocket.Conn, max int) error {
+	return echo(ctx, c, max, func(typ websocket.MessageType, msg []byte) error {
+		return c.WritePrepared(ctx, websocket.NewPreparedMessage(typ, msg))
+	})
+}
+
+func echo(ctx context.Context, c *websocket.Conn, max int, write func(websocket.MessageType, []byte) error) error {
 	expType := websocket.MessageBinary
 	if xrand.Bool() {
 		expType = websocket.MessageText
@@ -57,7 +70,7 @@ func Echo(ctx context.Context, c *websocket.Conn, max int) error {
 	msg := randMessage(expType, xrand.Int(max))
 
 	writeErr := xsync.Go(func() error {
-		return c.Write(ctx, expType, msg)
+		return write(expType, msg)
 	})
 
 	actType, act, err := c.Read(ctx)

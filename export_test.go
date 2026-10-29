@@ -3,6 +3,7 @@
 package websocket
 
 import (
+	"io"
 	"net"
 
 	"github.com/coder/websocket/internal/util"
@@ -15,6 +16,10 @@ func (c *Conn) RecordBytesWritten() *int {
 		return c.rwc.Write(p)
 	}))
 	return &bytesWritten
+}
+
+func (c *Conn) DiscardWrites() {
+	c.bw.Reset(io.Discard)
 }
 
 func (c *Conn) RecordBytesRead() *int {

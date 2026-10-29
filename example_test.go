@@ -118,7 +118,7 @@ func Example_writeOnly() {
 }
 
 func Example_crossOrigin() {
-	// This handler demonstrates how to safely accept cross origin WebSockets
+	// This handler demonstrates how to safely accept cross-origin WebSockets
 	// from the origin example.com.
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
@@ -165,7 +165,13 @@ func Example_fullStackChat() {
 	// https://github.com/coder/websocket/tree/master/internal/examples/chat
 }
 
-// This example demonstrates a echo server.
+// This example demonstrates an echo server.
 func Example_echo() {
 	// https://github.com/coder/websocket/tree/master/internal/examples/echo
+}
+
+// This example demonstrates broadcasting messages to many subscribers with
+// a PreparedMessage.
+func ExampleConn_WritePrepared() {
+	// https://github.com/coder/websocket/tree/master/internal/examples/broadcast
 }
