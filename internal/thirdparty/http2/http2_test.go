@@ -124,8 +124,9 @@ func newH2TLSClientCustomRoundTripper(pre func(*http.Request), post func(*http.R
 func newH2CClient() *http.Client {
 	h2t := &http2.Transport{
 		AllowHTTP: true,
-		DialTLS: func(network, addr string, _ *tls.Config) (net.Conn, error) {
-			return net.Dial(network, addr)
+		DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
+			var d net.Dialer
+			return d.DialContext(ctx, network, addr)
 		},
 	}
 	return &http.Client{Transport: h2t}
