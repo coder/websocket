@@ -228,12 +228,18 @@ func (c *Conn) write(typ MessageType, p []byte) error {
 // It will wait until the peer responds with a close frame
 // or the connection is closed.
 // It thus performs the full WebSocket close handshake.
+//
+// Close replaces invalid UTF-8 in reason with U+FFFD, then truncates it to fit
+// 123 bytes without splitting a rune. If it truncated the reason and the close
+// had no other error, Close returns an error wrapping ErrCloseReasonTruncated.
 func (c *Conn) Close(code StatusCode, reason string) error {
+	// Browsers throw on a reason over 123 bytes and leave the connection open.
+	reason, truncErr := wireCloseReason(reason)
 	err := c.exportedClose(code, reason)
 	if err != nil {
 		return fmt.Errorf("failed to close WebSocket: %w", err)
 	}
-	return nil
+	return truncErr
 }
 
 // CloseNow closes the WebSocket connection without attempting a close handshake.

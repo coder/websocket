@@ -92,11 +92,29 @@ func CloseStatus(err error) StatusCode {
 // The connection can only be closed once. Additional calls to Close
 // are no-ops.
 //
-// The maximum length of reason must be 125 bytes. Avoid sending a dynamic reason.
+// Close replaces invalid UTF-8 in reason with U+FFFD, then truncates it to fit
+// 123 bytes without splitting a rune. If it truncated the reason and the close
+// had no other error, Close returns an error wrapping ErrCloseReasonTruncated.
+//
+// Valid codes are 1000 to 1003, 1007 to 1014, and 3000 to 4999. Close sends
+// any other code as StatusInternalError with no reason and returns an error.
+// The exception is StatusNoStatusRcvd, which sends a close frame with no code
+// and no reason.
+//
+// When the first call to Close returns, the connection is closed, even on error.
 //
 // Close will unblock all goroutines interacting with the connection once
 // complete.
-func (c *Conn) Close(code StatusCode, reason string) (err error) {
+func (c *Conn) Close(code StatusCode, reason string) error {
+	ce, wireErr := wireCloseError(code, reason)
+	err := c.exportedClose(ce.Code, ce.Reason)
+	if err != nil {
+		return err
+	}
+	return wireErr
+}
+
+func (c *Conn) exportedClose(code StatusCode, reason string) (err error) {
 	defer errd.Wrap(&err, "failed to close WebSocket")
 
 	if c.casClosing() {
@@ -168,24 +186,14 @@ func (c *Conn) closeHandshake(code StatusCode, reason string) error {
 }
 
 func (c *Conn) writeClose(code StatusCode, reason string) error {
-	ce := CloseError{
-		Code:   code,
-		Reason: reason,
-	}
-
-	var p []byte
-	var err error
-	if ce.Code != StatusNoStatusRcvd {
-		p, err = ce.bytes()
-		if err != nil {
-			return err
-		}
-	}
+	// The error is dropped: Close reports it from its own wireCloseError call,
+	// and writeError and the reply to a peer's close frame do not report it.
+	ce, _ := wireCloseError(code, reason)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	err = c.writeControl(ctx, opClose, p)
+	err := c.writeControl(ctx, opClose, ce.bytes())
 	// If the connection closed as we're writing we ignore the error as we might
 	// have written the close frame, the peer responded and then someone else read it
 	// and closed the connection.
@@ -292,33 +300,29 @@ func validWireCloseCode(code StatusCode) bool {
 	return false
 }
 
-func (ce CloseError) bytes() ([]byte, error) {
-	p, err := ce.bytesErr()
-	if err != nil {
-		err = fmt.Errorf("failed to marshal close frame: %w", err)
-		ce = CloseError{
-			Code: StatusInternalError,
-		}
-		p, _ = ce.bytesErr()
+// wireCloseError returns the CloseError to send, also when the error is
+// non-nil. The error reports a replaced code or a truncated reason.
+func wireCloseError(code StatusCode, reason string) (CloseError, error) {
+	if code == StatusNoStatusRcvd {
+		return CloseError{Code: code}, nil
 	}
-	return p, err
+	if !validWireCloseCode(code) {
+		return CloseError{Code: StatusInternalError}, fmt.Errorf("websocket: invalid close status code %v, replaced with %v", code, StatusInternalError)
+	}
+	reason, err := wireCloseReason(reason)
+	return CloseError{Code: code, Reason: reason}, err
 }
 
-const maxCloseReason = maxControlPayload - 2
-
-func (ce CloseError) bytesErr() ([]byte, error) {
-	if len(ce.Reason) > maxCloseReason {
-		return nil, fmt.Errorf("reason string max is %v but got %q with length %v", maxCloseReason, ce.Reason, len(ce.Reason))
+// bytes returns the close frame payload for ce, which must come from
+// wireCloseError.
+func (ce CloseError) bytes() []byte {
+	if ce.Code == StatusNoStatusRcvd {
+		return nil
 	}
-
-	if !validWireCloseCode(ce.Code) {
-		return nil, fmt.Errorf("status code %v cannot be set", ce.Code)
-	}
-
 	buf := make([]byte, 2+len(ce.Reason))
 	binary.BigEndian.PutUint16(buf, uint16(ce.Code))
 	copy(buf[2:], ce.Reason)
-	return buf, nil
+	return buf
 }
 
 func (c *Conn) casClosing() bool {
