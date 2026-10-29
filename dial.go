@@ -328,7 +328,9 @@ func verifyServerResponse(opts *DialOptions, copts *compressionOptions, secWebSo
 }
 
 func verifyServerResponseH1(opts *DialOptions, copts *compressionOptions, secWebSocketKey string, resp *http.Response) (*compressionOptions, error) {
-	if resp.ProtoMajor != 1 {
+	// Responses built by hand in a custom RoundTripper may leave ProtoMajor
+	// unset, so 0 is accepted as HTTP/1.x.
+	if resp.ProtoMajor != 0 && resp.ProtoMajor != 1 {
 		return nil, fmt.Errorf("expected HTTP/1.x response but got: %s", resp.Proto)
 	}
 
