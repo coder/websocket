@@ -52,3 +52,31 @@ func TestWasmDialTimeout(t *testing.T) {
 		t.Fatal("wasm context dial timeout is not working", time.Since(beforeDial))
 	}
 }
+
+func TestWasmCloseStatus(t *testing.T) {
+	t.Parallel()
+
+	// The library closes with these itself, but browsers only accept
+	// 1000 and 3000-4999.
+	for _, code := range []websocket.StatusCode{
+		websocket.StatusGoingAway,
+		websocket.StatusPolicyViolation,
+		websocket.StatusMessageTooBig,
+		websocket.StatusInternalError,
+	} {
+		t.Run(code.String(), func(t *testing.T) {
+			t.Parallel()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+
+			c, _, err := websocket.Dial(ctx, os.Getenv("WS_ECHO_SERVER_URL"), &websocket.DialOptions{
+				Subprotocols: []string{"echo"},
+			})
+			assert.Success(t, err)
+
+			err = c.Close(code, "")
+			assert.Success(t, err)
+		})
+	}
+}
