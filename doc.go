@@ -23,7 +23,7 @@
 // The package supports WebSocket over HTTP/2 via the extended CONNECT
 // protocol (RFC 8441).
 //
-// This functionality is currently opt-in and requires setting the Protocol
+// This functionality is currently opt-in and requires setting the HTTPProtocol
 // option on the AcceptOptions or DialOptions. When not set, HTTP/1.1 is used.
 //
 // Server-side extended CONNECT functionality must currently be enabled by
