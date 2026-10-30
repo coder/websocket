@@ -286,6 +286,8 @@ func handshakeRequestH2(ctx context.Context, u *url.URL, opts *DialOptions, copt
 	// RFC 8441 protocol header.
 	req.Header.Set(":protocol", "websocket")
 	req.Header.Set("Sec-WebSocket-Version", "13")
+	// RFC 8441 §5 does not use Sec-WebSocket-Key, but proxies such as Envoy
+	// forward this request to HTTP/1.1 servers, which require one.
 	req.Header.Set("Sec-WebSocket-Key", secWebSocketKey)
 	if len(opts.Subprotocols) > 0 {
 		req.Header.Set("Sec-WebSocket-Protocol", strings.Join(opts.Subprotocols, ","))
@@ -371,9 +373,11 @@ func verifyServerResponseH2(opts *DialOptions, copts *compressionOptions, secWeb
 		return nil, fmt.Errorf("expected 2xx status code for extended CONNECT but got: %d", resp.StatusCode)
 	}
 
-	if resp.Header.Get("Sec-WebSocket-Accept") != secWebSocketAccept(secWebSocketKey) {
+	// Most HTTP/2 servers send no Sec-WebSocket-Accept (RFC 8441 §5). One
+	// that is present answers our key, so it must match.
+	if accept := resp.Header.Get("Sec-WebSocket-Accept"); accept != "" && accept != secWebSocketAccept(secWebSocketKey) {
 		return nil, fmt.Errorf("WebSocket protocol violation: invalid Sec-WebSocket-Accept %q, key %q",
-			resp.Header.Get("Sec-WebSocket-Accept"),
+			accept,
 			secWebSocketKey,
 		)
 	}
