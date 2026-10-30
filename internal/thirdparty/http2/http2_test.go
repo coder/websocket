@@ -155,6 +155,7 @@ type runTableTestCase struct {
 	wantProto   int  // 1 or 2
 	wantStatus  int  // Wanted status code (e.g., 200 or 100).
 	wantErr     bool // Want a Dial error.
+	wantErrMsg  string
 }
 
 // runTable executes a table of cases under the current GODEBUG mode.
@@ -211,6 +212,9 @@ func runTable(t *testing.T, cases []runTableTestCase) {
 			if tc.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
+				}
+				if tc.wantErrMsg != "" {
+					assert.Contains(t, err, tc.wantErrMsg)
 				}
 				return
 			}
@@ -290,6 +294,31 @@ func TestHTTP2Suite_XCONNECT_Enabled(t *testing.T) {
 			clientProto: websocket.HTTPProtocol2,
 			serverProto: websocket.HTTPProtocolAny,
 			wantProto:   2,
+		},
+		{
+			name:   "OK server without Sec-WebSocket-Accept",
+			scheme: "wss",
+			client: func(t *testing.T) *http.Client {
+				return newH2TLSClientCustomRoundTripper(nil, func(resp *http.Response) {
+					resp.Header.Del("Sec-WebSocket-Accept")
+				})
+			},
+			clientProto: websocket.HTTPProtocol2,
+			serverProto: websocket.HTTPProtocol2,
+			wantProto:   2,
+		},
+		{
+			name:   "Error dial wrong Sec-WebSocket-Accept",
+			scheme: "wss",
+			client: func(t *testing.T) *http.Client {
+				return newH2TLSClientCustomRoundTripper(nil, func(resp *http.Response) {
+					resp.Header.Set("Sec-WebSocket-Accept", "wrong")
+				})
+			},
+			clientProto: websocket.HTTPProtocol2,
+			serverProto: websocket.HTTPProtocol2,
+			wantErr:     true,
+			wantErrMsg:  `invalid Sec-WebSocket-Accept "wrong"`,
 		},
 		{
 			name:   "Error server missing :protocol header",
