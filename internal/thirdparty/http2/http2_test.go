@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/internal/test/assert"
@@ -177,12 +176,14 @@ func runTable(t *testing.T, cases []runTableTestCase) {
 			case "wss":
 				srv := httptest.NewUnstartedServer(echoHandler)
 				srv.EnableHTTP2 = true
-				_ = http2.ConfigureServer(srv.Config, &http2.Server{})
 				srv.StartTLS()
 				defer srv.Close()
 				srvURL = strings.Replace(srv.URL, "https://", "wss://", 1)
 			case "ws":
-				srv := httptest.NewUnstartedServer(h2c.NewHandler(echoHandler, &http2.Server{}))
+				srv := httptest.NewUnstartedServer(echoHandler)
+				srv.Config.Protocols = new(http.Protocols)
+				srv.Config.Protocols.SetHTTP1(true)
+				srv.Config.Protocols.SetUnencryptedHTTP2(true)
 				srv.Start()
 				defer srv.Close()
 				srvURL = strings.Replace(srv.URL, "http://", "ws://", 1)
