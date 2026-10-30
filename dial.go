@@ -148,6 +148,14 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 	resp.Body = nil
 	defer func() {
 		if err != nil {
+			if resp.StatusCode == http.StatusSwitchingProtocols {
+				// The body is the upgraded connection, not an HTTP body.
+				// Reading it waits for data the server may never send.
+				respBody.Close()
+				resp.Body = http.NoBody
+				return
+			}
+
 			// We read a bit of the body for easier debugging.
 			r := io.LimitReader(respBody, 1024)
 
