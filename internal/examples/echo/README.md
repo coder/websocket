@@ -3,7 +3,7 @@
 This directory contains a echo server example using github.com/coder/websocket.
 
 ```bash
-$ cd examples/echo
+$ cd internal/examples/echo
 $ go run . localhost:0
 listening on ws://127.0.0.1:51055
 ```
