@@ -44,9 +44,12 @@ import (
 // A received StatusNormalClosure or StatusGoingAway close frame will be translated to
 // io.EOF when reading.
 //
-// Furthermore, the ReadLimit is set to -1 to disable it.
+// If SetReadLimit has not been called on c, NetConn disables the read limit.
+// A limit set with SetReadLimit before or after NetConn is kept.
 func NetConn(ctx context.Context, c *Conn, msgType MessageType) net.Conn {
-	c.SetReadLimit(-1)
+	if !c.readLimitSet.Load() {
+		c.setReadLimit(-1)
+	}
 
 	nc := &netConn{
 		c:       c,
