@@ -3,7 +3,7 @@
 This directory contains a full stack example of a simple chat webapp using github.com/coder/websocket.
 
 ```bash
-$ cd examples/chat
+$ cd internal/examples/chat
 $ go run . localhost:0
 listening on ws://127.0.0.1:51055
 ```
