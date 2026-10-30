@@ -21,7 +21,10 @@ import "fmt"
 // - HTTPProtocolAny: accept either HTTP/1.1 Upgrade or HTTP/2 extended CONNECT.
 //
 // For HTTP/2 client dialing, callers must supply an http.Client configured with
-// an http2.Transport (from golang.org/x/net/http2).
+// an http2.Transport (from golang.org/x/net/http2). On Go 1.27, build with
+// -tags http2legacy: without it, http2.Transport hands requests to net/http,
+// which rejects the :protocol pseudo-header that extended CONNECT needs (see
+// https://github.com/golang/go/issues/53208).
 //
 // Experimental: This type is experimental and may change in the future.
 type HTTPProtocol int
