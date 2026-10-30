@@ -33,7 +33,7 @@ go get github.com/coder/websocket
 - Compile to [Wasm](https://pkg.go.dev/github.com/coder/websocket#hdr-Wasm)
 - Experimental support for HTTP/2 extended CONNECT (RFC 8441)
   - Requires opt-in via the [AcceptOptions](https://pkg.go.dev/github.com/coder/websocket#AcceptOptions) and [DialOptions](https://pkg.go.dev/github.com/coder/websocket#DialOptions) HTTPProtocol option
-    - Clients must provide a `http2.Transport`
+    - Clients must provide a `http2.Transport`, and on Go 1.27 be built with `-tags http2legacy`
     - Servers must be started with `GODEBUG=http2xconnect=1`, see https://github.com/golang/go/issues/53208
   - See the [http2 example](./internal/examples/http2)
 

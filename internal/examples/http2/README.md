@@ -10,6 +10,9 @@ It supports:
 
 ## Run
 
+On Go 1.27, the client needs `-tags http2legacy`, for example
+`go run -tags http2legacy . client ws://127.0.0.1:8080`. The server does not.
+
 Cleartext HTTP/2:
 
 ```console
