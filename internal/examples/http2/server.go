@@ -9,9 +9,6 @@ import (
 	"os"
 	"strings"
 
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
-
 	"github.com/coder/websocket"
 )
 
@@ -91,17 +88,15 @@ Examples:
 			return errors.New("-cert and -key are required when using -tls")
 		}
 
-		// Enable HTTP/2 over TLS.
-		if err := http2.ConfigureServer(srv, &http2.Server{}); err != nil {
-			return err
-		}
-
+		// net/http serves HTTP/2 over TLS by default.
 		fmt.Printf("listening on wss://%s\n", visibleAddr(*addr))
 		return srv.ListenAndServeTLS(*certFile, *keyFile)
 	}
 
 	// Cleartext HTTP/2 (h2c).
-	srv.Handler = h2c.NewHandler(srv.Handler, &http2.Server{})
+	srv.Protocols = new(http.Protocols)
+	srv.Protocols.SetHTTP1(true)
+	srv.Protocols.SetUnencryptedHTTP2(true)
 	fmt.Printf("listening on ws://%s (h2c)\n", visibleAddr(*addr))
 	return srv.ListenAndServe()
 }
