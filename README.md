@@ -32,7 +32,7 @@ go get github.com/coder/websocket
 - [CloseRead](https://pkg.go.dev/github.com/coder/websocket#Conn.CloseRead) helper for write only connections
 - Compile to [Wasm](https://pkg.go.dev/github.com/coder/websocket#hdr-Wasm)
 - Experimental support for HTTP/2 extended CONNECT (RFC 8441)
-  - Requires opt-in via the [AcceptOptions](https://pkg.go.dev/github.com/coder/websocket#AcceptOptions) and [DialOptions](https://pkg.go.dev/github.com/coder/websocket#DialOptions) Protocol option
+  - Requires opt-in via the [AcceptOptions](https://pkg.go.dev/github.com/coder/websocket#AcceptOptions) and [DialOptions](https://pkg.go.dev/github.com/coder/websocket#DialOptions) HTTPProtocol option
     - Clients must provide a `http2.Transport`
     - Servers must be started with `GODEBUG=http2xconnect=1`, see https://github.com/golang/go/issues/53208
   - See the [http2 example](./internal/examples/http2)
