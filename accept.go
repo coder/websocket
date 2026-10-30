@@ -150,7 +150,9 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	switch proto {
 	case HTTPProtocol2:
 		// Prepare response headers for H2 (no Connection/Upgrade).
-		w.Header().Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
+		if key != "" {
+			w.Header().Set("Sec-WebSocket-Accept", secWebSocketAccept(key))
+		}
 
 		subproto := selectSubprotocol(r, opts.Subprotocols)
 		if subproto != "" {
@@ -316,22 +318,33 @@ func verifyClientRequestH2(w http.ResponseWriter, r *http.Request) (key string, 
 		return "", http.StatusMethodNotAllowed, fmt.Errorf("WebSocket protocol violation: handshake request method is not CONNECT but %q", r.Method)
 	}
 
-	key, errCode, err := validateSecWebSocketHeaders(w, r)
+	errCode, err := validateSecWebSocketVersion(w, r)
 	if err != nil {
 		return "", errCode, err
 	}
 
-	return key, 0, nil
+	// RFC 8441 §5 replaces Sec-WebSocket-Key with :protocol, and Chrome and
+	// Firefox send none. A key that does arrive is returned so Accept answers
+	// it: proxies such as Envoy forward an HTTP/1.1 client's key without
+	// generating the Sec-WebSocket-Accept that client checks.
+	return strings.TrimSpace(r.Header.Get("Sec-WebSocket-Key")), 0, nil
+}
+
+// validateSecWebSocketVersion sets Sec-WebSocket-Version: 13 on a mismatch.
+func validateSecWebSocketVersion(w http.ResponseWriter, r *http.Request) (errCode int, _ error) {
+	if r.Header.Get("Sec-WebSocket-Version") != "13" {
+		w.Header().Set("Sec-WebSocket-Version", "13")
+		return http.StatusBadRequest, fmt.Errorf("unsupported WebSocket protocol version (only 13 is supported): %q", r.Header.Get("Sec-WebSocket-Version"))
+	}
+	return 0, nil
 }
 
 // validateSecWebSocketHeaders validates Sec-WebSocket-Version/Sec-WebSocket-Key
 // and returns the trimmed key.
-//
-// It sets Sec-WebSocket-Version: 13 on version mismatch.
 func validateSecWebSocketHeaders(w http.ResponseWriter, r *http.Request) (key string, errCode int, _ error) {
-	if r.Header.Get("Sec-WebSocket-Version") != "13" {
-		w.Header().Set("Sec-WebSocket-Version", "13")
-		return "", http.StatusBadRequest, fmt.Errorf("unsupported WebSocket protocol version (only 13 is supported): %q", r.Header.Get("Sec-WebSocket-Version"))
+	errCode, err := validateSecWebSocketVersion(w, r)
+	if err != nil {
+		return "", errCode, err
 	}
 
 	websocketSecKeys := r.Header.Values("Sec-WebSocket-Key")
