@@ -1,3 +1,5 @@
+//lint:file-ignore SA1019 Go 1.26's net/http client rejects the :protocol pseudo-header, so the client uses golang.org/x/net/http2.
+
 package http2
 
 import (
