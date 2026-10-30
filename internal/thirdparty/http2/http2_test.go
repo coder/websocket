@@ -296,6 +296,36 @@ func TestHTTP2Suite_XCONNECT_Enabled(t *testing.T) {
 			wantProto:   2,
 		},
 		{
+			name:   "OK client without Sec-WebSocket-Key",
+			scheme: "wss",
+			client: func(t *testing.T) *http.Client {
+				return newH2TLSClientCustomRoundTripper(func(req *http.Request) {
+					req.Header.Del("Sec-WebSocket-Key")
+				}, func(resp *http.Response) {
+					if v := resp.Header.Get("Sec-WebSocket-Accept"); v != "" {
+						t.Errorf("Sec-WebSocket-Accept sent without a key: %q", v)
+					}
+				})
+			},
+			clientProto: websocket.HTTPProtocol2,
+			serverProto: websocket.HTTPProtocol2,
+			wantProto:   2,
+		},
+		{
+			name:   "OK server answers Sec-WebSocket-Key",
+			scheme: "wss",
+			client: func(t *testing.T) *http.Client {
+				return newH2TLSClientCustomRoundTripper(nil, func(resp *http.Response) {
+					if resp.Header.Get("Sec-WebSocket-Accept") == "" {
+						t.Error("no Sec-WebSocket-Accept for the request's key")
+					}
+				})
+			},
+			clientProto: websocket.HTTPProtocol2,
+			serverProto: websocket.HTTPProtocol2,
+			wantProto:   2,
+		},
+		{
 			name:   "OK server without Sec-WebSocket-Accept",
 			scheme: "wss",
 			client: func(t *testing.T) *http.Client {
