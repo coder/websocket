@@ -392,7 +392,7 @@ func TestAcceptErrorHandler(t *testing.T) {
 		assert.Equal(t, "handler calls", 0, calls)
 	})
 
-	// Checks the response a client receives from a real server.
+	// The handler response reaches a client over a real connection.
 	t.Run("server", func(t *testing.T) {
 		t.Parallel()
 
