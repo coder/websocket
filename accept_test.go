@@ -291,6 +291,20 @@ var acceptRejectionTests = []struct {
 		wantHeader: http.Header{},
 	},
 	{
+		name:       "invalidOrigin",
+		modify:     func(r *http.Request) { r.Header.Set("Origin", "http://[::1") },
+		wantStatus: http.StatusForbidden,
+		wantErr:    `failed to parse Origin header "http://[::1": parse "http://[::1": missing ']' in host`,
+		wantHeader: http.Header{},
+	},
+	{
+		name:       "noOriginHost",
+		modify:     func(r *http.Request) { r.Header.Set("Origin", "null") },
+		wantStatus: http.StatusForbidden,
+		wantErr:    `request Origin "null" is not a valid URL with a host`,
+		wantHeader: http.Header{},
+	},
+	{
 		name:       "unauthorizedOrigin",
 		modify:     func(r *http.Request) { r.Header.Set("Origin", "https://other.com") },
 		wantStatus: http.StatusForbidden,
