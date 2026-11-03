@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"strings"
 	"sync"
 	"testing"
@@ -226,6 +227,9 @@ var acceptRejectionTests = []struct {
 	opts       AcceptOptions
 	wantStatus int
 	wantErr    string
+	// wantErrIs, if set, must be wrapped by the error Accept returns and the
+	// error ErrorHandler receives.
+	wantErrIs error
 	// wantHeader is the response header when the handler runs.
 	wantHeader http.Header
 	// wantDefaultBody is the body without an ErrorHandler, if it differs
@@ -313,12 +317,14 @@ var acceptRejectionTests = []struct {
 	},
 	{
 		// The pattern error is logged and not sent to the client.
-		name:       "badOriginPattern",
-		modify:     func(r *http.Request) { r.Header.Set("Origin", "https://other.com") },
-		opts:       AcceptOptions{OriginPatterns: []string{"["}},
-		wantStatus: http.StatusForbidden,
-		wantErr:    "Forbidden",
-		wantHeader: http.Header{},
+		name:            "badOriginPattern",
+		modify:          func(r *http.Request) { r.Header.Set("Origin", "https://other.com") },
+		opts:            AcceptOptions{OriginPatterns: []string{"["}},
+		wantStatus:      http.StatusForbidden,
+		wantErr:         `failed to parse path pattern "[": syntax error in pattern`,
+		wantErrIs:       path.ErrBadPattern,
+		wantHeader:      http.Header{},
+		wantDefaultBody: "Forbidden",
 	},
 	{
 		name:            "noHijacker",
@@ -362,6 +368,10 @@ func TestAcceptErrorHandler(t *testing.T) {
 			assert.Equal(t, "handler calls", 1, calls)
 			if gotReq != r {
 				t.Fatalf("handler request: expected %p but got %p", r, gotReq)
+			}
+			if tc.wantErrIs != nil {
+				assert.ErrorIs(t, tc.wantErrIs, err)
+				assert.ErrorIs(t, tc.wantErrIs, gotErr)
 			}
 			assert.Equal(t, "handler status", tc.wantStatus, gotStatus)
 			assert.Equal(t, "handler err", tc.wantErr, gotErr.Error())
@@ -469,6 +479,9 @@ func TestAcceptRejectionDefault(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			_, err := Accept(w, r, &tc.opts)
+			if tc.wantErrIs != nil {
+				assert.ErrorIs(t, tc.wantErrIs, err)
+			}
 			assert.Equal(t, "err", "failed to accept WebSocket connection: "+tc.wantErr, err.Error())
 			assert.Equal(t, "status", tc.wantStatus, w.Code)
 			assert.Equal(t, "header", plain(tc.wantHeader.Clone()), w.Header())
