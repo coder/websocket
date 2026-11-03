@@ -59,7 +59,11 @@ type Conn struct {
 	readHeaderBuf  [8]byte
 	readControlBuf [maxControlPayload]byte
 	msgReader      *msgReader
-	readLimitSet   atomic.Bool
+
+	// readLimitMu makes NetConn's readLimitSet check atomic with SetReadLimit.
+	// It is never held during I/O, so it need not be the context-aware mu.
+	readLimitMu  sync.Mutex
+	readLimitSet bool
 
 	// Write state.
 	msgWriter      *msgWriter

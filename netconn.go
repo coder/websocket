@@ -49,9 +49,11 @@ import (
 // to each WebSocket message, such as each Write by a peer using NetConn.
 // Reading a message that exceeds it returns an error wrapping ErrMessageTooBig.
 func NetConn(ctx context.Context, c *Conn, msgType MessageType) net.Conn {
-	if !c.readLimitSet.Load() {
+	c.readLimitMu.Lock()
+	if !c.readLimitSet {
 		c.setReadLimit(-1)
 	}
+	c.readLimitMu.Unlock()
 
 	nc := &netConn{
 		c:       c,
