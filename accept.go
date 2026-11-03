@@ -130,11 +130,12 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	if !opts.InsecureSkipVerify {
 		err = authenticateOrigin(r, opts.OriginPatterns)
 		if err != nil {
+			defaultBody := err.Error()
 			if errors.Is(err, path.ErrBadPattern) {
 				log.Printf("websocket: %v", err)
-				err = errors.New(http.StatusText(http.StatusForbidden))
+				defaultBody = http.StatusText(http.StatusForbidden)
 			}
-			opts.writeRejection(w, r, http.StatusForbidden, err, err.Error())
+			opts.writeRejection(w, r, http.StatusForbidden, err, defaultBody)
 			return nil, err
 		}
 	}
