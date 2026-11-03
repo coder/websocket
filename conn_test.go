@@ -316,6 +316,12 @@ func TestConn(t *testing.T) {
 		assert.Equal(t, "read msg", s, string(b))
 	})
 
+	const (
+		readLimit        = 1024
+		overReadLimit    = 4 * readLimit
+		overDefaultLimit = 2 * 32768 // SetReadLimit documents the 32768 byte default.
+	)
+
 	for _, tc := range []struct {
 		name     string
 		setLimit func(ctx context.Context, c *websocket.Conn) net.Conn
@@ -325,16 +331,16 @@ func TestConn(t *testing.T) {
 		{"DisabledBeforeNetConn", func(ctx context.Context, c *websocket.Conn) net.Conn {
 			c.SetReadLimit(-1)
 			return websocket.NetConn(ctx, c, websocket.MessageBinary)
-		}, 65536, nil},
+		}, overDefaultLimit, nil},
 		{"BeforeNetConn", func(ctx context.Context, c *websocket.Conn) net.Conn {
-			c.SetReadLimit(1024)
+			c.SetReadLimit(readLimit)
 			return websocket.NetConn(ctx, c, websocket.MessageBinary)
-		}, 4096, websocket.ErrMessageTooBig},
+		}, overReadLimit, websocket.ErrMessageTooBig},
 		{"AfterNetConn", func(ctx context.Context, c *websocket.Conn) net.Conn {
 			nc := websocket.NetConn(ctx, c, websocket.MessageBinary)
-			c.SetReadLimit(1024)
+			c.SetReadLimit(readLimit)
 			return nc
-		}, 4096, websocket.ErrMessageTooBig},
+		}, overReadLimit, websocket.ErrMessageTooBig},
 	} {
 		t.Run("netConn/readLimitKept/"+tc.name, func(t *testing.T) {
 			tt, c1, c2 := newConnTest(t, nil, nil)
