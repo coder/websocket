@@ -451,6 +451,23 @@ func TestNetConnReadLimit(t *testing.T) {
 		overDefaultLimit = 2 * 32768 // SetReadLimit documents the 32768 byte default.
 	)
 
+	// A default at or above overDefaultLimit fails this case instead of letting
+	// the cases that expect no error pass without a limit to disable.
+	t.Run("DefaultWithoutNetConn", func(t *testing.T) {
+		tt, c1, c2 := newConnTest(t, nil, nil)
+
+		_ = c2.CloseRead(tt.ctx)
+		writeDone := xsync.Go(func() error {
+			return c2.Write(tt.ctx, websocket.MessageBinary, xrand.Bytes(overDefaultLimit))
+		})
+
+		_, _, err := c1.Read(tt.ctx)
+		assert.ErrorIs(t, websocket.ErrMessageTooBig, err)
+
+		_ = c2.CloseNow()
+		<-writeDone
+	})
+
 	for _, tc := range []struct {
 		name    string
 		netConn func(ctx context.Context, c *websocket.Conn) net.Conn
