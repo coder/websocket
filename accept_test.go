@@ -352,6 +352,24 @@ func TestAcceptErrorHandler(t *testing.T) {
 		})
 	}
 
+	t.Run("hijackFails", func(t *testing.T) {
+		t.Parallel()
+
+		errHijack := errors.New("hijack error")
+		w := mockHijacker{
+			ResponseWriter: httptest.NewRecorder(),
+			hijack: func() (net.Conn, *bufio.ReadWriter, error) {
+				return nil, nil, errHijack
+			},
+		}
+		var calls int
+		_, err := Accept(w, newHandshakeRequest(), &AcceptOptions{
+			ErrorHandler: func(http.ResponseWriter, *http.Request, int, error) { calls++ },
+		})
+		assert.ErrorIs(t, errHijack, err)
+		assert.Equal(t, "handler calls", 0, calls)
+	})
+
 	// The handler response reaches a client over a real connection, and a
 	// handler that writes nothing leaves net/http's default 200 OK.
 	t.Run("server", func(t *testing.T) {
