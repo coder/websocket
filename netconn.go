@@ -45,7 +45,9 @@ import (
 // io.EOF when reading.
 //
 // If SetReadLimit has not been called on c, NetConn disables the read limit.
-// A limit set with SetReadLimit before or after NetConn is kept.
+// A limit set with SetReadLimit before or after NetConn is kept. It applies
+// to each WebSocket message, such as each Write by a peer using NetConn.
+// Reading a message that exceeds it returns an error wrapping ErrMessageTooBig.
 func NetConn(ctx context.Context, c *Conn, msgType MessageType) net.Conn {
 	if !c.readLimitSet.Load() {
 		c.setReadLimit(-1)
