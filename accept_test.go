@@ -228,6 +228,9 @@ var acceptRejectionTests = []struct {
 	wantErr    string
 	// wantHeader is the response header when the handler runs.
 	wantHeader http.Header
+	// wantDefaultBody is the body without an ErrorHandler, if it differs
+	// from wantErr.
+	wantDefaultBody string
 }{
 	{
 		name: "http1.0",
@@ -304,10 +307,11 @@ var acceptRejectionTests = []struct {
 		wantHeader: http.Header{},
 	},
 	{
-		name:       "noHijacker",
-		wantStatus: http.StatusNotImplemented,
-		wantErr:    "http.ResponseWriter does not implement http.Hijacker",
-		wantHeader: http.Header{},
+		name:            "noHijacker",
+		wantStatus:      http.StatusNotImplemented,
+		wantErr:         "http.ResponseWriter does not implement http.Hijacker",
+		wantHeader:      http.Header{},
+		wantDefaultBody: "Not Implemented",
 	},
 }
 
@@ -434,26 +438,15 @@ func TestAcceptRejectionDefault(t *testing.T) {
 		h.Set("X-Content-Type-Options", "nosniff")
 		return h
 	}
-	want := map[string]struct {
-		header http.Header
-		body   string
-	}{
-		"http1.0":             {plain(http.Header{}), `WebSocket protocol violation: handshake request must be at least HTTP/1.1: "HTTP/1.0"` + "\n"},
-		"noConnectionUpgrade": {plain(http.Header{"Connection": {"Upgrade"}, "Upgrade": {"websocket"}}), `WebSocket protocol violation: Connection header "keep-alive" does not contain Upgrade` + "\n"},
-		"noUpgradeWebSocket":  {plain(http.Header{"Connection": {"Upgrade"}, "Upgrade": {"websocket"}}), `WebSocket protocol violation: Upgrade header "h2c" does not contain websocket` + "\n"},
-		"methodNotGet":        {plain(http.Header{}), `WebSocket protocol violation: handshake request method is not GET but "POST"` + "\n"},
-		"unsupportedVersion":  {plain(http.Header{"Sec-Websocket-Version": {"13"}}), `unsupported WebSocket protocol version (only 13 is supported): "8"` + "\n"},
-		"missingKey":          {plain(http.Header{}), "WebSocket protocol violation: missing Sec-WebSocket-Key\n"},
-		"multipleKeys":        {plain(http.Header{}), "WebSocket protocol violation: multiple Sec-WebSocket-Key headers\n"},
-		"invalidKey":          {plain(http.Header{}), `WebSocket protocol violation: invalid Sec-WebSocket-Key "notbase64", must be a 16 byte base64 encoded string` + "\n"},
-		"unauthorizedOrigin":  {plain(http.Header{}), `request Origin "other.com" is not authorized for Host "example.com"` + "\n"},
-		"badOriginPattern":    {plain(http.Header{}), "Forbidden\n"},
-		"noHijacker":          {plain(http.Header{}), "Not Implemented\n"},
-	}
 
 	for _, tc := range acceptRejectionTests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
+			wantBody := tc.wantErr
+			if tc.wantDefaultBody != "" {
+				wantBody = tc.wantDefaultBody
+			}
 
 			r := newHandshakeRequest()
 			if tc.modify != nil {
@@ -464,8 +457,8 @@ func TestAcceptRejectionDefault(t *testing.T) {
 			_, err := Accept(w, r, &tc.opts)
 			assert.Equal(t, "err", "failed to accept WebSocket connection: "+tc.wantErr, err.Error())
 			assert.Equal(t, "status", tc.wantStatus, w.Code)
-			assert.Equal(t, "header", want[tc.name].header, w.Header())
-			assert.Equal(t, "body", want[tc.name].body, w.Body.String())
+			assert.Equal(t, "header", plain(tc.wantHeader.Clone()), w.Header())
+			assert.Equal(t, "body", wantBody+"\n", w.Body.String())
 		})
 	}
 }
