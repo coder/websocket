@@ -370,8 +370,7 @@ func TestAcceptErrorHandler(t *testing.T) {
 		assert.Equal(t, "handler calls", 0, calls)
 	})
 
-	// The handler response reaches a client over a real connection, and a
-	// handler that writes nothing leaves net/http's default 200 OK.
+	// Checks the response a client receives from a real server.
 	t.Run("server", func(t *testing.T) {
 		t.Parallel()
 
@@ -399,11 +398,16 @@ func TestAcceptErrorHandler(t *testing.T) {
 				}))
 				defer s.Close()
 
-				req, err := http.NewRequest("GET", s.URL, nil)
+				// A raw connection avoids http.Client transport goroutines,
+				// which outlive s.Close and fail the TestMain leak check.
+				c, err := net.Dial("tcp", s.Listener.Addr().String())
 				assert.Success(t, err)
-				req.Header = newHandshakeRequest().Header
+				defer c.Close()
+				req := newHandshakeRequest()
+				req.Header.Set("Connection", "Upgrade, close")
 				req.Header.Set("Origin", "https://other.com")
-				res, err := s.Client().Do(req)
+				assert.Success(t, req.Write(c))
+				res, err := http.ReadResponse(bufio.NewReader(c), req)
 				assert.Success(t, err)
 				defer res.Body.Close()
 				body, err := io.ReadAll(res.Body)
