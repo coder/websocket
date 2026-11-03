@@ -95,7 +95,9 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 //
 // Set to -1 to disable.
 func (c *Conn) SetReadLimit(n int64) {
-	c.readLimitSet.Store(true)
+	c.readLimitMu.Lock()
+	defer c.readLimitMu.Unlock()
+	c.readLimitSet = true
 	c.setReadLimit(n)
 }
 

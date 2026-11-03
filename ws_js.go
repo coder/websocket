@@ -46,7 +46,11 @@ type Conn struct {
 
 	// read limit for a message in bytes.
 	msgReadLimit atomic.Int64
-	readLimitSet atomic.Bool
+
+	// readLimitMu makes NetConn's readLimitSet check atomic with SetReadLimit.
+	// It is never held during I/O, so it need not be the context-aware mu.
+	readLimitMu  sync.Mutex
+	readLimitSet bool
 
 	closeReadMu  sync.Mutex
 	closeReadCtx context.Context
@@ -415,7 +419,9 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 
 // SetReadLimit implements *Conn.SetReadLimit for wasm.
 func (c *Conn) SetReadLimit(n int64) {
-	c.readLimitSet.Store(true)
+	c.readLimitMu.Lock()
+	defer c.readLimitMu.Unlock()
+	c.readLimitSet = true
 	c.setReadLimit(n)
 }
 
