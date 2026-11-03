@@ -156,14 +156,14 @@ func TestDialErrBadStatus(t *testing.T) {
 	t.Run("networkError", func(t *testing.T) {
 		t.Parallel()
 
-		s := httptest.NewServer(http.NotFoundHandler())
-		u := s.URL
-		s.Close()
-
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
 
-		_, resp, err := websocket.Dial(ctx, u, nil)
+		_, resp, err := websocket.Dial(ctx, "ws://example.com", &websocket.DialOptions{
+			HTTPClient: mockHTTPClient(func(*http.Request) (*http.Response, error) {
+				return nil, errors.New("connection refused")
+			}),
+		})
 		assert.Error(t, err)
 		assert.Equal(t, "errors.Is(err, ErrBadStatus)", false, errors.Is(err, websocket.ErrBadStatus))
 		if resp != nil {
