@@ -83,11 +83,12 @@ type AcceptOptions struct {
 	// ErrorHandler writes the HTTP response when Accept rejects the handshake
 	// request. status is the HTTP status Accept chose, w.Header() holds the
 	// headers Accept set for the rejection, and Accept returns an error
-	// wrapping err. ErrorHandler must write a response; otherwise net/http
-	// sends 200 OK with an empty body. If nil, Accept writes a plain text
-	// response with http.Error. ErrorHandler is not called when hijacking the
-	// connection fails, because Accept has already written 101 Switching
-	// Protocols.
+	// wrapping err. err is a diagnostic for logging that may contain server
+	// details, and is not meant to be sent to the client. ErrorHandler must
+	// write a response; otherwise net/http sends 200 OK with an empty body. If
+	// nil, Accept writes a plain text response with http.Error. ErrorHandler
+	// is not called when hijacking the connection fails, because Accept has
+	// already written 101 Switching Protocols.
 	ErrorHandler func(w http.ResponseWriter, r *http.Request, status int, err error)
 }
 
