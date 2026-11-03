@@ -153,32 +153,6 @@ func TestDialErrBadStatus(t *testing.T) {
 		assert.Equal(t, "body", body[:1024], string(b))
 	})
 
-	t.Run("invalidAccept", func(t *testing.T) {
-		t.Parallel()
-
-		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			conn, brw, err := w.(http.Hijacker).Hijack()
-			if err != nil {
-				return
-			}
-			defer conn.Close()
-			brw.WriteString("HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: invalid\r\n\r\n")
-			brw.Flush()
-		}))
-		defer s.Close()
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-		defer cancel()
-
-		_, resp, err := websocket.Dial(ctx, s.URL, nil)
-		assert.Contains(t, err, "invalid Sec-WebSocket-Accept")
-		assert.Equal(t, "errors.Is(err, ErrBadStatus)", false, errors.Is(err, websocket.ErrBadStatus))
-		if resp == nil {
-			t.Fatal("expected non-nil response")
-		}
-		assert.Equal(t, "status code", http.StatusSwitchingProtocols, resp.StatusCode)
-	})
-
 	t.Run("networkError", func(t *testing.T) {
 		t.Parallel()
 
@@ -367,6 +341,7 @@ func Test_verifyServerHandshake(t *testing.T) {
 			} else {
 				assert.Error(t, err)
 			}
+			assert.Equal(t, "errors.Is(err, ErrBadStatus)", tc.name == "badStatus", errors.Is(err, websocket.ErrBadStatus))
 		})
 	}
 }
