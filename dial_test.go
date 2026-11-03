@@ -433,9 +433,10 @@ func TestDialFailedHandshakeBody(t *testing.T) {
 			brw.WriteString("HTTP/1.1 101 Switching Protocols\r\n" +
 				"Connection: Upgrade\r\n" +
 				"Upgrade: websocket\r\n" +
-				"Sec-WebSocket-Accept: xd\r\n\r\n")
+				"Sec-WebSocket-Accept: xd\r\n\r\n" +
+				"after upgrade")
 			brw.Flush()
-			// Send nothing more and wait for the client to close.
+			// Keep the connection open, so reading it would stall.
 			io.Copy(io.Discard, conn)
 		}))
 		defer s.Close()
@@ -451,6 +452,8 @@ func TestDialFailedHandshakeBody(t *testing.T) {
 		b, err := io.ReadAll(resp.Body)
 		assert.Success(t, err)
 		assert.Equal(t, "body", "", string(b))
+		// Reading the body would take the 3s of Dial's read timer, and 1s
+		// leaves margin for slow CI.
 		if elapsed > time.Second {
 			t.Fatalf("Dial took %v, want under 1s", elapsed)
 		}
