@@ -319,16 +319,22 @@ func TestConn(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		setLimit func(ctx context.Context, c *websocket.Conn) net.Conn
+		msgSize  int
+		wantErr  error
 	}{
+		{"DisabledBeforeNetConn", func(ctx context.Context, c *websocket.Conn) net.Conn {
+			c.SetReadLimit(-1)
+			return websocket.NetConn(ctx, c, websocket.MessageBinary)
+		}, 65536, nil},
 		{"BeforeNetConn", func(ctx context.Context, c *websocket.Conn) net.Conn {
 			c.SetReadLimit(1024)
 			return websocket.NetConn(ctx, c, websocket.MessageBinary)
-		}},
+		}, 4096, websocket.ErrMessageTooBig},
 		{"AfterNetConn", func(ctx context.Context, c *websocket.Conn) net.Conn {
 			nc := websocket.NetConn(ctx, c, websocket.MessageBinary)
 			c.SetReadLimit(1024)
 			return nc
-		}},
+		}, 4096, websocket.ErrMessageTooBig},
 	} {
 		t.Run("netConn/readLimitKept/"+tc.name, func(t *testing.T) {
 			tt, c1, c2 := newConnTest(t, nil, nil)
@@ -336,39 +342,24 @@ func TestConn(t *testing.T) {
 			n1 := tc.setLimit(tt.ctx, c1)
 			_ = c2.CloseRead(tt.ctx)
 
+			msg := xrand.Bytes(tc.msgSize)
 			writeDone := xsync.Go(func() error {
-				return c2.Write(tt.ctx, websocket.MessageBinary, make([]byte, 4096))
+				return c2.Write(tt.ctx, websocket.MessageBinary, msg)
 			})
 
-			_, err := io.ReadFull(n1, make([]byte, 4096))
-			assert.ErrorIs(t, websocket.ErrMessageTooBig, err)
-
-			_ = c2.CloseNow()
-			<-writeDone
+			got := make([]byte, len(msg))
+			_, err := io.ReadFull(n1, got)
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, tc.wantErr, err)
+				_ = c2.CloseNow()
+				<-writeDone
+				return
+			}
+			assert.Success(t, err)
+			assert.Success(t, <-writeDone)
+			assert.Equal(t, "read msg", msg, got)
 		})
 	}
-
-	t.Run("netConn/readLimitDisabledBeforeNetConn", func(t *testing.T) {
-		tt, c1, c2 := newConnTest(t, nil, nil)
-
-		c1.SetReadLimit(-1)
-		n1 := websocket.NetConn(tt.ctx, c1, websocket.MessageBinary)
-		n2 := websocket.NetConn(tt.ctx, c2, websocket.MessageBinary)
-
-		s := strings.Repeat("papa", 1<<20)
-		errs := xsync.Go(func() error {
-			_, err := n2.Write([]byte(s))
-			if err != nil {
-				return err
-			}
-			return n2.Close()
-		})
-
-		b, err := io.ReadAll(n1)
-		assert.Success(t, err)
-		assert.Success(t, <-errs)
-		assert.Equal(t, "read msg", s, string(b))
-	})
 
 	t.Run("netConn/pastDeadline", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
