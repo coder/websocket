@@ -150,8 +150,8 @@ func dial(ctx context.Context, urls string, opts *DialOptions, rand io.Reader) (
 		if err != nil {
 			if resp.StatusCode == http.StatusSwitchingProtocols {
 				// The body is the upgraded connection, not an HTTP body, and
-				// reading it stalls until the timer below fires if the server
-				// sends nothing.
+				// reading it stalls until the timer below fires unless the
+				// server closes it or sends 1024 bytes.
 				respBody.Close()
 				resp.Body = http.NoBody
 				return
