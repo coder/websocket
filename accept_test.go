@@ -326,14 +326,15 @@ func TestAcceptErrorHandler(t *testing.T) {
 
 			var (
 				calls     int
+				gotReq    *http.Request
 				gotStatus int
 				gotErr    error
 				gotHeader http.Header
 			)
 			opts := tc.opts
-			opts.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, status int, err error) {
+			opts.ErrorHandler = func(w http.ResponseWriter, r *http.Request, status int, err error) {
 				calls++
-				gotStatus, gotErr, gotHeader = status, err, w.Header().Clone()
+				gotReq, gotStatus, gotErr, gotHeader = r, status, err, w.Header().Clone()
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(status)
 				_, _ = w.Write([]byte(`{"message":"custom"}`))
@@ -341,6 +342,9 @@ func TestAcceptErrorHandler(t *testing.T) {
 
 			_, err := Accept(w, r, &opts)
 			assert.Equal(t, "handler calls", 1, calls)
+			if gotReq != r {
+				t.Fatalf("handler request: expected %p but got %p", r, gotReq)
+			}
 			assert.Equal(t, "handler status", tc.wantStatus, gotStatus)
 			assert.Equal(t, "handler err", tc.wantErr, gotErr.Error())
 			assert.ErrorIs(t, gotErr, err)
