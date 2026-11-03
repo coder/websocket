@@ -194,14 +194,12 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	}), nil
 }
 
-// writeRejection writes the response for a handshake request that Accept
-// rejects. body is the http.Error text used when ErrorHandler is nil.
-func (opts *AcceptOptions) writeRejection(w http.ResponseWriter, r *http.Request, status int, err error, body string) {
+func (opts *AcceptOptions) writeRejection(w http.ResponseWriter, r *http.Request, status int, err error, defaultBody string) {
 	if opts.ErrorHandler != nil {
 		opts.ErrorHandler(w, r, status, err)
 		return
 	}
-	http.Error(w, body, status)
+	http.Error(w, defaultBody, status)
 }
 
 func verifyClientRequest(w http.ResponseWriter, r *http.Request) (errCode int, _ error) {
