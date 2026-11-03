@@ -309,7 +309,11 @@ func (c *Conn) writeFrame(ctx context.Context, fin bool, flate bool, opcode opco
 	c.closeStateMu.Lock()
 	closeSentErr := c.closeSentErr
 	c.closeStateMu.Unlock()
-	if closeSentErr != nil {
+	// After sending a close frame, only a pong may still be written: RFC 6455
+	// section 5.5.2 requires answering a ping until the peer's close frame is
+	// received, and failing to do so would abort waitCloseHandshake before the
+	// peer's close frame is read.
+	if closeSentErr != nil && opcode != opPong {
 		return 0, net.ErrClosed
 	}
 
