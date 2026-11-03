@@ -109,8 +109,10 @@ func (opts *DialOptions) cloneWithDefaults(ctx context.Context) (context.Context
 // The response is the WebSocket handshake response from the server.
 // You never need to close resp.Body yourself.
 //
-// If an error occurs, the returned response may be non nil.
-// However, you can only read the first 1024 bytes of the body.
+// If an error occurs, the returned response may be non nil. After a 101
+// response, resp.Body is empty, because its bytes belong to the upgraded
+// connection. For any other status, resp.Body holds at most the first
+// 1024 bytes of the body.
 //
 // This function requires at least Go 1.12 as it uses a new feature
 // in net/http to perform WebSocket handshakes.
