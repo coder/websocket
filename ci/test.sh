@@ -15,7 +15,9 @@ coverpkgs=$(go list ./... | grep -v websocket/internal/test | paste -sd, -)
 # HTTP/2 tests are kept in a separate module currently.
 echo "++++ Building HTTP/2 tests"
 pushd internal/thirdparty
-go test -c -cover -covermode=atomic -coverpkg=github.com/coder/websocket -o ../../ci/out/http2.test ./http2
+# http2legacy keeps x/net's own HTTP/2 client on Go 1.27, where the default
+# client passes requests to net/http, which rejects :protocol.
+go test -c -tags http2legacy -cover -covermode=atomic -coverpkg=github.com/coder/websocket -o ../../ci/out/http2.test ./http2
 popd
 
 echo "++++ Running HTTP/2 tests: http2xconnect=0"
