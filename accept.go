@@ -44,6 +44,9 @@ type AcceptOptions struct {
 	// https://golang.org/pkg/path/#Match). By default, it is matched
 	// against the request origin host. If the pattern contains a URI
 	// scheme ("://"), it will be matched against "scheme://host".
+	// Patterns are tried in order. Reaching an invalid pattern rejects a
+	// cross origin request with 403 Forbidden and an error wrapping
+	// path.ErrBadPattern.
 	//
 	// Please ensure you understand the ramifications of enabling this.
 	// If used incorrectly your WebSocket server will be open to CSRF attacks.
