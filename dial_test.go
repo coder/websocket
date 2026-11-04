@@ -145,6 +145,12 @@ func TestDialErrBadStatus(t *testing.T) {
 		assert.Error(t, err)
 		assert.Equal(t, "error", "failed to WebSocket dial: expected handshake response status code 101 but got 403", err.Error())
 		assert.ErrorIs(t, websocket.ErrBadStatus, err)
+		// Code that unwraps to the innermost error must still get the status text.
+		inner := err
+		for e := errors.Unwrap(inner); e != nil; e = errors.Unwrap(inner) {
+			inner = e
+		}
+		assert.Equal(t, "innermost error", "expected handshake response status code 101 but got 403", inner.Error())
 		if resp == nil {
 			t.Fatal("expected non-nil response")
 		}
