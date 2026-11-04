@@ -207,6 +207,25 @@ func TestAccept(t *testing.T) {
 		wg.Wait()
 		assert.Success(t, err)
 	})
+
+	t.Run("insecureSkipVerifyIgnoresBadPattern", func(t *testing.T) {
+		t.Parallel()
+
+		server, client := net.Pipe()
+		defer client.Close()
+		w := mockHijacker{
+			ResponseWriter: httptest.NewRecorder(),
+			hijack: func() (net.Conn, *bufio.ReadWriter, error) {
+				return server, bufio.NewReadWriter(bufio.NewReader(server), bufio.NewWriter(server)), nil
+			},
+		}
+		r := newHandshakeRequest()
+		r.Header.Set("Origin", "https://other.com")
+
+		c, err := Accept(w, r, &AcceptOptions{InsecureSkipVerify: true, OriginPatterns: []string{"["}})
+		assert.Success(t, err)
+		c.CloseNow()
+	})
 }
 
 func newHandshakeRequest() *http.Request {
@@ -318,7 +337,6 @@ var acceptRejectionTests = []struct {
 	{
 		// The pattern error is logged, and the default body omits it.
 		name:            "badOriginPattern",
-		modify:          func(r *http.Request) { r.Header.Set("Origin", "https://other.com") },
 		opts:            AcceptOptions{OriginPatterns: []string{"["}},
 		wantStatus:      http.StatusInternalServerError,
 		wantErr:         `invalid OriginPatterns entry "[": syntax error in pattern`,
