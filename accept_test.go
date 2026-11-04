@@ -316,7 +316,7 @@ var acceptRejectionTests = []struct {
 		wantHeader: http.Header{},
 	},
 	{
-		// The default body hides the pattern error, which Accept logs.
+		// The pattern error is logged, and the default body omits it.
 		name:            "badOriginPattern",
 		modify:          func(r *http.Request) { r.Header.Set("Origin", "https://other.com") },
 		opts:            AcceptOptions{OriginPatterns: []string{"["}},
@@ -430,8 +430,9 @@ func TestAcceptErrorHandler(t *testing.T) {
 				}))
 				defer s.Close()
 
-				// A raw connection avoids http.Client transport goroutines,
-				// which outlive s.Close and fail the TestMain leak check.
+				// A raw connection starts no http.Client transport goroutines.
+				// Those keep running after s.Close returns and fail the
+				// TestMain leak check.
 				c, err := net.Dial("tcp", s.Listener.Addr().String())
 				assert.Success(t, err)
 				defer c.Close()
@@ -452,7 +453,7 @@ func TestAcceptErrorHandler(t *testing.T) {
 	})
 }
 
-// TestAcceptRejectionDefault pins the response Accept writes without an
+// TestAcceptRejectionDefault checks the response Accept writes without an
 // ErrorHandler.
 func TestAcceptRejectionDefault(t *testing.T) {
 	t.Parallel()
