@@ -320,11 +320,11 @@ var acceptRejectionTests = []struct {
 		name:            "badOriginPattern",
 		modify:          func(r *http.Request) { r.Header.Set("Origin", "https://other.com") },
 		opts:            AcceptOptions{OriginPatterns: []string{"["}},
-		wantStatus:      http.StatusForbidden,
+		wantStatus:      http.StatusInternalServerError,
 		wantErr:         `invalid OriginPatterns entry "[": syntax error in pattern`,
 		wantErrIs:       path.ErrBadPattern,
 		wantHeader:      http.Header{},
-		wantDefaultBody: "Forbidden",
+		wantDefaultBody: "Internal Server Error",
 	},
 	{
 		name:            "noHijacker",
