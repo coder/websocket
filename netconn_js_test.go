@@ -76,7 +76,8 @@ func TestWasmNetConnReadLimit(t *testing.T) {
 				Subprotocols: []string{"echo"},
 			})
 			assert.Success(t, err)
-			// The echo server expects StatusNormalClosure.
+			// The echo server fails TestWasm unless the close status is
+			// StatusNormalClosure.
 			defer c.Close(websocket.StatusNormalClosure, "")
 
 			nc := tc.netConn(ctx, c)
