@@ -44,9 +44,8 @@ type AcceptOptions struct {
 	// https://golang.org/pkg/path/#Match). By default, it is matched
 	// against the request origin host. If the pattern contains a URI
 	// scheme ("://"), it will be matched against "scheme://host".
-	// Patterns are tried in order. Reaching an invalid pattern rejects a
-	// cross origin request with 403 Forbidden and an error wrapping
-	// path.ErrBadPattern.
+	// If a pattern is invalid, Accept rejects every handshake, whatever its
+	// origin, with 403 Forbidden and an error wrapping path.ErrBadPattern.
 	//
 	// Please ensure you understand the ramifications of enabling this.
 	// If used incorrectly your WebSocket server will be open to CSRF attacks.
@@ -248,6 +247,14 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) (errCode int, _
 }
 
 func authenticateOrigin(r *http.Request, originHosts []string) error {
+	// Check every pattern first, so an invalid one rejects every request,
+	// whatever its origin.
+	for _, hostPattern := range originHosts {
+		if _, err := match(hostPattern, ""); err != nil {
+			return fmt.Errorf("invalid OriginPatterns entry %q: %w", hostPattern, err)
+		}
+	}
+
 	origin := r.Header.Get("Origin")
 	if origin == "" {
 		return nil
@@ -267,10 +274,7 @@ func authenticateOrigin(r *http.Request, originHosts []string) error {
 		if strings.Contains(hostPattern, "://") {
 			target = u.Scheme + "://" + u.Host
 		}
-		matched, err := match(hostPattern, target)
-		if err != nil {
-			return fmt.Errorf("invalid OriginPatterns entry %q: %w", hostPattern, err)
-		}
+		matched, _ := match(hostPattern, target) // Every pattern was checked above.
 		if matched {
 			return nil
 		}
