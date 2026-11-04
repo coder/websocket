@@ -321,7 +321,7 @@ var acceptRejectionTests = []struct {
 		modify:          func(r *http.Request) { r.Header.Set("Origin", "https://other.com") },
 		opts:            AcceptOptions{OriginPatterns: []string{"["}},
 		wantStatus:      http.StatusForbidden,
-		wantErr:         `failed to parse path pattern "[": syntax error in pattern`,
+		wantErr:         `invalid OriginPatterns entry "[": syntax error in pattern`,
 		wantErrIs:       path.ErrBadPattern,
 		wantHeader:      http.Header{},
 		wantDefaultBody: "Forbidden",
