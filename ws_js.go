@@ -286,7 +286,7 @@ type DialOptions struct {
 // Dial creates a new WebSocket connection to the given url with the given options.
 // The passed context bounds the maximum time spent waiting for the connection to open.
 // The returned *http.Response is always nil or a mock. It's only in the signature
-// to match the core API. The error never wraps ErrBadStatus, because the
+// to match the core API. The error never matches ErrBadStatus, because the
 // browser does not expose the handshake response.
 func Dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Response, error) {
 	c, resp, err := dial(ctx, url, opts)

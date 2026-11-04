@@ -4,8 +4,10 @@ import (
 	"errors"
 )
 
-// ErrBadStatus is wrapped by the error from Dial when the server answers
-// the opening handshake with a status other than 101 Switching Protocols.
+// ErrBadStatus means that the server answered the opening handshake from
+// Dial with a status other than 101 Switching Protocols. Test for it with
+// errors.Is. For backward compatibility, the error from Dial does not
+// unwrap to it.
 var ErrBadStatus = errors.New("websocket: bad status")
 
 // ErrMessageTooBig is returned when a message exceeds the read limit.

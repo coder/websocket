@@ -114,10 +114,10 @@ func (opts *DialOptions) cloneWithDefaults(ctx context.Context) (context.Context
 // connection. For any other status, resp.Body holds at most the first
 // 1024 bytes of the body.
 //
-// The error wraps ErrBadStatus when the final response that
+// The error matches ErrBadStatus when the final response that
 // DialOptions.HTTPClient returns has a status other than 101 Switching
 // Protocols, and resp is then non nil. If HTTPClient.CheckRedirect returns
-// an error other than http.ErrUseLastResponse, the error does not wrap
+// an error other than http.ErrUseLastResponse, the error does not match
 // ErrBadStatus and resp is nil.
 //
 // This function requires at least Go 1.12 as it uses a new feature
@@ -285,8 +285,8 @@ func verifyServerResponse(opts *DialOptions, copts *compressionOptions, secWebSo
 }
 
 // badStatusError keeps the Dial error text unchanged, because callers match
-// on that text. Unwrap, unlike an Is method, puts ErrBadStatus in the error
-// chain, so code that walks the chain finds it, not only errors.Is.
+// on that text. It matches ErrBadStatus through Is instead of Unwrap, so code
+// that unwraps to the innermost error still gets that text.
 type badStatusError struct {
 	statusCode int
 }
@@ -295,8 +295,8 @@ func (e badStatusError) Error() string {
 	return fmt.Sprintf("expected handshake response status code %v but got %v", http.StatusSwitchingProtocols, e.statusCode)
 }
 
-func (badStatusError) Unwrap() error {
-	return ErrBadStatus
+func (badStatusError) Is(target error) bool {
+	return target == ErrBadStatus
 }
 
 func verifySubprotocol(subprotos []string, resp *http.Response) error {
