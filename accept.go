@@ -45,7 +45,8 @@ type AcceptOptions struct {
 	// against the request origin host. If the pattern contains a URI
 	// scheme ("://"), it will be matched against "scheme://host".
 	// If a pattern is invalid, Accept rejects every handshake, whatever its
-	// origin, with 403 Forbidden and an error wrapping path.ErrBadPattern.
+	// origin, with 500 Internal Server Error and an error wrapping
+	// path.ErrBadPattern.
 	//
 	// Please ensure you understand the ramifications of enabling this.
 	// If used incorrectly your WebSocket server will be open to CSRF attacks.
@@ -128,12 +129,13 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	if !opts.InsecureSkipVerify {
 		err = authenticateOrigin(r, opts.OriginPatterns)
 		if err != nil {
-			defaultBody := err.Error()
+			status, defaultBody := http.StatusForbidden, err.Error()
 			if errors.Is(err, path.ErrBadPattern) {
 				log.Printf("websocket: %v", err)
-				defaultBody = http.StatusText(http.StatusForbidden)
+				status = http.StatusInternalServerError
+				defaultBody = http.StatusText(status)
 			}
-			opts.writeRejection(w, r, http.StatusForbidden, err, defaultBody)
+			opts.writeRejection(w, r, status, err, defaultBody)
 			return nil, err
 		}
 	}
