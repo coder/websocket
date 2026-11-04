@@ -121,6 +121,7 @@ func TestBadDials(t *testing.T) {
 			HTTPClient: mockHTTPClient(rt),
 		})
 		assert.Contains(t, err, "response body is not a io.ReadWriteCloser")
+		assert.Equal(t, "errors.Is(err, ErrBadStatus)", false, errors.Is(err, websocket.ErrBadStatus))
 	})
 }
 
@@ -169,6 +170,52 @@ func TestDialErrBadStatus(t *testing.T) {
 		if resp != nil {
 			t.Fatalf("expected nil response, got status %d", resp.StatusCode)
 		}
+	})
+
+	redirect := func(checkRedirect error) *http.Client {
+		hc := mockHTTPClient(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusFound,
+				Header:     http.Header{"Location": {"wss://example.com/login"}},
+			}, nil
+		})
+		hc.CheckRedirect = func(*http.Request, []*http.Request) error {
+			return checkRedirect
+		}
+		return hc
+	}
+
+	t.Run("redirectRefused", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		errRefused := errors.New("redirect refused")
+		_, resp, err := websocket.Dial(ctx, "ws://example.com", &websocket.DialOptions{
+			HTTPClient: redirect(errRefused),
+		})
+		assert.ErrorIs(t, errRefused, err)
+		assert.Equal(t, "errors.Is(err, ErrBadStatus)", false, errors.Is(err, websocket.ErrBadStatus))
+		if resp != nil {
+			t.Fatalf("expected nil response, got status %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("redirectUseLastResponse", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		_, resp, err := websocket.Dial(ctx, "ws://example.com", &websocket.DialOptions{
+			HTTPClient: redirect(http.ErrUseLastResponse),
+		})
+		assert.ErrorIs(t, websocket.ErrBadStatus, err)
+		if resp == nil {
+			t.Fatal("expected non-nil response")
+		}
+		assert.Equal(t, "status code", http.StatusFound, resp.StatusCode)
 	})
 }
 
