@@ -316,7 +316,7 @@ var acceptRejectionTests = []struct {
 		wantHeader: http.Header{},
 	},
 	{
-		// The pattern error is logged and not sent to the client.
+		// The default body hides the pattern error, which Accept logs.
 		name:            "badOriginPattern",
 		modify:          func(r *http.Request) { r.Header.Set("Origin", "https://other.com") },
 		opts:            AcceptOptions{OriginPatterns: []string{"["}},
