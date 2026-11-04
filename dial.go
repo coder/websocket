@@ -281,7 +281,7 @@ func verifyServerResponse(opts *DialOptions, copts *compressionOptions, secWebSo
 
 // badStatusError keeps the Dial error text unchanged, because callers match
 // on that text. Unwrap, unlike an Is method, puts ErrBadStatus in the error
-// chain, so callers can find it with errors.Unwrap as well as errors.Is.
+// chain, so code that walks the chain finds it, not only errors.Is.
 type badStatusError struct {
 	statusCode int
 }
