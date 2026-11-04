@@ -33,7 +33,7 @@ type AcceptOptions struct {
 	InsecureSkipVerify bool
 
 	// OriginPatterns lists the host patterns for authorized origins.
-	// The request host is always authorized.
+	// The request host is authorized without a matching pattern.
 	// Use this to enable cross origin WebSockets.
 	//
 	// i.e javascript running on example.com wants to access a WebSocket server at chat.example.com.
@@ -249,8 +249,8 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) (errCode int, _
 }
 
 func authenticateOrigin(r *http.Request, originHosts []string) error {
-	// Check every pattern first, so an invalid one rejects every request,
-	// whatever its origin.
+	// This check comes before the Origin checks, so an invalid pattern rejects
+	// every request.
 	for _, hostPattern := range originHosts {
 		if _, err := match(hostPattern, ""); err != nil {
 			return fmt.Errorf("invalid OriginPatterns entry %q: %w", hostPattern, err)
