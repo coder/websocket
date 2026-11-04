@@ -103,9 +103,8 @@ func (opts *AcceptOptions) cloneWithDefaults() *AcceptOptions {
 // Accept will not allow cross origin requests by default.
 // See the InsecureSkipVerify and OriginPatterns options to allow cross origin requests.
 //
-// Accept writes a response to w on all errors, through
-// AcceptOptions.ErrorHandler when it rejects the handshake request. Do not
-// write to w after Accept returns an error.
+// Accept writes a response to w on all errors. To change it, set the
+// ErrorHandler on AcceptOptions.
 //
 // Note that using the http.Request Context after Accept returns may lead to
 // unexpected behavior (see http.Hijacker).
