@@ -700,6 +700,7 @@ func Test_authenticateOrigin(t *testing.T) {
 		host           string
 		originPatterns []string
 		success        bool
+		wantErrIs      error
 	}{
 		{
 			name:    "none",
@@ -786,6 +787,26 @@ func Test_authenticateOrigin(t *testing.T) {
 			},
 			success: true,
 		},
+		{
+			name:           "invalidPatternNoOrigin",
+			host:           "example.com",
+			originPatterns: []string{"["},
+			wantErrIs:      path.ErrBadPattern,
+		},
+		{
+			name:           "invalidPatternSameOrigin",
+			origin:         "https://example.com",
+			host:           "example.com",
+			originPatterns: []string{"["},
+			wantErrIs:      path.ErrBadPattern,
+		},
+		{
+			name:           "invalidPatternAfterMatch",
+			origin:         "https://other.com",
+			host:           "example.com",
+			originPatterns: []string{"other.com", "["},
+			wantErrIs:      path.ErrBadPattern,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -797,6 +818,9 @@ func Test_authenticateOrigin(t *testing.T) {
 			r.Header.Set("Origin", tc.origin)
 
 			err := authenticateOrigin(r, tc.originPatterns)
+			if tc.wantErrIs != nil {
+				assert.ErrorIs(t, tc.wantErrIs, err)
+			}
 			if tc.success {
 				assert.Success(t, err)
 			} else {
