@@ -80,15 +80,12 @@ type AcceptOptions struct {
 	// is a response to a ping and does not trigger any further frame transmission.
 	OnPongReceived func(ctx context.Context, payload []byte)
 
-	// ErrorHandler writes the HTTP response when Accept rejects the handshake
-	// request. The status argument is the HTTP status for the rejection, and
-	// w.Header() holds the headers Accept set for it. Accept returns an error
-	// wrapping the err argument, which may contain server details.
-	// ErrorHandler must write a response, because otherwise net/http sends
-	// 200 OK with an empty body. If ErrorHandler is nil, Accept writes a plain
-	// text response with http.Error. ErrorHandler is not called when hijacking
-	// the connection fails, because Accept has already written 101 Switching
-	// Protocols.
+	// ErrorHandler can be set to change how and what HTTP errors are shown to
+	// the client. The handler must write a response, otherwise the client
+	// sees HTTP 200 OK. The status is what Accept would have written with
+	// http.Error, and err is the reason for the rejection. Headers set by
+	// Accept can be inspected and changed via w.Header(). ErrorHandler is not
+	// called when hijacking the connection fails.
 	ErrorHandler func(w http.ResponseWriter, r *http.Request, status int, err error)
 }
 
