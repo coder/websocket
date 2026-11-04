@@ -107,14 +107,14 @@ func CloseStatus(err error) StatusCode {
 // complete.
 func (c *Conn) Close(code StatusCode, reason string) error {
 	ce, wireErr := wireCloseError(code, reason)
-	err := c.exportedClose(ce.Code, ce.Reason)
+	err := c.closeAndWait(ce.Code, ce.Reason)
 	if err != nil {
 		return err
 	}
 	return wireErr
 }
 
-func (c *Conn) exportedClose(code StatusCode, reason string) (err error) {
+func (c *Conn) closeAndWait(code StatusCode, reason string) (err error) {
 	defer errd.Wrap(&err, "failed to close WebSocket")
 
 	if c.casClosing() {

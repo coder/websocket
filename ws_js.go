@@ -235,7 +235,7 @@ func (c *Conn) write(typ MessageType, p []byte) error {
 func (c *Conn) Close(code StatusCode, reason string) error {
 	// Browsers throw on a reason over 123 bytes and leave the connection open.
 	reason, truncErr := wireCloseReason(reason)
-	err := c.exportedClose(code, reason)
+	err := c.closeAndWait(code, reason)
 	if err != nil {
 		return fmt.Errorf("failed to close WebSocket: %w", err)
 	}
@@ -251,7 +251,7 @@ func (c *Conn) CloseNow() error {
 	return c.Close(StatusGoingAway, "")
 }
 
-func (c *Conn) exportedClose(code StatusCode, reason string) error {
+func (c *Conn) closeAndWait(code StatusCode, reason string) error {
 	c.closingMu.Lock()
 	defer c.closingMu.Unlock()
 
