@@ -269,7 +269,7 @@ func authenticateOrigin(r *http.Request, originHosts []string) error {
 		}
 		matched, err := match(hostPattern, target)
 		if err != nil {
-			return fmt.Errorf("failed to parse path pattern %q: %w", hostPattern, err)
+			return fmt.Errorf("invalid OriginPatterns entry %q: %w", hostPattern, err)
 		}
 		if matched {
 			return nil
