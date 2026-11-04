@@ -60,9 +60,10 @@ type Conn struct {
 	readControlBuf [maxControlPayload]byte
 	msgReader      *msgReader
 
-	// readLimitSet is true once SetReadLimit has been called, so NetConn
-	// keeps the limit. readLimitMu makes NetConn's check and update atomic
-	// with SetReadLimit. It is never held during I/O.
+	// readLimitSet is true once SetReadLimit has been called, and NetConn
+	// then leaves the limit unchanged. Holding readLimitMu makes NetConn's
+	// check of readLimitSet and its update of the limit atomic with
+	// SetReadLimit. The mutex is never held during I/O.
 	readLimitMu  sync.Mutex
 	readLimitSet bool
 
