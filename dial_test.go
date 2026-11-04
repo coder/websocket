@@ -178,7 +178,7 @@ func TestDialErrBadStatus(t *testing.T) {
 		}
 	})
 
-	redirect := func(checkRedirect error) *http.Client {
+	redirectClient := func(checkRedirect error) *http.Client {
 		hc := mockHTTPClient(func(*http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusFound,
@@ -199,7 +199,7 @@ func TestDialErrBadStatus(t *testing.T) {
 
 		errRefused := errors.New("redirect refused")
 		_, resp, err := websocket.Dial(ctx, "ws://example.com", &websocket.DialOptions{
-			HTTPClient: redirect(errRefused),
+			HTTPClient: redirectClient(errRefused),
 		})
 		assert.ErrorIs(t, errRefused, err)
 		assert.Equal(t, "errors.Is(err, ErrBadStatus)", false, errors.Is(err, websocket.ErrBadStatus))
@@ -215,7 +215,7 @@ func TestDialErrBadStatus(t *testing.T) {
 		defer cancel()
 
 		_, resp, err := websocket.Dial(ctx, "ws://example.com", &websocket.DialOptions{
-			HTTPClient: redirect(http.ErrUseLastResponse),
+			HTTPClient: redirectClient(http.ErrUseLastResponse),
 		})
 		assert.ErrorIs(t, websocket.ErrBadStatus, err)
 		if resp == nil {
