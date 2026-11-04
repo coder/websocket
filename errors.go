@@ -7,9 +7,9 @@ import (
 // ErrBadStatus is wrapped by the error from Dial when the final response
 // that DialOptions.HTTPClient returns for the opening handshake has a
 // status other than 101 Switching Protocols. See Dial for the response
-// returned with it. A redirect that HTTPClient.CheckRedirect refuses is
-// returned as a request error with a nil response, so it does not wrap
-// ErrBadStatus.
+// returned with it. If HTTPClient.CheckRedirect returns an error other than
+// http.ErrUseLastResponse, the error from Dial does not wrap ErrBadStatus
+// and the response is nil.
 //
 // On js/wasm, Dial never returns an error wrapping ErrBadStatus because
 // the browser does not expose the handshake response.
