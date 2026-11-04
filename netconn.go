@@ -44,10 +44,8 @@ import (
 // A received StatusNormalClosure or StatusGoingAway close frame will be translated to
 // io.EOF when reading.
 //
-// If SetReadLimit has not been called on c, NetConn disables the read limit.
-// A limit set with SetReadLimit before or after NetConn is kept. It applies
-// to each WebSocket message, such as each Write by a peer using NetConn.
-// Reading a message that exceeds it returns an error wrapping ErrMessageTooBig.
+// NetConn disables the read limit unless SetReadLimit has been called on c,
+// because each Write to a net.Conn becomes one message and can be any size.
 func NetConn(ctx context.Context, c *Conn, msgType MessageType) net.Conn {
 	c.readLimitMu.Lock()
 	if !c.readLimitSet {
