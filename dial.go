@@ -113,7 +113,12 @@ func (opts *DialOptions) cloneWithDefaults(ctx context.Context) (context.Context
 // response, resp.Body is empty, because its bytes belong to the upgraded
 // connection. For any other status, resp.Body holds at most the first
 // 1024 bytes of the body.
-// If err wraps ErrBadStatus, resp is non nil.
+//
+// The error wraps ErrBadStatus when the final response that
+// DialOptions.HTTPClient returns has a status other than 101 Switching
+// Protocols, and resp is then non nil. If HTTPClient.CheckRedirect returns
+// an error other than http.ErrUseLastResponse, the error does not wrap
+// ErrBadStatus and resp is nil.
 //
 // This function requires at least Go 1.12 as it uses a new feature
 // in net/http to perform WebSocket handshakes.
