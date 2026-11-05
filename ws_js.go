@@ -435,6 +435,8 @@ func (c *Conn) disableReadLimitUnlessSet() {
 	}
 }
 
+// setReadLimit does not set readLimitSet, so NetConn can still disable the
+// limit.
 func (c *Conn) setReadLimit(n int64) {
 	c.msgReadLimit.Store(n)
 }
