@@ -825,6 +825,13 @@ func Test_authenticateOrigin(t *testing.T) {
 			originPatterns: []string{"other.com", "["},
 			wantErrIs:      path.ErrBadPattern,
 		},
+		{
+			name:           "invalidPatternInvalidOrigin",
+			origin:         "http://[::1",
+			host:           "example.com",
+			originPatterns: []string{"["},
+			wantErrIs:      path.ErrBadPattern,
+		},
 	}
 
 	for _, tc := range testCases {
