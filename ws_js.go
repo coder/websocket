@@ -56,6 +56,10 @@ type Conn struct {
 	closeErrOnce  sync.Once
 	closeErr      error
 	closeWasClean bool
+	// closeCalled is set by the first Close or CloseNow call. Library code
+	// and the browser close the connection without setting it, so the user's
+	// first Close does not report net.ErrClosed after either closed it.
+	closeCalled atomic.Bool
 
 	releaseOnClose   func()
 	releaseOnError   func()
@@ -125,7 +129,7 @@ func (c *Conn) init() {
 }
 
 func (c *Conn) closeWithInternal() {
-	c.Close(StatusInternalError, "something went wrong")
+	c.closeWithHandshake(StatusInternalError, "something went wrong")
 }
 
 // Read attempts to read a message from the connection.
@@ -145,7 +149,7 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 	readLimit := c.msgReadLimit.Load()
 	if readLimit >= 0 && int64(len(p)) > readLimit {
 		reason := fmt.Errorf("read limited at %d bytes", c.msgReadLimit.Load())
-		c.Close(StatusMessageTooBig, reason.Error())
+		c.closeWithHandshake(StatusMessageTooBig, reason.Error())
 		return 0, nil, fmt.Errorf("%w: %v", ErrMessageTooBig, reason)
 	}
 	return typ, p, nil
@@ -154,7 +158,7 @@ func (c *Conn) Read(ctx context.Context) (MessageType, []byte, error) {
 func (c *Conn) read(ctx context.Context) (MessageType, []byte, error) {
 	select {
 	case <-ctx.Done():
-		c.Close(StatusPolicyViolation, "read timed out")
+		c.closeWithHandshake(StatusPolicyViolation, "read timed out")
 		return 0, nil, ctx.Err()
 	case <-c.readSignal:
 	case <-c.closed:
@@ -229,6 +233,17 @@ func (c *Conn) write(typ MessageType, p []byte) error {
 // or the connection is closed.
 // It thus performs the full WebSocket close handshake.
 func (c *Conn) Close(code StatusCode, reason string) error {
+	firstCall := !c.closeCalled.Swap(true)
+	err := c.closeWithHandshake(code, reason)
+	if firstCall && errors.Is(err, net.ErrClosed) {
+		return nil
+	}
+	return err
+}
+
+// closeWithHandshake implements Close for library code, which must not set
+// closeCalled.
+func (c *Conn) closeWithHandshake(code StatusCode, reason string) error {
 	err := c.exportedClose(code, reason)
 	if err != nil {
 		return fmt.Errorf("failed to close WebSocket: %w", err)
@@ -403,10 +418,10 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 
 	go func() {
 		defer cancel()
-		defer c.CloseNow()
+		defer c.closeWithHandshake(StatusGoingAway, "")
 		_, _, err := c.read(ctx)
 		if err != nil {
-			c.Close(StatusPolicyViolation, "unexpected data message")
+			c.closeWithHandshake(StatusPolicyViolation, "unexpected data message")
 		}
 	}()
 	return ctx
