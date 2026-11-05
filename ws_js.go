@@ -427,6 +427,14 @@ func (c *Conn) SetReadLimit(n int64) {
 	c.setReadLimit(n)
 }
 
+func (c *Conn) disableReadLimitUnlessSet() {
+	c.readLimitMu.Lock()
+	defer c.readLimitMu.Unlock()
+	if !c.readLimitSet {
+		c.setReadLimit(-1)
+	}
+}
+
 func (c *Conn) setReadLimit(n int64) {
 	c.msgReadLimit.Store(n)
 }
