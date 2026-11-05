@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"errors"
 	"io"
 	"maps"
 	"net/http"
@@ -120,6 +121,107 @@ func TestBadDials(t *testing.T) {
 			HTTPClient: mockHTTPClient(rt),
 		})
 		assert.Contains(t, err, "response body is not a io.ReadWriteCloser")
+		assert.Equal(t, "errors.Is(err, ErrBadStatus)", false, errors.Is(err, websocket.ErrBadStatus))
+	})
+}
+
+func TestDialErrBadStatus(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nonSwitchingStatus", func(t *testing.T) {
+		t.Parallel()
+
+		body := strings.Repeat("a", 1024) + "b"
+		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			io.WriteString(w, body)
+		}))
+		defer s.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		_, resp, err := websocket.Dial(ctx, s.URL, nil)
+		assert.Error(t, err)
+		assert.Equal(t, "error", "failed to WebSocket dial: expected handshake response status code 101 but got 403", err.Error())
+		assert.ErrorIs(t, websocket.ErrBadStatus, err)
+		// Code that unwraps to the innermost error must still get the status text.
+		inner := err
+		for e := errors.Unwrap(inner); e != nil; e = errors.Unwrap(inner) {
+			inner = e
+		}
+		assert.Equal(t, "innermost error", "expected handshake response status code 101 but got 403", inner.Error())
+		if resp == nil {
+			t.Fatal("expected non-nil response")
+		}
+		assert.Equal(t, "status code", http.StatusForbidden, resp.StatusCode)
+		b, err := io.ReadAll(resp.Body)
+		assert.Success(t, err)
+		assert.Equal(t, "body", body[:1024], string(b))
+	})
+
+	t.Run("networkError", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		_, resp, err := websocket.Dial(ctx, "ws://example.com", &websocket.DialOptions{
+			HTTPClient: mockHTTPClient(func(*http.Request) (*http.Response, error) {
+				return nil, errors.New("connection refused")
+			}),
+		})
+		assert.Error(t, err)
+		assert.Equal(t, "errors.Is(err, ErrBadStatus)", false, errors.Is(err, websocket.ErrBadStatus))
+		if resp != nil {
+			t.Fatalf("expected nil response, got status %d", resp.StatusCode)
+		}
+	})
+
+	redirectClient := func(checkRedirect error) *http.Client {
+		hc := mockHTTPClient(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusFound,
+				Header:     http.Header{"Location": {"wss://example.com/login"}},
+			}, nil
+		})
+		hc.CheckRedirect = func(*http.Request, []*http.Request) error {
+			return checkRedirect
+		}
+		return hc
+	}
+
+	t.Run("redirectRefused", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		errRefused := errors.New("redirect refused")
+		_, resp, err := websocket.Dial(ctx, "ws://example.com", &websocket.DialOptions{
+			HTTPClient: redirectClient(errRefused),
+		})
+		assert.ErrorIs(t, errRefused, err)
+		assert.Equal(t, "errors.Is(err, ErrBadStatus)", false, errors.Is(err, websocket.ErrBadStatus))
+		if resp != nil {
+			t.Fatalf("expected nil response, got status %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("redirectUseLastResponse", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		_, resp, err := websocket.Dial(ctx, "ws://example.com", &websocket.DialOptions{
+			HTTPClient: redirectClient(http.ErrUseLastResponse),
+		})
+		assert.ErrorIs(t, websocket.ErrBadStatus, err)
+		if resp == nil {
+			t.Fatal("expected non-nil response")
+		}
+		assert.Equal(t, "status code", http.StatusFound, resp.StatusCode)
 	})
 }
 
@@ -292,6 +394,7 @@ func Test_verifyServerHandshake(t *testing.T) {
 			} else {
 				assert.Error(t, err)
 			}
+			assert.Equal(t, "errors.Is(err, ErrBadStatus)", tc.name == "badStatus", errors.Is(err, websocket.ErrBadStatus))
 		})
 	}
 }
