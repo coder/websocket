@@ -337,6 +337,7 @@ var acceptRejectionTests = []struct {
 	{
 		// The pattern error is logged, and the default body omits it.
 		name:            "badOriginPattern",
+		modify:          func(r *http.Request) { r.Header.Set("Origin", "https://other.com") },
 		opts:            AcceptOptions{OriginPatterns: []string{"["}},
 		wantStatus:      http.StatusInternalServerError,
 		wantErr:         `invalid OriginPatterns entry "[": syntax error in pattern`,
@@ -718,7 +719,6 @@ func Test_authenticateOrigin(t *testing.T) {
 		host           string
 		originPatterns []string
 		success        bool
-		wantErrIs      error
 	}{
 		{
 			name:    "none",
@@ -809,28 +809,21 @@ func Test_authenticateOrigin(t *testing.T) {
 			name:           "invalidPatternNoOrigin",
 			host:           "example.com",
 			originPatterns: []string{"["},
-			wantErrIs:      path.ErrBadPattern,
+			success:        true,
 		},
 		{
 			name:           "invalidPatternSameOrigin",
 			origin:         "https://example.com",
 			host:           "example.com",
 			originPatterns: []string{"["},
-			wantErrIs:      path.ErrBadPattern,
+			success:        true,
 		},
 		{
 			name:           "invalidPatternAfterMatch",
 			origin:         "https://other.com",
 			host:           "example.com",
 			originPatterns: []string{"other.com", "["},
-			wantErrIs:      path.ErrBadPattern,
-		},
-		{
-			name:           "invalidPatternInvalidOrigin",
-			origin:         "http://[::1",
-			host:           "example.com",
-			originPatterns: []string{"["},
-			wantErrIs:      path.ErrBadPattern,
+			success:        true,
 		},
 	}
 
@@ -843,9 +836,6 @@ func Test_authenticateOrigin(t *testing.T) {
 			r.Header.Set("Origin", tc.origin)
 
 			err := authenticateOrigin(r, tc.originPatterns)
-			if tc.wantErrIs != nil {
-				assert.ErrorIs(t, tc.wantErrIs, err)
-			}
 			if tc.success {
 				assert.Success(t, err)
 			} else {

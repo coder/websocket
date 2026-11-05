@@ -33,7 +33,7 @@ type AcceptOptions struct {
 	InsecureSkipVerify bool
 
 	// OriginPatterns lists the host patterns for authorized origins.
-	// The request host is authorized without a matching pattern.
+	// The request host is always authorized.
 	// Use this to enable cross origin WebSockets.
 	//
 	// i.e javascript running on example.com wants to access a WebSocket server at chat.example.com.
@@ -44,9 +44,10 @@ type AcceptOptions struct {
 	// https://golang.org/pkg/path/#Match). By default, it is matched
 	// against the request origin host. If the pattern contains a URI
 	// scheme ("://"), it will be matched against "scheme://host".
-	// Unless InsecureSkipVerify is set, an invalid pattern makes Accept reject
-	// every valid handshake request with 500 Internal Server Error and an
-	// error wrapping path.ErrBadPattern.
+	// Accept tries the patterns in order. When it tries an invalid pattern,
+	// it rejects the request with 500 Internal Server Error and an error
+	// wrapping path.ErrBadPattern. To find invalid patterns up front, check
+	// each with path.Match.
 	//
 	// Please ensure you understand the ramifications of enabling this.
 	// If used incorrectly your WebSocket server will be open to CSRF attacks.
@@ -250,39 +251,36 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) (errCode int, _
 
 func authenticateOrigin(r *http.Request, originHosts []string) error {
 	origin := r.Header.Get("Origin")
-	u, parseErr := url.Parse(origin)
-	if parseErr != nil {
-		u = &url.URL{}
+	if origin == "" {
+		return nil
 	}
 
-	// path.Match returns ErrBadPattern for a malformed pattern whatever the
-	// name. Checking here, before the Origin checks, makes an invalid pattern
-	// reject every request.
-	matched := false
+	u, err := url.Parse(origin)
+	if err != nil {
+		return fmt.Errorf("failed to parse Origin header %q: %w", origin, err)
+	}
+
+	if strings.EqualFold(r.Host, u.Host) {
+		return nil
+	}
+
 	for _, hostPattern := range originHosts {
 		target := u.Host
 		if strings.Contains(hostPattern, "://") {
 			target = u.Scheme + "://" + u.Host
 		}
-		ok, err := match(hostPattern, target)
+		matched, err := match(hostPattern, target)
 		if err != nil {
 			return fmt.Errorf("invalid OriginPatterns entry %q: %w", hostPattern, err)
 		}
-		matched = matched || ok
+		if matched {
+			return nil
+		}
 	}
-
-	switch {
-	case origin == "":
-		return nil
-	case parseErr != nil:
-		return fmt.Errorf("failed to parse Origin header %q: %w", origin, parseErr)
-	case strings.EqualFold(r.Host, u.Host), matched:
-		return nil
-	case u.Host == "":
+	if u.Host == "" {
 		return fmt.Errorf("request Origin %q is not a valid URL with a host", origin)
-	default:
-		return fmt.Errorf("request Origin %q is not authorized for Host %q", u.Host, r.Host)
 	}
+	return fmt.Errorf("request Origin %q is not authorized for Host %q", u.Host, r.Host)
 }
 
 func match(pattern, s string) (bool, error) {
