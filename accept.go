@@ -45,8 +45,8 @@ type AcceptOptions struct {
 	// against the request origin host. If the pattern contains a URI
 	// scheme ("://"), it will be matched against "scheme://host".
 	// Unless InsecureSkipVerify is set, an invalid pattern makes Accept reject
-	// every handshake with 500 Internal Server Error and an error wrapping
-	// path.ErrBadPattern.
+	// every valid handshake request with 500 Internal Server Error and an
+	// error wrapping path.ErrBadPattern.
 	//
 	// Please ensure you understand the ramifications of enabling this.
 	// If used incorrectly your WebSocket server will be open to CSRF attacks.
