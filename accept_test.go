@@ -208,7 +208,7 @@ func TestAccept(t *testing.T) {
 		assert.Success(t, err)
 	})
 
-	t.Run("insecureSkipVerifyIgnoresBadPattern", func(t *testing.T) {
+	t.Run("insecureSkipVerifyIgnoresInvalidPattern", func(t *testing.T) {
 		t.Parallel()
 
 		server, client := net.Pipe()
