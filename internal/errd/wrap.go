@@ -2,13 +2,16 @@ package errd
 
 import (
 	"fmt"
+	"io"
 )
 
 // Wrap wraps err with fmt.Errorf if err is non nil.
 // Intended for use with defer and a named error return.
 // Inspired by https://github.com/golang/go/issues/32676.
+//
+// io.EOF is never wrapped because callers test for it with ==.
 func Wrap(err *error, f string, v ...any) {
-	if *err != nil {
+	if *err != nil && *err != io.EOF {
 		*err = fmt.Errorf(f+": %w", append(v, *err)...)
 	}
 }
