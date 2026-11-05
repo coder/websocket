@@ -300,7 +300,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+	ctx, cancel := context.WithTimeout(ctx, time.Second*20)
 	defer cancel()
 
 	b := c.readControlBuf[:h.payloadLength]
