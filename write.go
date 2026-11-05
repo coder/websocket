@@ -48,6 +48,39 @@ func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	return nil
 }
 
+// WritePrepared writes a prepared message to the connection.
+//
+// It behaves like Write but reuses the compressed payload of pm across
+// connections where possible. See PreparedMessage.
+func (c *Conn) WritePrepared(ctx context.Context, pm *PreparedMessage) error {
+	err := c.writePrepared(ctx, pm)
+	if err != nil {
+		return fmt.Errorf("failed to write prepared msg: %w", err)
+	}
+	return nil
+}
+
+func (c *Conn) writePrepared(ctx context.Context, pm *PreparedMessage) error {
+	if !c.flate() || len(pm.data) < c.flateThreshold || c.msgWriter.flateContextTakeover() {
+		_, err := c.write(ctx, pm.typ, pm.data)
+		return err
+	}
+
+	p, compressed, err := pm.compress()
+	if err != nil {
+		return err
+	}
+
+	err = c.msgWriter.reset(ctx, pm.typ)
+	if err != nil {
+		return err
+	}
+	defer c.msgWriter.mu.unlock()
+
+	_, err = c.writeFrame(ctx, true, compressed, c.msgWriter.opcode, p)
+	return err
+}
+
 type msgWriter struct {
 	c *Conn
 
@@ -180,7 +213,19 @@ func (mw *msgWriter) writeCompressedFrame(ctx context.Context, p []byte) (int, e
 
 	mw.closed = true
 
-	_, err = mw.c.writeFrame(ctx, true, true, mw.opcode, buf.Bytes())
+	// Without context takeover, the peer keeps no history between messages,
+	// so a message that compression does not make smaller is sent as is.
+	// With context takeover, the message is already in our sliding window
+	// and must be sent compressed to keep the peer's window in sync, as
+	// uncompressed messages do not affect it.
+	// See https://tools.ietf.org/html/rfc7692#section-7.2.3.2
+	compressed := mw.flateContextTakeover() || buf.Len() < len(p)
+	b := p
+	if compressed {
+		b = buf.Bytes()
+	}
+
+	_, err = mw.c.writeFrame(ctx, true, compressed, mw.opcode, b)
 	if err != nil {
 		return 0, err
 	}
