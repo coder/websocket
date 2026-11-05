@@ -249,42 +249,40 @@ func verifyClientRequest(w http.ResponseWriter, r *http.Request) (errCode int, _
 }
 
 func authenticateOrigin(r *http.Request, originHosts []string) error {
-	// This check comes before the Origin checks, so an invalid pattern rejects
-	// every request.
-	for _, hostPattern := range originHosts {
-		if _, err := match(hostPattern, ""); err != nil {
-			return fmt.Errorf("invalid OriginPatterns entry %q: %w", hostPattern, err)
-		}
-	}
-
 	origin := r.Header.Get("Origin")
-	if origin == "" {
-		return nil
+	u, parseErr := url.Parse(origin)
+	if parseErr != nil {
+		u = &url.URL{}
 	}
 
-	u, err := url.Parse(origin)
-	if err != nil {
-		return fmt.Errorf("failed to parse Origin header %q: %w", origin, err)
-	}
-
-	if strings.EqualFold(r.Host, u.Host) {
-		return nil
-	}
-
+	// path.Match returns ErrBadPattern for a malformed pattern whatever the
+	// name. Checking here, before the Origin checks, makes an invalid pattern
+	// reject every request.
+	matched := false
 	for _, hostPattern := range originHosts {
 		target := u.Host
 		if strings.Contains(hostPattern, "://") {
 			target = u.Scheme + "://" + u.Host
 		}
-		matched, _ := match(hostPattern, target) // Every pattern was checked above.
-		if matched {
-			return nil
+		ok, err := match(hostPattern, target)
+		if err != nil {
+			return fmt.Errorf("invalid OriginPatterns entry %q: %w", hostPattern, err)
 		}
+		matched = matched || ok
 	}
-	if u.Host == "" {
+
+	switch {
+	case origin == "":
+		return nil
+	case parseErr != nil:
+		return fmt.Errorf("failed to parse Origin header %q: %w", origin, parseErr)
+	case strings.EqualFold(r.Host, u.Host), matched:
+		return nil
+	case u.Host == "":
 		return fmt.Errorf("request Origin %q is not a valid URL with a host", origin)
+	default:
+		return fmt.Errorf("request Origin %q is not authorized for Host %q", u.Host, r.Host)
 	}
-	return fmt.Errorf("request Origin %q is not authorized for Host %q", u.Host, r.Host)
 }
 
 func match(pattern, s string) (bool, error) {
