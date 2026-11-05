@@ -12,6 +12,19 @@ mkdir -p "$coverdir"
 
 coverpkgs=$(go list ./... | grep -v websocket/internal/test | paste -sd, -)
 
+# HTTP/2 tests are kept in a separate module currently.
+echo "++++ Building HTTP/2 tests"
+pushd internal/thirdparty
+# http2legacy keeps x/net's own HTTP/2 client on Go 1.27, where the default
+# client passes requests to net/http, which rejects :protocol.
+go test -c -tags http2legacy -cover -covermode=atomic -coverpkg=github.com/coder/websocket -o ../../ci/out/http2.test ./http2
+popd
+
+echo "++++ Running HTTP/2 tests: http2xconnect=0"
+GODEBUG=http2xconnect=0 ./ci/out/http2.test -test.timeout=30s -test.gocoverdir="$coverdir" -test.run='.*XCONNECT_Disabled$' -test.count=1
+echo "++++ Running HTTP/2 tests: http2xconnect=1"
+GODEBUG=http2xconnect=1 ./ci/out/http2.test -test.timeout=30s -test.gocoverdir="$coverdir" -test.run='.*XCONNECT_Enabled$' -test.count=1
+
 echo "++++ Running main tests"
 # -test.gocoverdir is a test binary flag, so it goes after -args. Each test
 # binary runs in its package directory, so the path must be absolute.
@@ -24,7 +37,10 @@ popd
 
 echo "+++ Testing thirdparty"
 pushd internal/thirdparty
-go test "$@" ./...
+# The HTTP/2 tests ran above, each with its GODEBUG setting.
+thirdpartypkgs=$(go list ./... | grep -v /http2)
+# shellcheck disable=SC2086 # Package paths contain no spaces.
+go test "$@" $thirdpartypkgs
 popd
 
 if [[ $# -eq 0 ]]; then

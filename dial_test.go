@@ -97,6 +97,25 @@ func TestBadDials(t *testing.T) {
 		assert.Contains(t, err, "failed to WebSocket dial: expected handshake response status code 101 but got 0")
 	})
 
+	t.Run("badProto", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		_, _, err := websocket.Dial(ctx, "ws://example.com", &websocket.DialOptions{
+			HTTPClient: mockHTTPClient(func(*http.Request) (*http.Response, error) {
+				return &http.Response{
+					Proto:      "HTTP/3.0",
+					ProtoMajor: 3,
+					StatusCode: http.StatusSwitchingProtocols,
+					Body:       io.NopCloser(strings.NewReader("hi")),
+				}, nil
+			}),
+		})
+		assert.Contains(t, err, "failed to WebSocket dial: expected HTTP/1.x response but got: HTTP/3.0")
+	})
+
 	t.Run("badBody", func(t *testing.T) {
 		t.Parallel()
 
