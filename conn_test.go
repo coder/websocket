@@ -358,6 +358,15 @@ func TestConn(t *testing.T) {
 			c.SetReadLimit(readLimit)
 			return nc
 		}, overReadLimit, websocket.ErrMessageTooBig},
+		{"ConcurrentWithNetConn", func(ctx context.Context, c *websocket.Conn) net.Conn {
+			set := xsync.Go(func() error {
+				c.SetReadLimit(readLimit)
+				return nil
+			})
+			nc := websocket.NetConn(ctx, c, websocket.MessageBinary)
+			<-set
+			return nc
+		}, overReadLimit, websocket.ErrMessageTooBig},
 	} {
 		t.Run("netConn/readLimit/"+tc.name, func(t *testing.T) {
 			tt, c1, c2 := newConnTest(t, nil, nil)
