@@ -109,6 +109,8 @@ func (c *Conn) disableReadLimitUnlessSet() {
 	}
 }
 
+// setReadLimit does not set readLimitSet, so NetConn can still disable the
+// limit.
 func (c *Conn) setReadLimit(n int64) {
 	if n >= 0 {
 		// We read one more byte than the limit in case
