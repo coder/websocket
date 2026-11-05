@@ -101,6 +101,14 @@ func (c *Conn) SetReadLimit(n int64) {
 	c.setReadLimit(n)
 }
 
+func (c *Conn) disableReadLimitUnlessSet() {
+	c.readLimitMu.Lock()
+	defer c.readLimitMu.Unlock()
+	if !c.readLimitSet {
+		c.setReadLimit(-1)
+	}
+}
+
 func (c *Conn) setReadLimit(n int64) {
 	if n >= 0 {
 		// We read one more byte than the limit in case

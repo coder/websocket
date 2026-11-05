@@ -47,11 +47,7 @@ import (
 // NetConn disables the read limit unless SetReadLimit has been called on c,
 // because each Write to a net.Conn becomes one message and can be any size.
 func NetConn(ctx context.Context, c *Conn, msgType MessageType) net.Conn {
-	c.readLimitMu.Lock()
-	if !c.readLimitSet {
-		c.setReadLimit(-1)
-	}
-	c.readLimitMu.Unlock()
+	c.disableReadLimitUnlessSet()
 
 	nc := &netConn{
 		c:       c,
