@@ -107,14 +107,14 @@ func CloseStatus(err error) StatusCode {
 // complete.
 func (c *Conn) Close(code StatusCode, reason string) error {
 	ce, wireErr := wireCloseError(code, reason)
-	err := c.closeAndWait(ce.Code, ce.Reason)
+	err := c.closeAndWait(ce)
 	if err != nil {
 		return err
 	}
 	return wireErr
 }
 
-func (c *Conn) closeAndWait(code StatusCode, reason string) (err error) {
+func (c *Conn) closeAndWait(ce CloseError) (err error) {
 	defer errd.Wrap(&err, "failed to close WebSocket")
 
 	if c.casClosing() {
@@ -130,7 +130,7 @@ func (c *Conn) closeAndWait(code StatusCode, reason string) (err error) {
 		}
 	}()
 
-	err = c.closeHandshake(code, reason)
+	err = c.closeHandshake(ce)
 
 	err2 := c.close()
 	if err == nil && err2 != nil {
@@ -172,24 +172,20 @@ func (c *Conn) CloseNow() (err error) {
 	return err
 }
 
-func (c *Conn) closeHandshake(code StatusCode, reason string) error {
-	err := c.writeClose(code, reason)
+func (c *Conn) closeHandshake(ce CloseError) error {
+	err := c.writeClose(ce)
 	if err != nil {
 		return err
 	}
 
 	err = c.waitCloseHandshake()
-	if CloseStatus(err) != code {
+	if CloseStatus(err) != ce.Code {
 		return err
 	}
 	return nil
 }
 
-func (c *Conn) writeClose(code StatusCode, reason string) error {
-	// The error is dropped: Close reports it from its own wireCloseError call,
-	// and writeError and the reply to a peer's close frame do not report it.
-	ce, _ := wireCloseError(code, reason)
-
+func (c *Conn) writeClose(ce CloseError) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
@@ -315,7 +311,7 @@ func wireCloseError(code StatusCode, reason string) (CloseError, error) {
 }
 
 // bytes returns the close frame payload for ce, which must come from
-// wireCloseError.
+// wireCloseError or parseClosePayload.
 func (ce CloseError) bytes() []byte {
 	if ce.Code == StatusNoStatusRcvd {
 		return nil
