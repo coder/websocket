@@ -98,20 +98,6 @@ func (c *Conn) SetReadLimit(n int64) {
 	c.readLimitMu.Lock()
 	defer c.readLimitMu.Unlock()
 	c.readLimitSet = true
-	c.setReadLimit(n)
-}
-
-func (c *Conn) disableReadLimitUnlessSet() {
-	c.readLimitMu.Lock()
-	defer c.readLimitMu.Unlock()
-	if !c.readLimitSet {
-		c.setReadLimit(-1)
-	}
-}
-
-// setReadLimit does not set readLimitSet, so NetConn can still disable the
-// limit.
-func (c *Conn) setReadLimit(n int64) {
 	if n >= 0 {
 		// We read one more byte than the limit in case
 		// there is a fin frame that needs to be read.
@@ -119,6 +105,14 @@ func (c *Conn) setReadLimit(n int64) {
 	}
 
 	c.msgReader.limitReader.limit.Store(n)
+}
+
+func (c *Conn) disableReadLimitUnlessSet() {
+	c.readLimitMu.Lock()
+	defer c.readLimitMu.Unlock()
+	if !c.readLimitSet {
+		c.msgReader.limitReader.limit.Store(-1)
+	}
 }
 
 const defaultReadLimit = 32768
