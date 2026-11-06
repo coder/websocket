@@ -37,3 +37,7 @@ var (
 )
 
 var CompressionModeOpts = CompressionMode.opts
+
+func (c *Conn) WriteError(code StatusCode, err error) {
+	c.writeError(code, err)
+}
