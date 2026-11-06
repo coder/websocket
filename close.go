@@ -270,16 +270,17 @@ func parseClosePayload(p []byte) (CloseError, error) {
 		return CloseError{}, fmt.Errorf("close payload %q too small, cannot even contain the 2 byte status code", p)
 	}
 
-	ce := CloseError{
-		Code:   StatusCode(binary.BigEndian.Uint16(p)),
-		Reason: string(p[2:]),
+	code := StatusCode(binary.BigEndian.Uint16(p))
+	if !validWireCloseCode(code) {
+		return CloseError{}, fmt.Errorf("invalid close status code %v", code)
 	}
 
-	if !validWireCloseCode(ce.Code) {
-		return CloseError{}, fmt.Errorf("invalid status code %v", ce.Code)
-	}
-
-	return ce, nil
+	// The reason is normalized as for Close, because the reply to this frame
+	// sends the returned CloseError. The truncation error is dropped. Only
+	// replacing invalid UTF-8 can make a received reason too long, and that is
+	// not an error in the received frame.
+	reason, _ := wireCloseReason(string(p[2:]))
+	return CloseError{Code: code, Reason: reason}, nil
 }
 
 // See http://www.iana.org/assignments/websocket/websocket.xhtml#close-code-number

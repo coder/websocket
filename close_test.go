@@ -144,6 +144,7 @@ func Test_parseClosePayload(t *testing.T) {
 		p       []byte
 		success bool
 		ce      CloseError
+		err     string
 	}{
 		{
 			name:    "normal",
@@ -170,6 +171,26 @@ func Test_parseClosePayload(t *testing.T) {
 			name:    "badStatusCode",
 			p:       []byte{0x17, 0x70},
 			success: false,
+			err:     "invalid close status code StatusCode(6000)",
+		},
+		{
+			name:    "noStatusCode",
+			p:       []byte{0x03, 0xED},
+			success: false,
+			err:     "invalid close status code StatusNoStatusRcvd",
+		},
+		{
+			name:    "invalidUTF8Reason",
+			p:       []byte{0x03, 0xE8, 0xFF, 'a'},
+			success: true,
+			ce:      CloseError{Code: StatusNormalClosure, Reason: "\uFFFDa"},
+		},
+		{
+			// Each "\xFFa" becomes 4 bytes, so the reason is truncated.
+			name:    "invalidUTF8ReasonTooLong",
+			p:       append([]byte{0x03, 0xE8}, strings.Repeat("\xFFa", 61)+"a"...),
+			success: true,
+			ce:      CloseError{Code: StatusNormalClosure, Reason: strings.Repeat("\uFFFDa", 30) + "\uFFFD"},
 		},
 	}
 
@@ -184,6 +205,9 @@ func Test_parseClosePayload(t *testing.T) {
 				assert.Equal(t, "close payload", tc.ce, ce)
 			} else {
 				assert.Error(t, err)
+				if tc.err != "" {
+					assert.Equal(t, "error", tc.err, err.Error())
+				}
 			}
 		})
 	}
