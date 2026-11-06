@@ -272,9 +272,9 @@ func parseClosePayload(p []byte) (CloseError, error) {
 	}
 
 	// The reason is normalized as for Close, because the reply to this frame
-	// sends the returned CloseError. The truncation error is dropped. Only
-	// replacing invalid UTF-8 can make a received reason too long, and that is
-	// not an error in the received frame.
+	// sends the returned CloseError. The truncation error is dropped, because a
+	// received reason fits in a close frame and only replacing invalid UTF-8
+	// can make it longer.
 	reason, _ := wireCloseReason(string(p[2:]))
 	return CloseError{Code: code, Reason: reason}, nil
 }
