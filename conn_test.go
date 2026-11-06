@@ -285,7 +285,7 @@ func TestConn(t *testing.T) {
 		}
 	})
 
-	t.Run("netConn/readLimit", func(t *testing.T) {
+	t.Run("netConn/readLimit/Unset", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
 
 		n1 := websocket.NetConn(tt.ctx, c1, websocket.MessageBinary)
@@ -315,6 +315,83 @@ func TestConn(t *testing.T) {
 
 		assert.Equal(t, "read msg", s, string(b))
 	})
+
+	const (
+		readLimit        = 1024
+		overReadLimit    = 4 * readLimit
+		overDefaultLimit = 2 * 32768 // SetReadLimit documents the 32768 byte default.
+	)
+
+	// A default at or above overDefaultLimit fails this case instead of letting
+	// the cases that expect no error pass without a limit to disable.
+	t.Run("netConn/readLimit/DefaultWithoutNetConn", func(t *testing.T) {
+		tt, c1, c2 := newConnTest(t, nil, nil)
+
+		_ = c2.CloseRead(tt.ctx)
+		writeDone := xsync.Go(func() error {
+			return c2.Write(tt.ctx, websocket.MessageBinary, xrand.Bytes(overDefaultLimit))
+		})
+
+		_, _, err := c1.Read(tt.ctx)
+		assert.ErrorIs(t, websocket.ErrMessageTooBig, err)
+
+		_ = c2.CloseNow()
+		<-writeDone
+	})
+
+	for _, tc := range []struct {
+		name    string
+		netConn func(ctx context.Context, c *websocket.Conn) net.Conn
+		msgSize int
+		wantErr error
+	}{
+		{"DisabledBeforeNetConn", func(ctx context.Context, c *websocket.Conn) net.Conn {
+			c.SetReadLimit(-1)
+			return websocket.NetConn(ctx, c, websocket.MessageBinary)
+		}, overDefaultLimit, nil},
+		{"BeforeNetConn", func(ctx context.Context, c *websocket.Conn) net.Conn {
+			c.SetReadLimit(readLimit)
+			return websocket.NetConn(ctx, c, websocket.MessageBinary)
+		}, overReadLimit, websocket.ErrMessageTooBig},
+		{"AfterNetConn", func(ctx context.Context, c *websocket.Conn) net.Conn {
+			nc := websocket.NetConn(ctx, c, websocket.MessageBinary)
+			c.SetReadLimit(readLimit)
+			return nc
+		}, overReadLimit, websocket.ErrMessageTooBig},
+		{"ConcurrentWithNetConn", func(ctx context.Context, c *websocket.Conn) net.Conn {
+			set := xsync.Go(func() error {
+				c.SetReadLimit(readLimit)
+				return nil
+			})
+			nc := websocket.NetConn(ctx, c, websocket.MessageBinary)
+			<-set
+			return nc
+		}, overReadLimit, websocket.ErrMessageTooBig},
+	} {
+		t.Run("netConn/readLimit/"+tc.name, func(t *testing.T) {
+			tt, c1, c2 := newConnTest(t, nil, nil)
+
+			n1 := tc.netConn(tt.ctx, c1)
+			_ = c2.CloseRead(tt.ctx)
+
+			msg := xrand.Bytes(tc.msgSize)
+			writeDone := xsync.Go(func() error {
+				return c2.Write(tt.ctx, websocket.MessageBinary, msg)
+			})
+
+			got := make([]byte, len(msg))
+			_, err := io.ReadFull(n1, got)
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, tc.wantErr, err)
+				_ = c2.CloseNow()
+				<-writeDone
+				return
+			}
+			assert.Success(t, err)
+			assert.Success(t, <-writeDone)
+			assert.Equal(t, "read msg", msg, got)
+		})
+	}
 
 	t.Run("netConn/pastDeadline", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
