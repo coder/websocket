@@ -278,9 +278,24 @@ func (c *Conn) Subprotocol() string {
 }
 
 // DialOptions represents the options available to pass to Dial.
+//
+// Only Subprotocols is used. The JavaScript WebSocket API performs the
+// handshake and handles control frames, so it cannot send custom headers, use
+// another HTTP client, set compression options or report pings and pongs.
+// The other fields match the native DialOptions so code that sets them also
+// compiles for Wasm. Dial ignores them.
 type DialOptions struct {
+	HTTPClient *http.Client
+	HTTPHeader http.Header
+	Host       string
+
 	// Subprotocols lists the subprotocols to negotiate with the server.
 	Subprotocols []string
+
+	CompressionMode      CompressionMode
+	CompressionThreshold int
+	OnPingReceived       func(ctx context.Context, payload []byte) bool
+	OnPongReceived       func(ctx context.Context, payload []byte)
 }
 
 // Dial creates a new WebSocket connection to the given url with the given options.

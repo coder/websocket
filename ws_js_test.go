@@ -37,6 +37,27 @@ func TestWasm(t *testing.T) {
 	assert.Success(t, err)
 }
 
+func TestWasmDialIgnoresNativeOptions(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	c, _, err := websocket.Dial(ctx, os.Getenv("WS_ECHO_SERVER_URL"), &websocket.DialOptions{
+		HTTPClient:   http.DefaultClient,
+		HTTPHeader:   http.Header{"Authorization": []string{"Bearer token"}},
+		Host:         "example.com",
+		Subprotocols: []string{"echo"},
+	})
+	assert.Success(t, err)
+	defer c.Close(websocket.StatusInternalError, "")
+
+	assert.Equal(t, "subprotocol", "echo", c.Subprotocol())
+
+	err = c.Close(websocket.StatusNormalClosure, "")
+	assert.Success(t, err)
+}
+
 func TestWasmDialTimeout(t *testing.T) {
 	t.Parallel()
 
