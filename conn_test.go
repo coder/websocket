@@ -285,7 +285,7 @@ func TestConn(t *testing.T) {
 		}
 	})
 
-	t.Run("netConn/readLimit", func(t *testing.T) {
+	t.Run("netConn/readLimit/Unset", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
 
 		n1 := websocket.NetConn(tt.ctx, c1, websocket.MessageBinary)
