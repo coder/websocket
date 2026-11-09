@@ -58,7 +58,8 @@ const (
 	StatusTLSHandshake StatusCode = 1015
 )
 
-// CloseError is returned when the connection is closed with a status and reason.
+// CloseError is returned when the connection is closed with a status and
+// reason. Invalid UTF-8 in a received reason is replaced with U+FFFD.
 //
 // Use Go 1.13's errors.As to check for this error.
 // Also see the CloseStatus helper.
