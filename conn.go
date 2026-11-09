@@ -77,9 +77,13 @@ type Conn struct {
 	closeReadCtx  context.Context
 	closeReadDone chan struct{}
 
-	closing atomic.Bool
-	closeMu sync.Mutex // Protects following.
-	closed  chan struct{}
+	// closeCalled is set by the first Close or CloseNow call. Library code
+	// closes the connection without setting it, so the user's first Close
+	// does not report net.ErrClosed when the library closed first.
+	closeCalled atomic.Bool
+	closing     atomic.Bool
+	closeMu     sync.Mutex // Protects following.
+	closed      chan struct{}
 
 	pingCounter    atomic.Int64
 	activePingsMu  sync.Mutex

@@ -401,6 +401,71 @@ func TestConn(t *testing.T) {
 		assert.ErrorIs(t, websocket.ErrClosed, err2)
 	})
 
+	t.Run("firstCloseAfterLibraryClose", func(t *testing.T) {
+		t.Parallel()
+
+		closers := []struct {
+			name  string
+			close func(*websocket.Conn) error
+		}{
+			{"Close", func(c *websocket.Conn) error { return c.Close(websocket.StatusNormalClosure, "") }},
+			{"CloseNow", (*websocket.Conn).CloseNow},
+		}
+		for _, closer := range closers {
+			t.Run(closer.name, func(t *testing.T) {
+				t.Parallel()
+
+				t.Run("peerClose", func(t *testing.T) {
+					tt, c1, c2 := newConnTest(t, nil, nil)
+
+					readErr := xsync.Go(func() error {
+						_, _, err := c1.Read(tt.ctx)
+						return err
+					})
+					assert.Success(t, c2.Close(websocket.StatusNormalClosure, ""))
+					assert.Success(t, assertCloseStatus(websocket.StatusNormalClosure, <-readErr))
+
+					assert.Success(t, closer.close(c1))
+				})
+
+				t.Run("closeReadDataMessage", func(t *testing.T) {
+					tt, c1, c2 := newConnTest(t, nil, nil)
+
+					closeReadCtx := c1.CloseRead(tt.ctx)
+					readErr := xsync.Go(func() error {
+						_, _, err := c2.Read(tt.ctx)
+						return err
+					})
+					assert.Success(t, c2.Write(tt.ctx, websocket.MessageText, []byte("x")))
+					assert.Success(t, assertCloseStatus(websocket.StatusPolicyViolation, <-readErr))
+					<-closeReadCtx.Done()
+
+					assert.Success(t, closer.close(c1))
+				})
+
+				t.Run("netConnUnexpectedType", func(t *testing.T) {
+					tt, c1, c2 := newConnTest(t, nil, nil)
+
+					nc := websocket.NetConn(tt.ctx, c1, websocket.MessageBinary)
+					readErr := xsync.Go(func() error {
+						_, _, err := c2.Read(tt.ctx)
+						return err
+					})
+					// net.Pipe writes block until nc.Read reads them.
+					writeErr := xsync.Go(func() error {
+						return c2.Write(tt.ctx, websocket.MessageText, []byte("x"))
+					})
+					_, err := nc.Read(make([]byte, 1))
+					assert.Contains(t, err, "unexpected frame type")
+					assert.Success(t, <-writeErr)
+					assert.Success(t, assertCloseStatus(websocket.StatusUnsupportedData, <-readErr))
+
+					assert.Success(t, closer.close(c1))
+				})
+			})
+		}
+	})
+
 	t.Run("MidReadClose", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
 
@@ -449,6 +514,21 @@ func TestWasm(t *testing.T) {
 	}
 
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Sec-WebSocket-Protocol") == "close" {
+			// Closes first so the client's Close runs after the browser
+			// closed the connection.
+			c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+				Subprotocols:       []string{"close"},
+				InsecureSkipVerify: true,
+			})
+			if err == nil {
+				err = c.Close(websocket.StatusNormalClosure, "")
+			}
+			if err != nil {
+				t.Error(err)
+			}
+			return
+		}
 		err := echoServer(w, r, &websocket.AcceptOptions{
 			Subprotocols:       []string{"echo"},
 			InsecureSkipVerify: true,
