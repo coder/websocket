@@ -194,7 +194,7 @@ func (c *Conn) Ping(ctx context.Context) error {
 }
 
 // Write writes a message of the given type to the connection.
-// Always non blocking.
+// Always non-blocking.
 func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 	err := c.write(typ, p)
 	if err != nil {
@@ -208,6 +208,27 @@ func (c *Conn) Write(ctx context.Context, typ MessageType, p []byte) error {
 		return err
 	}
 	return nil
+}
+
+// PreparedMessage is a message that can be written to many connections with
+// Conn.WritePrepared.
+type PreparedMessage struct {
+	typ  MessageType
+	data []byte
+}
+
+// NewPreparedMessage returns a PreparedMessage of the specified type with cloned data.
+func NewPreparedMessage(typ MessageType, data []byte) *PreparedMessage {
+	return &PreparedMessage{
+		typ:  typ,
+		data: bytes.Clone(data),
+	}
+}
+
+// WritePrepared writes a prepared message to the connection.
+// The browser handles framing and compression, so it is equivalent to Write.
+func (c *Conn) WritePrepared(ctx context.Context, pm *PreparedMessage) error {
+	return c.Write(ctx, pm.typ, pm.data)
 }
 
 func (c *Conn) write(typ MessageType, p []byte) error {

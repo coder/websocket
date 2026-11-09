@@ -50,14 +50,82 @@ func TestConn(t *testing.T) {
 
 				c1.SetReadLimit(131072)
 
+				// Interleave prepared writes with regular writes, as they share
+				// the compression state of the connection.
 				for range 5 {
 					err := wstest.Echo(tt.ctx, c1, 131072)
+					assert.Success(t, err)
+
+					err = wstest.EchoPrepared(tt.ctx, c1, 131072)
 					assert.Success(t, err)
 				}
 
 				err := c1.Close(websocket.StatusNormalClosure, "")
 				assert.Success(t, err)
 			})
+		}
+	})
+
+	t.Run("writePreparedConcurrent", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+		defer cancel()
+
+		exp := strings.Repeat("prepared", 128)
+		pm := websocket.NewPreparedMessage(websocket.MessageText, []byte(exp))
+
+		modes := []websocket.CompressionMode{
+			websocket.CompressionDisabled,
+			websocket.CompressionContextTakeover,
+			websocket.CompressionNoContextTakeover,
+		}
+
+		// Write the same message with every compression mode from both sides,
+		// so connections with different settings share it and client masking
+		// runs concurrently on the shared payload.
+		var errs []<-chan error
+		for i := range 12 {
+			mode := modes[i%len(modes)]
+			client, server := wstest.Pipe(&websocket.DialOptions{
+				CompressionMode: mode,
+			}, &websocket.AcceptOptions{
+				CompressionMode: mode,
+			})
+			t.Cleanup(func() {
+				client.CloseNow()
+				server.CloseNow()
+			})
+
+			w, r := client, server
+			if i%2 == 0 {
+				w, r = server, client
+			}
+			errs = append(errs, xsync.Go(func() error {
+				for range 5 {
+					err := w.WritePrepared(ctx, pm)
+					if err != nil {
+						return err
+					}
+				}
+				return nil
+			}))
+			errs = append(errs, xsync.Go(func() error {
+				for range 5 {
+					_, p, err := r.Read(ctx)
+					if err != nil {
+						return err
+					}
+					if string(p) != exp {
+						return fmt.Errorf("unexpected msg: %q", p)
+					}
+				}
+				return nil
+			}))
+		}
+
+		for _, errc := range errs {
+			assert.Success(t, <-errc)
 		}
 	})
 
@@ -674,6 +742,85 @@ func BenchmarkConn(b *testing.B) {
 			err := c1.Close(websocket.StatusNormalClosure, "")
 			assert.Success(b, err)
 		})
+	}
+}
+
+func BenchmarkBroadcast(b *testing.B) {
+	const conns = 16
+
+	modes := []struct {
+		name string
+		mode websocket.CompressionMode
+	}{
+		{"disabledCompress", websocket.CompressionDisabled},
+		{"compressContextTakeover", websocket.CompressionContextTakeover},
+		{"compressNoContext", websocket.CompressionNoContextTakeover},
+	}
+	writes := []struct {
+		name  string
+		write func(ctx context.Context, cs []*websocket.Conn, msg []byte) error
+	}{
+		{"write", func(ctx context.Context, cs []*websocket.Conn, msg []byte) error {
+			for _, c := range cs {
+				err := c.Write(ctx, websocket.MessageText, msg)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		}},
+		{"writePrepared", func(ctx context.Context, cs []*websocket.Conn, msg []byte) error {
+			pm := websocket.NewPreparedMessage(websocket.MessageText, msg)
+			for _, c := range cs {
+				err := c.WritePrepared(ctx, pm)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		}},
+	}
+
+	msg := []byte(strings.Repeat("1234", 256))
+
+	// Clients mask every write, so they are benchmarked separately.
+	for _, side := range []string{"server", "client"} {
+		for _, m := range modes {
+			for _, w := range writes {
+				b.Run(side+"/"+m.name+"/"+w.name, func(b *testing.B) {
+					ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+					defer cancel()
+
+					writers := make([]*websocket.Conn, conns)
+					for i := range writers {
+						client, server := wstest.Pipe(&websocket.DialOptions{
+							CompressionMode: m.mode,
+						}, &websocket.AcceptOptions{
+							CompressionMode: m.mode,
+						})
+						b.Cleanup(func() {
+							client.CloseNow()
+							server.CloseNow()
+						})
+						writers[i] = server
+						if side == "client" {
+							writers[i] = client
+						}
+						writers[i].DiscardWrites()
+					}
+
+					b.SetBytes(int64(len(msg) * conns))
+					b.ReportAllocs()
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						err := w.write(ctx, writers, msg)
+						if err != nil {
+							b.Fatal(err)
+						}
+					}
+				})
+			}
+		}
 	}
 }
 

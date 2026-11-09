@@ -76,6 +76,8 @@ func TestWriteSingleFrameCompressed(t *testing.T) {
 
 		largeMsg = []byte(strings.Repeat("hello world ", 100))
 		smallMsg = []byte("small message")
+		// Random bytes do not compress, so compression makes them larger.
+		incompressibleMsg = xrand.Bytes(1024)
 	)
 
 	testCases := []struct {
@@ -88,6 +90,10 @@ func TestWriteSingleFrameCompressed(t *testing.T) {
 		{"NoContextTakeover/AboveThreshold", CompressionNoContextTakeover, largeMsg, true},
 		{"ContextTakeover/BelowThreshold", CompressionContextTakeover, smallMsg, false},
 		{"NoContextTakeover/BelowThreshold", CompressionNoContextTakeover, smallMsg, false},
+		// With context takeover, the message is in the sliding window, so it
+		// stays compressed to keep the peer's window in sync.
+		{"ContextTakeover/Incompressible", CompressionContextTakeover, incompressibleMsg, true},
+		{"NoContextTakeover/Incompressible", CompressionNoContextTakeover, incompressibleMsg, false},
 	}
 
 	for _, tc := range testCases {
@@ -126,6 +132,9 @@ func TestWriteSingleFrameCompressed(t *testing.T) {
 
 			assert.Equal(t, "opcode", opText, h.opcode)
 			assert.Equal(t, "rsv1 (compressed)", tc.wantRsv1, h.rsv1)
+			if !tc.wantRsv1 {
+				assert.Equal(t, "payload length", int64(len(tc.msg)), h.payloadLength)
+			}
 			assert.Equal(t, "fin", true, h.fin)
 
 			err = <-writeDone
