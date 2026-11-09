@@ -114,12 +114,13 @@ type netConn struct {
 
 var _ net.Conn = &netConn{}
 
-func (nc *netConn) Close() error {
+func (nc *netConn) Close() (err error) {
+	err = nc.c.Close(StatusNormalClosure, "")
 	nc.writeTimer.Stop()
 	nc.writeCancel()
 	nc.readTimer.Stop()
 	nc.readCancel()
-	return nc.c.Close(StatusNormalClosure, "")
+	return err
 }
 
 func (nc *netConn) Write(p []byte) (int, error) {
