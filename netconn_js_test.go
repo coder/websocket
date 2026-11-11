@@ -1,0 +1,98 @@
+package websocket_test
+
+import (
+	"context"
+	"io"
+	"net"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/internal/test/assert"
+	"github.com/coder/websocket/internal/test/xrand"
+)
+
+func TestWasmNetConnReadLimit(t *testing.T) {
+	t.Parallel()
+
+	const (
+		readLimit        = 1024
+		overReadLimit    = 4 * readLimit
+		overDefaultLimit = 2 * 32768 // SetReadLimit documents the 32768 byte default.
+	)
+
+	// A default at or above overDefaultLimit fails this case instead of letting
+	// the cases that expect no error pass without a limit to disable.
+	t.Run("DefaultWithoutNetConn", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+
+		c, _, err := websocket.Dial(ctx, os.Getenv("WS_ECHO_SERVER_URL"), &websocket.DialOptions{
+			Subprotocols: []string{"echo"},
+		})
+		assert.Success(t, err)
+		defer c.Close(websocket.StatusNormalClosure, "")
+
+		err = c.Write(ctx, websocket.MessageBinary, xrand.Bytes(overDefaultLimit))
+		assert.Success(t, err)
+
+		_, _, err = c.Read(ctx)
+		assert.ErrorIs(t, websocket.ErrMessageTooBig, err)
+	})
+
+	for _, tc := range []struct {
+		name    string
+		netConn func(ctx context.Context, c *websocket.Conn) net.Conn
+		msgSize int
+		wantErr error
+	}{
+		{"Unset", func(ctx context.Context, c *websocket.Conn) net.Conn {
+			return websocket.NetConn(ctx, c, websocket.MessageBinary)
+		}, overDefaultLimit, nil},
+		{"DisabledBeforeNetConn", func(ctx context.Context, c *websocket.Conn) net.Conn {
+			c.SetReadLimit(-1)
+			return websocket.NetConn(ctx, c, websocket.MessageBinary)
+		}, overDefaultLimit, nil},
+		{"BeforeNetConn", func(ctx context.Context, c *websocket.Conn) net.Conn {
+			c.SetReadLimit(readLimit)
+			return websocket.NetConn(ctx, c, websocket.MessageBinary)
+		}, overReadLimit, websocket.ErrMessageTooBig},
+		{"AfterNetConn", func(ctx context.Context, c *websocket.Conn) net.Conn {
+			nc := websocket.NetConn(ctx, c, websocket.MessageBinary)
+			c.SetReadLimit(readLimit)
+			return nc
+		}, overReadLimit, websocket.ErrMessageTooBig},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+
+			c, _, err := websocket.Dial(ctx, os.Getenv("WS_ECHO_SERVER_URL"), &websocket.DialOptions{
+				Subprotocols: []string{"echo"},
+			})
+			assert.Success(t, err)
+			// The echo server fails TestWasm unless the close status is
+			// StatusNormalClosure.
+			defer c.Close(websocket.StatusNormalClosure, "")
+
+			nc := tc.netConn(ctx, c)
+			msg := []byte(xrand.String(tc.msgSize))
+			_, err = nc.Write(msg)
+			assert.Success(t, err)
+
+			got := make([]byte, len(msg))
+			_, err = io.ReadFull(nc, got)
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, tc.wantErr, err)
+				return
+			}
+			assert.Success(t, err)
+			assert.Equal(t, "read msg", msg, got)
+		})
+	}
+}
