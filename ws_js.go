@@ -101,8 +101,9 @@ func (c *Conn) init() {
 	})
 
 	c.releaseOnError = c.ws.OnError(func(v js.Value) {
+		// A close event always follows. Closing here would wait for it
+		// inside this callback and deadlock.
 		c.setCloseErr(errors.New(v.Get("message").String()))
-		c.closeWithInternal()
 	})
 
 	c.releaseOnMessage = c.ws.OnMessage(func(e wsjs.MessageEvent) {
@@ -265,6 +266,9 @@ func (c *Conn) closeAndWait(code StatusCode, reason string) error {
 	})
 
 	c.setCloseErr(ce)
+	if code != StatusNormalClosure && (code < 3000 || code > 4999) {
+		code = StatusNormalClosure // Browsers throw on any other code.
+	}
 	err := c.ws.Close(int(code), reason)
 	if err != nil {
 		return err
