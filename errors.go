@@ -12,3 +12,7 @@ var ErrBadStatus = errors.New("websocket: bad status")
 
 // ErrMessageTooBig is returned when a message exceeds the read limit.
 var ErrMessageTooBig = errors.New("websocket: message too big")
+
+// ErrCloseReasonTruncated indicates that Close shortened the reason to fit
+// 123 bytes.
+var ErrCloseReasonTruncated = errors.New("websocket: close reason truncated")

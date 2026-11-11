@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +35,40 @@ func TestWasm(t *testing.T) {
 	}
 
 	err = c.Close(websocket.StatusNormalClosure, "")
+	assert.Success(t, err)
+}
+
+func TestWasmCloseReasonTruncated(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	c, _, err := websocket.Dial(ctx, os.Getenv("WS_ECHO_SERVER_URL"), &websocket.DialOptions{
+		Subprotocols: []string{"echo"},
+	})
+	assert.Success(t, err)
+
+	// The echo server checks the close code.
+	err = c.Close(websocket.StatusNormalClosure, strings.Repeat("é", 62))
+	assert.ErrorIs(t, websocket.ErrCloseReasonTruncated, err)
+	assert.Equal(t, "close error", "websocket: close reason truncated from 124 to 122 bytes", err.Error())
+}
+
+func TestWasmCloseReasonInvalidUTF8(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	c, _, err := websocket.Dial(ctx, os.Getenv("WS_ECHO_SERVER_URL"), &websocket.DialOptions{
+		Subprotocols: []string{"echo"},
+	})
+	assert.Success(t, err)
+
+	// Without the U+FFFD replacement, these 50 bytes become more than 123 bytes
+	// when converted to a JavaScript string. The echo server checks the close code.
+	err = c.Close(websocket.StatusNormalClosure, strings.Repeat("\x80", 50))
 	assert.Success(t, err)
 }
 
