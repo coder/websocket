@@ -2,7 +2,7 @@ name: daily
 on:
   workflow_dispatch:
   schedule:
-    - cron: '42 0 * * *' # daily at 00:42
+    - cron: '43 0 * * *' # daily at 00:43
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: true
