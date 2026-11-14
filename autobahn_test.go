@@ -98,9 +98,9 @@ func TestAutobahn(t *testing.T) {
 	checkWSTestIndex(t, "./ci/out/autobahn-report/index.json")
 }
 
-// waitWS dials url until the handshake succeeds. On a fresh ubuntu-26.04
-// GitHub runner, the first container start alone took up to 12s, so the
-// limit is a minute.
+// waitWS dials url until the handshake succeeds. On ubuntu-26.04 GitHub
+// runners, a container started right after docker pull took up to 12s to
+// start, so the limit is a minute.
 func waitWS(ctx context.Context, url string) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
