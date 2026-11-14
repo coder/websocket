@@ -98,20 +98,25 @@ func TestAutobahn(t *testing.T) {
 	checkWSTestIndex(t, "./ci/out/autobahn-report/index.json")
 }
 
+// waitWS dials url until the handshake succeeds. On a fresh ubuntu-26.04
+// GitHub runner, the first container start alone took up to 12s, so the
+// limit is a minute.
 func waitWS(ctx context.Context, url string) error {
-	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	for ctx.Err() == nil {
+	for {
 		c, _, err := websocket.Dial(ctx, url, nil)
-		if err != nil {
-			continue
+		if err == nil {
+			c.Close(websocket.StatusNormalClosure, "")
+			return nil
 		}
-		c.Close(websocket.StatusNormalClosure, "")
-		return nil
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("wstest server did not accept a WebSocket handshake: %w", err)
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
-
-	return ctx.Err()
 }
 
 func wstestServer(tb testing.TB, ctx context.Context) (url string, closeFn func() error, err error) {
