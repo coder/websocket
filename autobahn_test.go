@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -95,12 +96,11 @@ func TestAutobahn(t *testing.T) {
 	checkWSTestIndex(t, "./ci/out/autobahn-report/index.json")
 }
 
-// waitWS dials url until the handshake succeeds or exited is closed. On
-// ubuntu-26.04 GitHub runners, a container started right after docker pull
-// took up to 12s to start. A server that fails to start exits, so the 5 minute
-// limit only ends the wait for a server that hangs.
-func waitWS(ctx context.Context, url string, exited <-chan struct{}) error {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+// waitWS dials url until the handshake succeeds or ctx is done. The image is
+// already pulled, so the wait covers the container start and wstest's own
+// startup, which took up to 13.5s on ubuntu-26.04 GitHub runners.
+func waitWS(ctx context.Context, url string) error {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
 	for {
@@ -110,10 +110,8 @@ func waitWS(ctx context.Context, url string, exited <-chan struct{}) error {
 			return nil
 		}
 		select {
-		case <-exited:
-			return errors.New("wstest exited before accepting a WebSocket handshake")
 		case <-ctx.Done():
-			return fmt.Errorf("wstest did not accept a WebSocket handshake: %w", err)
+			return fmt.Errorf("wstest did not accept a WebSocket handshake: %w (last dial error: %w)", context.Cause(ctx), err)
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
@@ -203,30 +201,30 @@ func wstestServer(tb testing.TB, ctx context.Context) (url string, closeFn func(
 		return "", nil, fmt.Errorf("failed to start wstest: %w", err)
 	}
 
-	exited := make(chan struct{})
-	var exitErr error
-	go func() {
-		exitErr = wstest.Wait()
-		close(exited)
-	}()
+	// A server that fails to start exits, and the wait ends then instead of at
+	// its time limit.
+	waitCtx, exited := context.WithCancelCause(ctx)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		err := wstest.Wait()
+		if err == nil {
+			err = errors.New("exit status 0")
+		}
+		exited(fmt.Errorf("wstest exited: %w", err))
+	})
 
 	closeFn = func() error {
-		out, rmErr := exec.Command("docker", "rm", "--force", container).CombinedOutput()
+		out, err := exec.Command("docker", "rm", "--force", container).CombinedOutput()
 		_ = wstest.Process.Kill()
-		<-exited
-		if rmErr != nil {
-			return fmt.Errorf("failed to remove wstest container: %w: %s", rmErr, out)
+		wg.Wait()
+		if err != nil {
+			return fmt.Errorf("failed to remove wstest container: %w: %s", err, out)
 		}
 		return nil
 	}
 
-	err = waitWS(ctx, url, exited)
+	err = waitWS(waitCtx, url)
 	if err != nil {
-		select {
-		case <-exited:
-			err = fmt.Errorf("%w: %v", err, exitErr)
-		default:
-		}
 		return "", nil, errors.Join(err, closeFn())
 	}
 	return url, closeFn, nil
