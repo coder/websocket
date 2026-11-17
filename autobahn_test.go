@@ -21,6 +21,7 @@ import (
 	"github.com/coder/websocket/internal/errd"
 	"github.com/coder/websocket/internal/test/assert"
 	"github.com/coder/websocket/internal/test/wstest"
+	"github.com/coder/websocket/internal/test/xrand"
 	"github.com/coder/websocket/internal/util"
 )
 
@@ -96,13 +97,8 @@ func TestAutobahn(t *testing.T) {
 	checkWSTestIndex(t, "./ci/out/autobahn-report/index.json")
 }
 
-// waitWS dials url until the handshake succeeds or ctx is done. The image is
-// already pulled, so the wait covers the container start and wstest's own
-// startup, which took up to 13.5s on ubuntu-26.04 GitHub runners.
+// waitWS dials url every 100ms until the handshake succeeds or ctx is done.
 func waitWS(ctx context.Context, url string) error {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-
 	for {
 		c, _, err := websocket.Dial(ctx, url, nil)
 		if err == nil {
@@ -172,8 +168,9 @@ func wstestServer(tb testing.TB, ctx context.Context) (url string, closeFn func(
 	}
 
 	// Killing the docker client does not stop the container, so closeFn
-	// removes it by name.
-	container := "websocket-autobahn-" + serverPort
+	// removes it by this name. The name is random because another run can get
+	// the same port.
+	container := fmt.Sprintf("websocket-autobahn-%x", xrand.Bytes(8))
 	var args []string
 	args = append(args, "run", "-i", "--rm", "--name", container,
 		"-v", fmt.Sprintf("%s:%[1]s", specFile),
@@ -201,9 +198,13 @@ func wstestServer(tb testing.TB, ctx context.Context) (url string, closeFn func(
 		return "", nil, fmt.Errorf("failed to start wstest: %w", err)
 	}
 
-	// A server that fails to start exits, and the wait ends then instead of at
-	// its time limit.
+	// The image is already pulled, so the wait covers the container start and
+	// wstest's startup, which took up to 13.5s on ubuntu-26.04 GitHub runners.
+	// A server that fails to start exits, which ends the wait early.
+	const startTimeout = 2 * time.Minute
 	waitCtx, exited := context.WithCancelCause(ctx)
+	waitCtx, cancelWait := context.WithTimeoutCause(waitCtx, startTimeout, fmt.Errorf("timed out after %v", startTimeout))
+	defer cancelWait()
 	var wg sync.WaitGroup
 	wg.Go(func() {
 		err := wstest.Wait()
@@ -214,7 +215,9 @@ func wstestServer(tb testing.TB, ctx context.Context) (url string, closeFn func(
 	})
 
 	closeFn = func() error {
-		out, err := exec.Command("docker", "rm", "--force", container).CombinedOutput()
+		// The --volumes flag also removes the image's anonymous volumes, as --rm
+		// does.
+		out, err := exec.Command("docker", "rm", "--force", "--volumes", container).CombinedOutput()
 		_ = wstest.Process.Kill()
 		wg.Wait()
 		if err != nil {
