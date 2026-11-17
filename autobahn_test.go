@@ -215,8 +215,6 @@ func wstestServer(tb testing.TB, ctx context.Context) (url string, closeFn func(
 	})
 
 	closeFn = func() error {
-		// The --volumes flag also removes the image's anonymous volumes, as --rm
-		// does.
 		out, err := exec.Command("docker", "rm", "--force", "--volumes", container).CombinedOutput()
 		_ = wstest.Process.Kill()
 		wg.Wait()
