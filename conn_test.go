@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/coder/websocket"
@@ -835,6 +836,75 @@ func TestConcurrentClosePing(t *testing.T) {
 			<-errc
 		}()
 	}
+}
+
+func TestCloseReadDataMessage(t *testing.T) {
+	t.Parallel()
+
+	// In a synctest bubble the clock advances only while every goroutine is
+	// blocked, so a close that is still pending after synctest.Wait is
+	// waiting on a timer.
+
+	t.Run("closesConn", func(t *testing.T) {
+		t.Parallel()
+		synctest.Test(t, func(t *testing.T) {
+			c1, c2 := wstest.Pipe(nil, nil)
+			defer c1.CloseNow()
+			defer c2.CloseNow()
+
+			closeReadCtx := c1.CloseRead(context.Background())
+			readErr := xsync.Go(func() error {
+				_, _, err := c2.Read(context.Background())
+				return err
+			})
+			err := c2.Write(context.Background(), websocket.MessageText, []byte("x"))
+			assert.Success(t, err)
+			assert.Success(t, assertCloseStatus(websocket.StatusPolicyViolation, <-readErr))
+
+			synctest.Wait()
+			select {
+			case <-closeReadCtx.Done():
+			default:
+				t.Fatal("CloseRead context is not done after the close handshake")
+			}
+		})
+	})
+
+	t.Run("duringClose", func(t *testing.T) {
+		t.Parallel()
+		synctest.Test(t, func(t *testing.T) {
+			c1, c2 := wstest.Pipe(nil, nil)
+			defer c1.CloseNow()
+			defer c2.CloseNow()
+
+			closeReadCtx := c1.CloseRead(context.Background())
+			closeErr := xsync.Go(func() error {
+				return c1.Close(websocket.StatusNormalClosure, "")
+			})
+			// Close stays blocked writing its close frame until c2 reads,
+			// so the CloseRead goroutine reads the data message during
+			// Close.
+			synctest.Wait()
+
+			err := c2.Write(context.Background(), websocket.MessageText, []byte("x"))
+			assert.Success(t, err)
+			_, _, err = c2.Read(context.Background())
+			assert.Success(t, assertCloseStatus(websocket.StatusNormalClosure, err))
+
+			synctest.Wait()
+			select {
+			case err := <-closeErr:
+				assert.Success(t, err)
+			default:
+				t.Fatal("Close has not returned after the close handshake")
+			}
+			select {
+			case <-closeReadCtx.Done():
+			default:
+				t.Fatal("CloseRead context is not done after Close returned")
+			}
+		})
+	})
 }
 
 func TestConnClosePropagation(t *testing.T) {

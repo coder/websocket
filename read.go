@@ -78,9 +78,19 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 		defer cancel()
 		defer c.close()
 		_, _, err := c.Reader(ctx)
-		if err == nil {
-			c.Close(StatusPolicyViolation, "unexpected data message")
+		if err != nil {
+			return
 		}
+		// Close cannot be used here, because it waits for this goroutine to
+		// exit.
+		if c.casClosing() {
+			// A concurrent Close is closing the connection. The deferred
+			// close must not run before that Close's handshake is done.
+			<-c.closed
+			return
+		}
+		ce, _ := wireCloseError(StatusPolicyViolation, "unexpected data message")
+		_ = c.closeHandshake(ce)
 	}()
 	return ctx
 }
