@@ -168,8 +168,7 @@ func wstestServer(tb testing.TB, ctx context.Context) (url string, closeFn func(
 	}
 
 	// Killing the docker client does not stop the container, so closeFn
-	// removes it by this name. The name is random because another run can get
-	// the same port.
+	// removes it by this name. Uses a random name to avoid collisions.
 	container := fmt.Sprintf("websocket-autobahn-%x", xrand.Bytes(8))
 	var args []string
 	args = append(args, "run", "-i", "--rm", "--name", container,
