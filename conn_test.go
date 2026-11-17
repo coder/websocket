@@ -356,6 +356,93 @@ func TestConn(t *testing.T) {
 		assert.Equal(t, "read msg", []byte("hello"), b)
 	})
 
+	t.Run("netConn/zeroLengthRead", func(t *testing.T) {
+		for _, buffered := range []bool{false, true} {
+			for _, empty := range [][]byte{nil, {}} {
+				t.Run(fmt.Sprintf("buffered=%v/nil=%v", buffered, empty == nil), func(t *testing.T) {
+					tt, c1, c2 := newConnTest(t, nil, nil)
+					n1 := websocket.NetConn(tt.ctx, c1, websocket.MessageBinary)
+					n2 := websocket.NetConn(tt.ctx, c2, websocket.MessageBinary)
+
+					if buffered {
+						written := xsync.Go(func() error {
+							_, err := n2.Write([]byte("hello"))
+							return err
+						})
+						first := make([]byte, 1)
+						_, err := io.ReadFull(n1, first)
+						assert.Success(t, err)
+						assert.Equal(t, "first byte", "h", string(first))
+						assert.Success(t, <-written)
+					}
+
+					done := make(chan error, 1)
+					go func() {
+						n, err := n1.Read(empty)
+						if n != 0 || err != nil {
+							err = fmt.Errorf("zero-length Read = (%d, %v), want (0, nil)", n, err)
+						}
+						done <- err
+					}()
+					select {
+					case err := <-done:
+						assert.Success(t, err)
+					case <-time.After(time.Second):
+						c1.CloseNow()
+						<-done
+						t.Fatal("zero-length Read blocked on an open connection")
+					}
+
+					if buffered {
+						rest := make([]byte, 4)
+						_, err := io.ReadFull(n1, rest)
+						assert.Success(t, err)
+						assert.Equal(t, "remaining message", "ello", string(rest))
+					}
+				})
+			}
+		}
+	})
+
+	t.Run("netConn/emptyMessages", func(t *testing.T) {
+		tt, c1, c2 := newConnTest(t, nil, nil)
+		n1 := websocket.NetConn(tt.ctx, c1, websocket.MessageBinary)
+		written := xsync.Go(func() error {
+			for _, msg := range []string{"", "", "hello"} {
+				if err := c2.Write(tt.ctx, websocket.MessageBinary, []byte(msg)); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		buf := make([]byte, 5)
+		n, err := n1.Read(buf)
+		assert.Success(t, err)
+		assert.Equal(t, "read count", len(buf), n)
+		assert.Equal(t, "message", "hello", string(buf))
+		assert.Success(t, <-written)
+	})
+
+	t.Run("netConn/zeroLengthReadDeadline", func(t *testing.T) {
+		tt, c1, _ := newConnTest(t, nil, nil)
+		n1 := websocket.NetConn(tt.ctx, c1, websocket.MessageBinary)
+		assert.Success(t, n1.SetReadDeadline(time.Now().Add(-time.Second)))
+		// Wait for the idle deadline callback to mark the read as expired.
+		var err error
+		for until := time.Now().Add(time.Second); time.Now().Before(until); {
+			_, err = n1.Read(nil)
+			if err != nil {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		assert.ErrorIs(t, context.DeadlineExceeded, err)
+		assert.Success(t, n1.SetReadDeadline(time.Time{}))
+		n, err := n1.Read(nil)
+		assert.Success(t, err)
+		assert.Equal(t, "read count", 0, n)
+	})
+
 	t.Run("netConn/BadMsg", func(t *testing.T) {
 		tt, c1, c2 := newConnTest(t, nil, nil)
 
