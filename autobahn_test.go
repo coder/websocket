@@ -198,9 +198,9 @@ func wstestServer(tb testing.TB, ctx context.Context) (url string, closeFn func(
 	}
 
 	// The image is already pulled, so the wait covers the container start and
-	// wstest's startup, which took up to 13.5s on ubuntu-26.04 GitHub runners.
-	// A server that fails to start exits, which ends the wait early.
-	const startTimeout = 2 * time.Minute
+	// wstest's startup. This can take up to 15s on Ubuntu 26.04 GitHub runners.
+	// The selected timeout leaves enough room to avoid flakes.
+	const startTimeout = 1 * time.Minute
 	waitCtx, exited := context.WithCancelCause(ctx)
 	waitCtx, cancelWait := context.WithTimeoutCause(waitCtx, startTimeout, fmt.Errorf("timed out after %v", startTimeout))
 	defer cancelWait()
