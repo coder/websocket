@@ -28,8 +28,8 @@ func TestMain(m *testing.M) {
 	}
 	// A goroutine can still exist after the call it serves has returned, until
 	// the scheduler runs it to its end. The watchCtx goroutine of os/exec does
-	// this after Cmd.Wait returns. A leaked goroutine is still there after the
-	// wait.
+	// this after Cmd.Wait returns. The wait also lets through a leaked
+	// goroutine that a timer ends within 5 seconds.
 	got := runtime.NumGoroutine()
 	for deadline := time.Now().Add(5 * time.Second); got != want && time.Now().Before(deadline); {
 		time.Sleep(10 * time.Millisecond)
