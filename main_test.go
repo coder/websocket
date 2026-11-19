@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime"
 	"testing"
+	"time"
 )
 
 func goroutineStacks() []byte {
@@ -20,9 +21,22 @@ func goroutineStacks() []byte {
 
 func TestMain(m *testing.M) {
 	code := m.Run()
-	if runtime.GOOS != "js" && runtime.NumGoroutine() != 1 ||
-		runtime.GOOS == "js" && runtime.NumGoroutine() != 2 {
-		fmt.Fprintf(os.Stderr, "goroutine leak detected, expected 1 but got %d goroutines\n", runtime.NumGoroutine())
+
+	want := 1
+	if runtime.GOOS == "js" {
+		want = 2
+	}
+	// A goroutine can still exist after the call it serves has returned, until
+	// the scheduler runs it to its end. The watchCtx goroutine of os/exec does
+	// this after Cmd.Wait returns. The wait also lets through a leaked
+	// goroutine that a timer ends within 5 seconds.
+	got := runtime.NumGoroutine()
+	for deadline := time.Now().Add(5 * time.Second); got != want && time.Now().Before(deadline); {
+		time.Sleep(10 * time.Millisecond)
+		got = runtime.NumGoroutine()
+	}
+	if got != want {
+		fmt.Fprintf(os.Stderr, "goroutine leak detected, expected %d but got %d goroutines\n", want, got)
 		fmt.Fprintf(os.Stderr, "%s\n", goroutineStacks())
 		os.Exit(1)
 	}
