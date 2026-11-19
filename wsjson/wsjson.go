@@ -14,6 +14,11 @@ import (
 
 // Read reads a JSON message from c into v.
 // It will reuse buffers in between calls to avoid allocations.
+//
+// If the message cannot be unmarshalled into v, Read closes the connection
+// with websocket.StatusInvalidFramePayloadData and returns an error wrapping
+// the unmarshal error. To keep the connection open on bad JSON, read the
+// message with c.Read and call json.Unmarshal yourself.
 func Read(ctx context.Context, c *websocket.Conn, v any) error {
 	return read(ctx, c, v)
 }
