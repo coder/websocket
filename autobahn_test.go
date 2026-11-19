@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/coder/websocket/internal/errd"
 	"github.com/coder/websocket/internal/test/assert"
 	"github.com/coder/websocket/internal/test/wstest"
+	"github.com/coder/websocket/internal/test/xrand"
 	"github.com/coder/websocket/internal/util"
 )
 
@@ -68,9 +70,6 @@ func TestAutobahn(t *testing.T) {
 		assert.Success(t, closeFn())
 	}()
 
-	err = waitWS(ctx, wstestURL)
-	assert.Success(t, err)
-
 	cases, err := wstestCaseCount(ctx, wstestURL)
 	assert.Success(t, err)
 
@@ -98,22 +97,24 @@ func TestAutobahn(t *testing.T) {
 	checkWSTestIndex(t, "./ci/out/autobahn-report/index.json")
 }
 
+// waitWS dials url every 100ms until the handshake succeeds or ctx is done.
 func waitWS(ctx context.Context, url string) error {
-	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
-	defer cancel()
-
-	for ctx.Err() == nil {
+	for {
 		c, _, err := websocket.Dial(ctx, url, nil)
-		if err != nil {
-			continue
+		if err == nil {
+			c.Close(websocket.StatusNormalClosure, "")
+			return nil
 		}
-		c.Close(websocket.StatusNormalClosure, "")
-		return nil
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("wstest did not accept a WebSocket handshake: %w (last dial error: %w)", context.Cause(ctx), err)
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
-
-	return ctx.Err()
 }
 
+// wstestServer starts the Autobahn fuzzing server and returns once it accepts
+// WebSocket handshakes. closeFn removes the container.
 func wstestServer(tb testing.TB, ctx context.Context) (url string, closeFn func() error, err error) {
 	defer errd.Wrap(&err, "failed to start autobahn wstest server")
 
@@ -166,8 +167,11 @@ func wstestServer(tb testing.TB, ctx context.Context) (url string, closeFn func(
 		return "", nil, err
 	}
 
+	// Killing the docker client does not stop the container, so closeFn
+	// removes it by this name. Uses a random name to avoid collisions.
+	container := fmt.Sprintf("websocket-autobahn-%x", xrand.Bytes(8))
 	var args []string
-	args = append(args, "run", "-i", "--rm",
+	args = append(args, "run", "-i", "--rm", "--name", container,
 		"-v", fmt.Sprintf("%s:%[1]s", specFile),
 		"-v", fmt.Sprintf("%s/ci:/ci", wd),
 		fmt.Sprintf("-p=%s:%s", serverAddr, serverPort),
@@ -193,18 +197,37 @@ func wstestServer(tb testing.TB, ctx context.Context) (url string, closeFn func(
 		return "", nil, fmt.Errorf("failed to start wstest: %w", err)
 	}
 
-	return url, func() error {
-		err = wstest.Process.Kill()
+	// The image is already pulled, so the wait covers the container start and
+	// wstest's startup. This can take up to 15s on Ubuntu 26.04 GitHub runners.
+	// The selected timeout leaves enough room to avoid flakes.
+	const startTimeout = 1 * time.Minute
+	waitCtx, exited := context.WithCancelCause(ctx)
+	waitCtx, cancelWait := context.WithTimeoutCause(waitCtx, startTimeout, fmt.Errorf("timed out after %v", startTimeout))
+	defer cancelWait()
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		err := wstest.Wait()
+		if err == nil {
+			err = errors.New("exit status 0")
+		}
+		exited(fmt.Errorf("wstest exited: %w", err))
+	})
+
+	closeFn = func() error {
+		out, err := exec.Command("docker", "rm", "--force", "--volumes", container).CombinedOutput()
+		_ = wstest.Process.Kill()
+		wg.Wait()
 		if err != nil {
-			return fmt.Errorf("failed to kill wstest: %w", err)
+			return fmt.Errorf("failed to remove wstest container: %w: %s", err, out)
 		}
-		err = wstest.Wait()
-		var ee *exec.ExitError
-		if errors.As(err, &ee) && ee.ExitCode() == -1 {
-			return nil
-		}
-		return err
-	}, nil
+		return nil
+	}
+
+	err = waitWS(waitCtx, url)
+	if err != nil {
+		return "", nil, errors.Join(err, closeFn())
+	}
+	return url, closeFn, nil
 }
 
 func wstestCaseCount(ctx context.Context, url string) (cases int, err error) {
