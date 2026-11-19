@@ -87,3 +87,53 @@ func TestWasmDialTimeout(t *testing.T) {
 		t.Fatal("wasm context dial timeout is not working", time.Since(beforeDial))
 	}
 }
+
+func TestWasmNetConnZeroLengthRead(t *testing.T) {
+	for _, buffered := range []bool{false, true} {
+		name := "idle"
+		if buffered {
+			name = "buffered"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			c, _, err := websocket.Dial(ctx, os.Getenv("WS_ECHO_SERVER_URL"), &websocket.DialOptions{
+				Subprotocols: []string{"echo"},
+			})
+			assert.Success(t, err)
+			defer c.Close(websocket.StatusNormalClosure, "")
+			nc := websocket.NetConn(ctx, c, websocket.MessageBinary)
+			if buffered {
+				_, err = nc.Write([]byte("hello"))
+				assert.Success(t, err)
+				first := make([]byte, 1)
+				_, err = nc.Read(first)
+				assert.Success(t, err)
+				assert.Equal(t, "first byte", "h", string(first))
+			}
+			for _, empty := range [][]byte{nil, {}} {
+				done := make(chan struct{})
+				go func() {
+					defer close(done)
+					n, err := nc.Read(empty)
+					assert.Success(t, err)
+					assert.Equal(t, "read count", 0, n)
+				}()
+				select {
+				case <-done:
+				case <-time.After(time.Second):
+					c.Close(websocket.StatusNormalClosure, "")
+					<-done
+					t.Fatal("zero-length Read blocked on an open connection")
+				}
+			}
+			if buffered {
+				rest := make([]byte, 4)
+				_, err = nc.Read(rest)
+				assert.Success(t, err)
+				assert.Equal(t, "remaining message", "ello", string(rest))
+			}
+			assert.Success(t, c.Close(websocket.StatusNormalClosure, ""))
+		})
+	}
+}

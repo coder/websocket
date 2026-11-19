@@ -146,7 +146,7 @@ func (nc *netConn) Read(p []byte) (int, error) {
 		if err != nil {
 			return n, err
 		}
-		if n == 0 {
+		if n == 0 && len(p) != 0 {
 			continue
 		}
 		return n, nil
@@ -160,6 +160,10 @@ func (nc *netConn) read(p []byte) (int, error) {
 
 	if nc.readEOFed {
 		return 0, io.EOF
+	}
+
+	if len(p) == 0 {
+		return 0, nil
 	}
 
 	if nc.reader == nil {
