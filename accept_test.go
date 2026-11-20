@@ -207,6 +207,25 @@ func TestAccept(t *testing.T) {
 		wg.Wait()
 		assert.Success(t, err)
 	})
+
+	t.Run("insecureSkipVerifyIgnoresInvalidPattern", func(t *testing.T) {
+		t.Parallel()
+
+		server, client := net.Pipe()
+		defer client.Close()
+		w := mockHijacker{
+			ResponseWriter: httptest.NewRecorder(),
+			hijack: func() (net.Conn, *bufio.ReadWriter, error) {
+				return server, bufio.NewReadWriter(bufio.NewReader(server), bufio.NewWriter(server)), nil
+			},
+		}
+		r := newHandshakeRequest()
+		r.Header.Set("Origin", "https://other.com")
+
+		c, err := Accept(w, r, &AcceptOptions{InsecureSkipVerify: true, OriginPatterns: []string{"["}})
+		assert.Success(t, err)
+		c.CloseNow()
+	})
 }
 
 func newHandshakeRequest() *http.Request {
@@ -320,11 +339,11 @@ var acceptRejectionTests = []struct {
 		name:            "badOriginPattern",
 		modify:          func(r *http.Request) { r.Header.Set("Origin", "https://other.com") },
 		opts:            AcceptOptions{OriginPatterns: []string{"["}},
-		wantStatus:      http.StatusForbidden,
+		wantStatus:      http.StatusInternalServerError,
 		wantErr:         `invalid OriginPatterns entry "[": syntax error in pattern`,
 		wantErrIs:       path.ErrBadPattern,
 		wantHeader:      http.Header{},
-		wantDefaultBody: "Forbidden",
+		wantDefaultBody: "Internal Server Error",
 	},
 	{
 		name:            "noHijacker",
@@ -785,6 +804,26 @@ func Test_authenticateOrigin(t *testing.T) {
 				"*.example.com",
 			},
 			success: true,
+		},
+		{
+			name:           "invalidPatternNoOrigin",
+			host:           "example.com",
+			originPatterns: []string{"["},
+			success:        true,
+		},
+		{
+			name:           "invalidPatternSameOrigin",
+			origin:         "https://example.com",
+			host:           "example.com",
+			originPatterns: []string{"["},
+			success:        true,
+		},
+		{
+			name:           "invalidPatternAfterMatch",
+			origin:         "https://other.com",
+			host:           "example.com",
+			originPatterns: []string{"other.com", "["},
+			success:        true,
 		},
 	}
 
