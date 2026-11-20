@@ -79,6 +79,14 @@ type AcceptOptions struct {
 	// Unlike OnPingReceived, this callback does not return a value because a pong frame
 	// is a response to a ping and does not trigger any further frame transmission.
 	OnPongReceived func(ctx context.Context, payload []byte)
+
+	// ErrorHandler can be set to change how and what HTTP errors are shown to
+	// the client. The handler must write a response, otherwise the client
+	// sees HTTP 200 OK. The status is what Accept would have written with
+	// http.Error, and err is the reason for the rejection. Headers set by
+	// Accept can be inspected and changed via w.Header(). ErrorHandler is not
+	// called when hijacking the connection fails.
+	ErrorHandler func(w http.ResponseWriter, r *http.Request, status int, err error)
 }
 
 func (opts *AcceptOptions) cloneWithDefaults() *AcceptOptions {
@@ -95,7 +103,8 @@ func (opts *AcceptOptions) cloneWithDefaults() *AcceptOptions {
 // Accept will not allow cross origin requests by default.
 // See the InsecureSkipVerify and OriginPatterns options to allow cross origin requests.
 //
-// Accept will write a response to w on all errors.
+// Accept writes a response to w on all errors. To change it, set the
+// ErrorHandler on AcceptOptions.
 //
 // Note that using the http.Request Context after Accept returns may lead to
 // unexpected behavior (see http.Hijacker).
@@ -106,21 +115,23 @@ func Accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (*Conn,
 func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Conn, err error) {
 	defer errd.Wrap(&err, "failed to accept WebSocket connection")
 
+	opts = opts.cloneWithDefaults()
+
 	errCode, err := verifyClientRequest(w, r)
 	if err != nil {
-		http.Error(w, err.Error(), errCode)
+		opts.writeRejection(w, r, errCode, err, err.Error())
 		return nil, err
 	}
 
-	opts = opts.cloneWithDefaults()
 	if !opts.InsecureSkipVerify {
 		err = authenticateOrigin(r, opts.OriginPatterns)
 		if err != nil {
+			defaultBody := err.Error()
 			if errors.Is(err, path.ErrBadPattern) {
 				log.Printf("websocket: %v", err)
-				err = errors.New(http.StatusText(http.StatusForbidden))
+				defaultBody = http.StatusText(http.StatusForbidden)
 			}
-			http.Error(w, err.Error(), http.StatusForbidden)
+			opts.writeRejection(w, r, http.StatusForbidden, err, defaultBody)
 			return nil, err
 		}
 	}
@@ -128,7 +139,7 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 	hj, ok := hijacker(w)
 	if !ok {
 		err = errors.New("http.ResponseWriter does not implement http.Hijacker")
-		http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
+		opts.writeRejection(w, r, http.StatusNotImplemented, err, http.StatusText(http.StatusNotImplemented))
 		return nil, err
 	}
 
@@ -179,6 +190,14 @@ func accept(w http.ResponseWriter, r *http.Request, opts *AcceptOptions) (_ *Con
 		br: brw.Reader,
 		bw: brw.Writer,
 	}), nil
+}
+
+func (opts *AcceptOptions) writeRejection(w http.ResponseWriter, r *http.Request, status int, err error, defaultBody string) {
+	if opts.ErrorHandler != nil {
+		opts.ErrorHandler(w, r, status, err)
+		return
+	}
+	http.Error(w, defaultBody, status)
 }
 
 func verifyClientRequest(w http.ResponseWriter, r *http.Request) (errCode int, _ error) {
@@ -247,7 +266,7 @@ func authenticateOrigin(r *http.Request, originHosts []string) error {
 		}
 		matched, err := match(hostPattern, target)
 		if err != nil {
-			return fmt.Errorf("failed to parse path pattern %q: %w", hostPattern, err)
+			return fmt.Errorf("invalid OriginPatterns entry %q: %w", hostPattern, err)
 		}
 		if matched {
 			return nil
