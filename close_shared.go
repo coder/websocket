@@ -4,7 +4,13 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/coder/websocket/internal/libclose"
 )
+
+func init() {
+	libclose.Close = (*Conn).closeWithHandshake
+}
 
 // maxControlPayload is the maximum length of a control frame payload.
 // See https://tools.ietf.org/html/rfc6455#section-5.5.

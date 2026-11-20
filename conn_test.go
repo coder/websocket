@@ -556,6 +556,26 @@ func TestConn(t *testing.T) {
 
 					assert.Success(t, closer.close(c1))
 				})
+
+				t.Run("wsjsonInvalidJSON", func(t *testing.T) {
+					tt, c1, c2 := newConnTest(t, nil, nil)
+
+					readErr := xsync.Go(func() error {
+						_, _, err := c2.Read(tt.ctx)
+						return err
+					})
+					// net.Pipe writes block until wsjson.Read reads them.
+					writeErr := xsync.Go(func() error {
+						return c2.Write(tt.ctx, websocket.MessageText, []byte("{"))
+					})
+					var v any
+					err := wsjson.Read(tt.ctx, c1, &v)
+					assert.Contains(t, err, "failed to unmarshal JSON")
+					assert.Success(t, <-writeErr)
+					assert.Success(t, assertCloseStatus(websocket.StatusInvalidFramePayloadData, <-readErr))
+
+					assert.Success(t, closer.close(c1))
+				})
 			})
 		}
 	})
