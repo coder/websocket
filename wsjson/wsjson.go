@@ -9,8 +9,13 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/internal/bpool"
 	"github.com/coder/websocket/internal/errd"
+	"github.com/coder/websocket/internal/libclose"
 	"github.com/coder/websocket/internal/util"
 )
+
+// closeWithHandshake closes c without counting as the application's first
+// Close call.
+var closeWithHandshake = libclose.Close.(func(*websocket.Conn, websocket.StatusCode, string) error)
 
 // Read reads a JSON message from c into v.
 // It will reuse buffers in between calls to avoid allocations.
@@ -36,7 +41,7 @@ func read(ctx context.Context, c *websocket.Conn, v any) (err error) {
 
 	err = json.Unmarshal(b.Bytes(), v)
 	if err != nil {
-		c.Close(websocket.StatusInvalidFramePayloadData, "failed to unmarshal JSON")
+		closeWithHandshake(c, websocket.StatusInvalidFramePayloadData, "failed to unmarshal JSON")
 		return fmt.Errorf("failed to unmarshal JSON: %w", err)
 	}
 
