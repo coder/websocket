@@ -53,6 +53,8 @@ type Conn struct {
 
 	readTimeoutStop  atomic.Pointer[func() bool]
 	writeTimeoutStop atomic.Pointer[func() bool]
+	readTimeoutFunc  func() // Guarded by readMu.
+	writeTimeoutFunc func() // Guarded by writeFrameMu.
 
 	// Read state.
 	readMu         *mu
@@ -173,10 +175,14 @@ func (c *Conn) setupWriteTimeout(ctx context.Context) bool {
 		return false
 	}
 
-	stop := context.AfterFunc(ctx, func() {
-		c.clearWriteTimeout()
-		c.close()
-	})
+	if c.writeTimeoutFunc == nil {
+		// Made on first use and reused, so each frame does not allocate it.
+		c.writeTimeoutFunc = func() {
+			c.clearWriteTimeout()
+			c.close()
+		}
+	}
+	stop := context.AfterFunc(ctx, c.writeTimeoutFunc)
 	swapTimeoutStop(&c.writeTimeoutStop, &stop)
 	return true
 }
@@ -190,10 +196,14 @@ func (c *Conn) setupReadTimeout(ctx context.Context) bool {
 		return false
 	}
 
-	stop := context.AfterFunc(ctx, func() {
-		c.clearReadTimeout()
-		c.close()
-	})
+	if c.readTimeoutFunc == nil {
+		// Made on first use and reused, so each frame does not allocate it.
+		c.readTimeoutFunc = func() {
+			c.clearReadTimeout()
+			c.close()
+		}
+	}
+	stop := context.AfterFunc(ctx, c.readTimeoutFunc)
 	swapTimeoutStop(&c.readTimeoutStop, &stop)
 	return true
 }
