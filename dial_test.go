@@ -581,3 +581,104 @@ func TestDialFailedHandshakeBody(t *testing.T) {
 		assert.Equal(t, "body", "forbidden by test\n", string(b))
 	})
 }
+
+func TestDialSubprotocolExactMatch(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		offered   []string
+		selected  string
+		wantError bool
+	}{
+		{name: "exact", offered: []string{"Chat"}, selected: "Chat"},
+		{name: "case-only-mismatch", offered: []string{"Chat"}, selected: "chat", wantError: true},
+		{name: "later-exact", offered: []string{"chat", "Chat"}, selected: "Chat"},
+		{name: "no-selection", offered: []string{"Chat"}},
+		{name: "unsolicited", selected: "Chat", wantError: true},
+		{name: "not-offered", offered: []string{"Chat"}, selected: "other", wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			serverDone := make(chan error, 1)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				hj, ok := w.(http.Hijacker)
+				if !ok {
+					serverDone <- errors.New("server cannot hijack")
+					return
+				}
+				conn, rw, err := hj.Hijack()
+				if err != nil {
+					serverDone <- err
+					return
+				}
+				defer conn.Close()
+				conn.SetDeadline(time.Now().Add(5 * time.Second))
+				header := http.Header{}
+				header.Set("Upgrade", "websocket")
+				header.Set("Connection", "Upgrade")
+				header.Set("Sec-WebSocket-Accept", websocket.SecWebSocketAccept(r.Header.Get("Sec-WebSocket-Key")))
+				if tc.selected != "" {
+					header.Set("Sec-WebSocket-Protocol", tc.selected)
+				}
+				if _, err = rw.WriteString("HTTP/1.1 101 Switching Protocols\r\n"); err == nil {
+					err = header.Write(rw)
+				}
+				if err == nil {
+					_, err = rw.WriteString("\r\n")
+				}
+				// A complete binary data message allows valid selections to prove
+				// that the resulting connection is usable, not just non-nil.
+				if err == nil {
+					_, err = rw.Write([]byte{0x82, 1, 'x'})
+				}
+				if err == nil {
+					err = rw.Flush()
+				}
+				if err != nil {
+					serverDone <- err
+					return
+				}
+				// Both rejected handshakes and successful CloseNow calls must
+				// release the upgraded transport without waiting for a body read.
+				_, err = io.Copy(io.Discard, conn)
+				serverDone <- err
+			}))
+			defer srv.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			c, resp, err := websocket.Dial(ctx, srv.URL, &websocket.DialOptions{Subprotocols: tc.offered})
+			if c != nil {
+				defer c.CloseNow()
+			}
+			if (err != nil) != tc.wantError {
+				if c != nil {
+					c.CloseNow()
+				}
+				t.Fatalf("Dial error = %v, wantError = %v", err, tc.wantError)
+			}
+			if tc.wantError {
+				if c != nil || resp == nil || resp.StatusCode != http.StatusSwitchingProtocols {
+					t.Fatalf("rejected handshake: conn=%v response=%v", c, resp)
+				}
+				if !strings.Contains(err.Error(), "unexpected Sec-WebSocket-Protocol") {
+					t.Fatalf("wrong rejection: %v", err)
+				}
+			} else {
+				if c.Subprotocol() != tc.selected {
+					t.Fatalf("Subprotocol = %q, want %q", c.Subprotocol(), tc.selected)
+				}
+				typ, payload, err := c.Read(ctx)
+				if err != nil || typ != websocket.MessageBinary || string(payload) != "x" {
+					t.Fatalf("Read = %v, %q, %v", typ, payload, err)
+				}
+				c.CloseNow()
+			}
+			select {
+			case err := <-serverDone:
+				if err != nil {
+					t.Fatalf("server transport: %v", err)
+				}
+			case <-ctx.Done():
+				t.Fatal("upgraded transport did not close")
+			}
+		})
+	}
+}
