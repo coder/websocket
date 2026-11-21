@@ -305,8 +305,9 @@ func verifySubprotocol(subprotos []string, resp *http.Response) error {
 		return nil
 	}
 
+	// Subprotocol names are case-sensitive (RFC 7936, section 2).
 	for _, sp2 := range subprotos {
-		if strings.EqualFold(sp2, proto) {
+		if sp2 == proto {
 			return nil
 		}
 	}
