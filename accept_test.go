@@ -825,6 +825,13 @@ func Test_authenticateOrigin(t *testing.T) {
 			originPatterns: []string{"other.com", "["},
 			success:        true,
 		},
+		{
+			name:           "invalidPatternBeforeMatch",
+			origin:         "https://other.com",
+			host:           "example.com",
+			originPatterns: []string{"[", "other.com"},
+			success:        false,
+		},
 	}
 
 	for _, tc := range testCases {
