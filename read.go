@@ -95,6 +95,9 @@ func (c *Conn) CloseRead(ctx context.Context) context.Context {
 //
 // Set to -1 to disable.
 func (c *Conn) SetReadLimit(n int64) {
+	c.readLimitMu.Lock()
+	defer c.readLimitMu.Unlock()
+	c.readLimitSet = true
 	if n >= 0 {
 		// We read one more byte than the limit in case
 		// there is a fin frame that needs to be read.
@@ -102,6 +105,14 @@ func (c *Conn) SetReadLimit(n int64) {
 	}
 
 	c.msgReader.limitReader.limit.Store(n)
+}
+
+func (c *Conn) disableReadLimitUnlessSet() {
+	c.readLimitMu.Lock()
+	defer c.readLimitMu.Unlock()
+	if !c.readLimitSet {
+		c.msgReader.limitReader.limit.Store(-1)
+	}
 }
 
 const defaultReadLimit = 32768

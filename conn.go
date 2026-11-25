@@ -60,6 +60,11 @@ type Conn struct {
 	readControlBuf [maxControlPayload]byte
 	msgReader      *msgReader
 
+	readLimitMu sync.Mutex // Protects following and is held across each read limit store. Never held during I/O.
+	// readLimitSet is true once SetReadLimit has been called, and NetConn
+	// then leaves the limit unchanged.
+	readLimitSet bool
+
 	// Write state.
 	msgWriter      *msgWriter
 	writeFrameMu   *mu
