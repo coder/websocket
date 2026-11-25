@@ -47,7 +47,7 @@ type Conn struct {
 	// read limit for a message in bytes.
 	msgReadLimit atomic.Int64
 
-	readLimitMu sync.Mutex // Protects following. Never held during I/O.
+	readLimitMu sync.Mutex // Protects following and is held across each read limit store. Never held during I/O.
 	// readLimitSet is true once SetReadLimit has been called, and NetConn
 	// then leaves the limit unchanged.
 	readLimitSet bool
