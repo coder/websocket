@@ -83,7 +83,8 @@ type AcceptOptions struct {
 	// ErrorHandler can be set to change how and what HTTP errors are shown to
 	// the client. The handler must write a response, otherwise the client
 	// sees HTTP 200 OK. The status is what Accept would have written with
-	// http.Error, and err is the reason for the rejection. Headers set by
+	// http.Error, and err is the reason for the rejection, which can include
+	// server details such as an invalid OriginPatterns entry. Headers set by
 	// Accept can be inspected and changed via w.Header(). ErrorHandler is not
 	// called when hijacking the connection fails.
 	ErrorHandler func(w http.ResponseWriter, r *http.Request, status int, err error)
