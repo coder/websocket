@@ -426,5 +426,7 @@ func extractBufioWriterBuf(bw *bufio.Writer, w io.Writer) []byte {
 }
 
 func (c *Conn) writeError(code StatusCode, err error) {
-	c.writeClose(code, err.Error())
+	// A truncated reason is not reported, because the caller returns err.
+	ce, _ := wireCloseError(code, err.Error())
+	c.writeClose(ce)
 }

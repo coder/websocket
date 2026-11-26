@@ -357,7 +357,7 @@ func (c *Conn) handleControl(ctx context.Context, h header) (err error) {
 	// writeClose as well because it may also call c.close.
 	if !closeSent {
 		c.readMu.unlock()
-		_ = c.writeClose(ce.Code, ce.Reason)
+		_ = c.writeClose(ce)
 	}
 	if !c.casClosing() {
 		c.readMu.unlock()

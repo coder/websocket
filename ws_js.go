@@ -228,12 +228,18 @@ func (c *Conn) write(typ MessageType, p []byte) error {
 // It will wait until the peer responds with a close frame
 // or the connection is closed.
 // It thus performs the full WebSocket close handshake.
+//
+// Close replaces invalid UTF-8 in reason with U+FFFD, then truncates it to fit
+// 123 bytes without splitting a rune. If it truncated the reason and the close
+// had no other error, Close returns an error wrapping ErrCloseReasonTruncated.
 func (c *Conn) Close(code StatusCode, reason string) error {
-	err := c.exportedClose(code, reason)
+	// Browsers throw on a reason over 123 bytes and leave the connection open.
+	reason, truncErr := wireCloseReason(reason)
+	err := c.closeAndWait(code, reason)
 	if err != nil {
 		return fmt.Errorf("failed to close WebSocket: %w", err)
 	}
-	return nil
+	return truncErr
 }
 
 // CloseNow closes the WebSocket connection without attempting a close handshake.
@@ -245,7 +251,7 @@ func (c *Conn) CloseNow() error {
 	return c.Close(StatusGoingAway, "")
 }
 
-func (c *Conn) exportedClose(code StatusCode, reason string) error {
+func (c *Conn) closeAndWait(code StatusCode, reason string) error {
 	c.closingMu.Lock()
 	defer c.closingMu.Unlock()
 
@@ -301,7 +307,8 @@ type DialOptions struct {
 // Dial creates a new WebSocket connection to the given url with the given options.
 // The passed context bounds the maximum time spent waiting for the connection to open.
 // The returned *http.Response is always nil or a mock. It's only in the signature
-// to match the core API.
+// to match the core API. The error never matches ErrBadStatus, because the
+// browser does not expose the handshake response.
 func Dial(ctx context.Context, url string, opts *DialOptions) (*Conn, *http.Response, error) {
 	c, resp, err := dial(ctx, url, opts)
 	if err != nil {
