@@ -5,17 +5,16 @@ package websocket_test
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/internal/test/assert"
+	"github.com/coder/websocket/internal/test/xrand"
 )
 
 type countingConn struct {
@@ -28,9 +27,12 @@ func (c countingConn) Write(p []byte) (int, error) {
 	return c.Conn.Write(p)
 }
 
-func dialCounting(t testing.TB, ctx context.Context, writeBufferSize int) (*websocket.Conn, *atomic.Int64) {
+func dialCounting(t testing.TB, writeBufferSize int) (*websocket.Conn, *atomic.Int64) {
 	t.Helper()
+
+	serverDone := make(chan struct{})
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer close(serverDone)
 		c, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			return
@@ -38,35 +40,39 @@ func dialCounting(t testing.TB, ctx context.Context, writeBufferSize int) (*webs
 		defer c.CloseNow()
 		c.SetReadLimit(-1)
 		for {
-			typ, p, err := c.Read(ctx)
+			typ, p, err := c.Read(context.Background())
 			if err != nil {
 				return
 			}
-			if err := c.Write(ctx, typ, p); err != nil {
+			if err := c.Write(context.Background(), typ, p); err != nil {
 				return
 			}
 		}
 	}))
 	t.Cleanup(s.Close)
 
-	writes := &atomic.Int64{}
+	var writes atomic.Int64
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	t.Cleanup(transport.CloseIdleConnections)
 	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-		conn, err := (&net.Dialer{}).DialContext(ctx, network, addr)
+		var d net.Dialer
+		conn, err := d.DialContext(ctx, network, addr)
 		if err != nil {
 			return nil, err
 		}
-		return countingConn{Conn: conn, writes: writes}, nil
+		return countingConn{Conn: conn, writes: &writes}, nil
 	}
-	c, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(s.URL, "http"), &websocket.DialOptions{
+	c, _, err := websocket.Dial(t.Context(), s.URL, &websocket.DialOptions{
 		HTTPClient:      &http.Client{Transport: transport},
 		WriteBufferSize: writeBufferSize,
 	})
 	assert.Success(t, err)
 	c.SetReadLimit(-1)
-	t.Cleanup(func() { c.CloseNow() })
-	return c, writes
+	t.Cleanup(func() {
+		c.CloseNow()
+		<-serverDone // httptest.Server.Close does not wait for hijacked connections.
+	})
+	return c, &writes
 }
 
 func TestDialWriteBufferSize(t *testing.T) {
@@ -118,28 +124,23 @@ func TestDialWriteBufferSize(t *testing.T) {
 			minWrites:       1024 / 5,
 		},
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
-			c, writes := dialCounting(t, ctx, tc.writeBufferSize)
-
-			msg := make([]byte, tc.messageSize)
-			_, err := rand.Read(msg)
-			assert.Success(t, err)
+			c, writes := dialCounting(t, tt.writeBufferSize)
+			msg := xrand.Bytes(tt.messageSize)
 
 			before := writes.Load()
-			err = c.Write(ctx, websocket.MessageBinary, msg)
-			assert.Success(t, err)
+			assert.Success(t, c.Write(ctx, websocket.MessageBinary, msg))
 			got := writes.Load() - before
-
-			if tc.maxWrites > 0 && got > tc.maxWrites {
-				t.Fatalf("%d writes for a %d byte message, want at most %d", got, tc.messageSize, tc.maxWrites)
+			if tt.maxWrites > 0 && got > tt.maxWrites {
+				t.Errorf("got %d writes for a %d byte message, want at most %d", got, tt.messageSize, tt.maxWrites)
 			}
-			if tc.minWrites > 0 && got < tc.minWrites {
-				t.Fatalf("%d writes for a %d byte message, want at least %d", got, tc.messageSize, tc.minWrites)
+			if tt.minWrites > 0 && got < tt.minWrites {
+				t.Errorf("got %d writes for a %d byte message, want at least %d", got, tt.messageSize, tt.minWrites)
 			}
 
 			typ, echoed, err := c.Read(ctx)
@@ -149,8 +150,7 @@ func TestDialWriteBufferSize(t *testing.T) {
 				t.Fatal("echoed message differs from the one sent")
 			}
 
-			err = c.Write(ctx, websocket.MessageText, []byte("small"))
-			assert.Success(t, err)
+			assert.Success(t, c.Write(ctx, websocket.MessageText, []byte("small")))
 			_, echoed, err = c.Read(ctx)
 			assert.Success(t, err)
 			assert.Equal(t, "small message", "small", string(echoed))
@@ -162,29 +162,29 @@ func TestDialWriteBufferSize(t *testing.T) {
 
 func BenchmarkDialWriteBufferSize(b *testing.B) {
 	const messageSize = 64 << 10
-	for _, size := range []int{0, 128 << 10} {
-		name := "default"
-		if size > 0 {
-			name = "128KiB"
-		}
-		b.Run(name, func(b *testing.B) {
-			ctx := b.Context()
-			c, writes := dialCounting(b, ctx, size)
+	benchmarks := []struct {
+		name string
+		size int
+	}{
+		{name: "default", size: 0},
+		{name: "128KiB", size: 128 << 10},
+	}
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			c, writes := dialCounting(b, bm.size)
 			msg := make([]byte, messageSize)
 
 			b.SetBytes(messageSize)
 			b.ReportAllocs()
-			b.ResetTimer()
 			before := writes.Load()
-			for range b.N {
-				if err := c.Write(ctx, websocket.MessageBinary, msg); err != nil {
+			for b.Loop() {
+				if err := c.Write(b.Context(), websocket.MessageBinary, msg); err != nil {
 					b.Fatal(err)
 				}
-				if _, _, err := c.Read(ctx); err != nil {
+				if _, _, err := c.Read(b.Context()); err != nil {
 					b.Fatal(err)
 				}
 			}
-			b.StopTimer()
 			b.ReportMetric(float64(writes.Load()-before)/float64(b.N), "writes/op")
 		})
 	}
