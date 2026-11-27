@@ -3,10 +3,15 @@
 package websocket
 
 import (
+	"bufio"
+	"encoding/binary"
+	"fmt"
 	"io"
 	"math"
+	"net"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/coder/websocket/internal/test/assert"
@@ -294,5 +299,101 @@ func TestCloseStatus(t *testing.T) {
 			act := CloseStatus(tc.in)
 			assert.Equal(t, "close status", tc.exp, act)
 		})
+	}
+}
+
+// TestCloseAnswersPingBeforePeerClose verifies that a ping already on the
+// wire after we send Close is answered with a pong, and that Close still
+// reads the peer's close frame (RFC 6455 section 5.5.2 and 7.1.2).
+func TestCloseAnswersPingBeforePeerClose(t *testing.T) {
+	t.Parallel()
+
+	serverSide, peerSide := net.Pipe()
+	defer serverSide.Close()
+	defer peerSide.Close()
+
+	c := newConn(connConfig{
+		rwc: serverSide,
+		br:  bufio.NewReader(serverSide),
+		bw:  bufio.NewWriter(serverSide),
+	})
+
+	type peerResult struct {
+		gotPong     bool
+		pongPayload string
+		err         error
+	}
+	peerDone := make(chan peerResult, 1)
+	go func() {
+		var res peerResult
+		defer func() { peerDone <- res }()
+
+		br := bufio.NewReader(peerSide)
+		bw := bufio.NewWriter(peerSide)
+		buf := make([]byte, 8)
+
+		readFrame := func() (header, []byte, error) {
+			h, err := readFrameHeader(br, buf)
+			if err != nil {
+				return h, nil, err
+			}
+			p := make([]byte, h.payloadLength)
+			_, err = io.ReadFull(br, p)
+			return h, p, err
+		}
+		writeFrame := func(op opcode, p []byte) error {
+			// Client frames must be masked; a zero key leaves the payload as is.
+			h := header{fin: true, opcode: op, payloadLength: int64(len(p)), masked: true}
+			if err := writeFrameHeader(h, bw, buf); err != nil {
+				return err
+			}
+			if _, err := bw.Write(p); err != nil {
+				return err
+			}
+			return bw.Flush()
+		}
+
+		h, _, err := readFrame()
+		if err != nil {
+			res.err = err
+			return
+		}
+		if h.opcode != opClose {
+			res.err = fmt.Errorf("expected close frame, got opcode %v", h.opcode)
+			return
+		}
+
+		// The peer had already queued a ping before it read our close.
+		if res.err = writeFrame(opPing, []byte("hi")); res.err != nil {
+			return
+		}
+
+		h, p, err := readFrame()
+		if err != nil {
+			res.err = err
+			return
+		}
+		if h.opcode != opPong {
+			res.err = fmt.Errorf("expected pong frame, got opcode %v", h.opcode)
+			return
+		}
+		res.gotPong = true
+		res.pongPayload = string(p)
+
+		closePayload := make([]byte, 2)
+		binary.BigEndian.PutUint16(closePayload, uint16(StatusNormalClosure))
+		res.err = writeFrame(opClose, closePayload)
+	}()
+
+	err := c.Close(StatusNormalClosure, "")
+	assert.Success(t, err)
+
+	select {
+	case res := <-peerDone:
+		assert.Success(t, res.err)
+		assert.Equal(t, "got pong", true, res.gotPong)
+		assert.Equal(t, "pong payload", "hi", res.pongPayload)
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for peer")
 	}
 }
