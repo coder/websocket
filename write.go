@@ -267,6 +267,8 @@ func (mw *msgWriter) close() {
 	if mw.c.client {
 		mw.c.writeFrameMu.forceLock()
 		putBufioWriter(mw.c.bw)
+		mw.c.bw = nil
+		mw.c.writeBuf = nil
 	}
 
 	mw.writeMu.forceLock()

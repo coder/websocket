@@ -287,6 +287,9 @@ func (c *Conn) Subprotocol() string {
 type DialOptions struct {
 	// Subprotocols lists the subprotocols to negotiate with the server.
 	Subprotocols []string
+
+	// WriteBufferSize is unused. It's only here to match the core API.
+	WriteBufferSize int
 }
 
 // Dial creates a new WebSocket connection to the given url with the given options.
